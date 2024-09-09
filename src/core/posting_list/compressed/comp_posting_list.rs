@@ -28,7 +28,6 @@ pub struct CompressedPostingList<W: Weight> {
     pub(super) quantization_params: W::QuantizationParams,
 }
 
-
 impl<W: Weight> CompressedPostingList<W> {
     pub fn view(&self) -> CompressedPostingListView<W> {
         CompressedPostingListView {

@@ -1,8 +1,8 @@
 use std::cmp::Reverse;
 
+use crate::{core::common::ScoreType, ffi::ScoredPointOffset};
 use ordered_float::Float;
-use crate::common::types::{ScoreType};
-use crate::ffi::ScoredPointOffset;
+
 
 /// TopK implementation following the median algorithm described in
 /// <https://quickwit.io/blog/top-k-complexity>.
@@ -74,11 +74,17 @@ mod test {
     #[test]
     fn test_top_k_under() {
         let mut top_k = TopK::new(3);
-        top_k.push(ScoredPointOffset { score: 1.0, row_id: 1 });
+        top_k.push(ScoredPointOffset {
+            score: 1.0,
+            row_id: 1,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 1);
 
-        top_k.push(ScoredPointOffset { score: 2.0, row_id: 2 });
+        top_k.push(ScoredPointOffset {
+            score: 2.0,
+            row_id: 2,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 2);
 
@@ -91,19 +97,31 @@ mod test {
     #[test]
     fn test_top_k_over() {
         let mut top_k = TopK::new(3);
-        top_k.push(ScoredPointOffset { score: 1.0, row_id: 1 });
+        top_k.push(ScoredPointOffset {
+            score: 1.0,
+            row_id: 1,
+        });
         assert_eq!(top_k.len(), 1);
         assert_eq!(top_k.threshold(), ScoreType::MIN);
 
-        top_k.push(ScoredPointOffset { score: 3.0, row_id: 3 });
+        top_k.push(ScoredPointOffset {
+            score: 3.0,
+            row_id: 3,
+        });
         assert_eq!(top_k.len(), 2);
         assert_eq!(top_k.threshold(), ScoreType::MIN);
 
-        top_k.push(ScoredPointOffset { score: 2.0, row_id: 2 });
+        top_k.push(ScoredPointOffset {
+            score: 2.0,
+            row_id: 2,
+        });
         assert_eq!(top_k.len(), 3);
         assert_eq!(top_k.threshold(), ScoreType::MIN);
 
-        top_k.push(ScoredPointOffset { score: 4.0, row_id: 4 });
+        top_k.push(ScoredPointOffset {
+            score: 4.0,
+            row_id: 4,
+        });
         assert_eq!(top_k.len(), 4);
         assert_eq!(top_k.threshold(), ScoreType::MIN);
 
@@ -117,27 +135,45 @@ mod test {
     #[test]
     fn test_top_k_pruned() {
         let mut top_k = TopK::new(3);
-        top_k.push(ScoredPointOffset { score: 1.0, row_id: 1 });
+        top_k.push(ScoredPointOffset {
+            score: 1.0,
+            row_id: 1,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 1);
 
-        top_k.push(ScoredPointOffset { score: 4.0, row_id: 4 });
+        top_k.push(ScoredPointOffset {
+            score: 4.0,
+            row_id: 4,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 2);
 
-        top_k.push(ScoredPointOffset { score: 2.0, row_id: 2 });
+        top_k.push(ScoredPointOffset {
+            score: 2.0,
+            row_id: 2,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 3);
 
-        top_k.push(ScoredPointOffset { score: 5.0, row_id: 5 });
+        top_k.push(ScoredPointOffset {
+            score: 5.0,
+            row_id: 5,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 4);
 
-        top_k.push(ScoredPointOffset { score: 3.0, row_id: 3 });
+        top_k.push(ScoredPointOffset {
+            score: 3.0,
+            row_id: 3,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 5);
 
-        top_k.push(ScoredPointOffset { score: 6.0, row_id: 6 });
+        top_k.push(ScoredPointOffset {
+            score: 6.0,
+            row_id: 6,
+        });
         assert_eq!(top_k.threshold(), 4.0);
         assert_eq!(top_k.len(), 3);
         assert_eq!(top_k.elements.capacity(), 6);
@@ -152,35 +188,71 @@ mod test {
     #[test]
     fn test_top_same_scores() {
         let mut top_k = TopK::new(3);
-        top_k.push(ScoredPointOffset { score: 1.0, row_id: 1 });
+        top_k.push(ScoredPointOffset {
+            score: 1.0,
+            row_id: 1,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 1);
 
-        top_k.push(ScoredPointOffset { score: 1.0, row_id: 4 });
+        top_k.push(ScoredPointOffset {
+            score: 1.0,
+            row_id: 4,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 2);
 
-        top_k.push(ScoredPointOffset { score: 2.0, row_id: 2 });
+        top_k.push(ScoredPointOffset {
+            score: 2.0,
+            row_id: 2,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 3);
 
-        top_k.push(ScoredPointOffset { score: 1.0, row_id: 5 });
+        top_k.push(ScoredPointOffset {
+            score: 1.0,
+            row_id: 5,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 4);
 
-        top_k.push(ScoredPointOffset { score: 1.0, row_id: 3 });
+        top_k.push(ScoredPointOffset {
+            score: 1.0,
+            row_id: 3,
+        });
         assert_eq!(top_k.threshold(), ScoreType::MIN);
         assert_eq!(top_k.len(), 5);
 
-        top_k.push(ScoredPointOffset { score: 1.0, row_id: 6 });
+        top_k.push(ScoredPointOffset {
+            score: 1.0,
+            row_id: 6,
+        });
         assert_eq!(top_k.threshold(), 1.0);
         assert_eq!(top_k.len(), 3);
         assert_eq!(top_k.elements.capacity(), 6);
 
         let res = top_k.into_vec();
         assert_eq!(res.len(), 3);
-        assert_eq!(res[0], ScoredPointOffset { score: 2.0, row_id: 2 });
-        assert_eq!(res[1], ScoredPointOffset { score: 1.0, row_id: 1 });
-        assert_eq!(res[2], ScoredPointOffset { score: 1.0, row_id: 4 });
+        assert_eq!(
+            res[0],
+            ScoredPointOffset {
+                score: 2.0,
+                row_id: 2
+            }
+        );
+        assert_eq!(
+            res[1],
+            ScoredPointOffset {
+                score: 1.0,
+                row_id: 1
+            }
+        );
+        assert_eq!(
+            res[2],
+            ScoredPointOffset {
+                score: 1.0,
+                row_id: 4
+            }
+        );
     }
 }

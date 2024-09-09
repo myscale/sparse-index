@@ -24,7 +24,6 @@
 //     fn indexed_vector_count(&self) -> usize;
 // }
 
-
 // #[derive(Debug)]
 // pub enum VectorIndexEnum {
 //     SparseRam(SparseVectorIndex<InvertedIndexRam>),

@@ -91,7 +91,7 @@ impl<'a, W: Weight> CompressedPostingListView<'a, W> {
             chunk.initial.checked_sub(1),
             &self.id_data[chunk.offset as usize..chunk.offset as usize + chunk_size],
             decompressed_chunk,
-            chunk_bits as u8
+            chunk_bits as u8,
         );
     }
 
@@ -101,7 +101,7 @@ impl<'a, W: Weight> CompressedPostingListView<'a, W> {
         chunk_index: usize,
     ) -> usize {
         if chunk_index + 1 < chunks.len() {
-            chunks[chunk_index+1].offset as usize - chunks[chunk_index].offset as usize
+            chunks[chunk_index + 1].offset as usize - chunks[chunk_index].offset as usize
         } else {
             data.len() - chunks[chunk_index].offset as usize
         }

@@ -1,7 +1,12 @@
+use crate::core::common::ops::*;
 use crate::core::common::types::{DimId, DimOffset, ElementOffsetType, Weight};
-use crate::core::common::{madvise, StorageVersion};
+use crate::core::inverted_index::inverted_index_compressed_immutable_ram::InvertedIndexCompressedImmutableRam;
 use crate::core::inverted_index::inverted_index_ram::InvertedIndexRam;
 use crate::core::inverted_index::{InvertedIndex, INDEX_FILE_NAME};
+use crate::core::posting_list::{
+    CompressedPostingChunk, CompressedPostingListIterator, CompressedPostingListView,
+    GenericPostingElement,
+};
 use crate::core::sparse_vector::RemappedSparseVector;
 use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
@@ -11,10 +16,8 @@ use std::marker::PhantomData;
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use crate::common::file_operations::{atomic_save_json, read_json};
-use crate::core::common::mmap_ops::{create_and_ensure_length, open_read_mmap, transmute_from_u8_to_slice, transmute_to_u8, transmute_to_u8_slice};
-use crate::core::inverted_index::inverted_index_compressed_immutable_ram::InvertedIndexCompressedImmutableRam;
-use crate::core::posting_list::{CompressedPostingChunk, CompressedPostingListIterator, CompressedPostingListView, GenericPostingElement};
+
+use super::StorageVersion;
 
 const INDEX_CONFIG_FILE_NAME: &str = "inverted_index_config.json";
 
@@ -29,7 +32,7 @@ impl StorageVersion for Version {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct InvertedIndexFileHeader {
     pub posting_count: usize, // number of posting
-    pub vector_count: usize, // all unique sparse vectors
+    pub vector_count: usize,  // all unique sparse vectors
 }
 
 #[derive(Debug, Default, Clone)]
@@ -47,10 +50,8 @@ pub struct InvertedIndexCompressedMmap<W> {
     path: PathBuf,
     mmap: Arc<Mmap>,
     pub file_header: InvertedIndexFileHeader,
-    _phantom: PhantomData<W>,  // 零大小类型，用于在范型上下文中标记类型 W 的存在，不占用实际的内存空间，主要用于编译时的类型检查与约束
+    _phantom: PhantomData<W>, // 零大小类型，用于在范型上下文中标记类型 W 的存在，不占用实际的内存空间，主要用于编译时的类型检查与约束
 }
-
-
 
 impl<W: Weight> InvertedIndex for InvertedIndexCompressedMmap<W> {
     type Iter<'a> = CompressedPostingListIterator<'a, W>;
@@ -121,7 +122,7 @@ impl<W: Weight> InvertedIndex for InvertedIndexCompressedMmap<W> {
     fn max_index(&self) -> Option<DimOffset> {
         match self.file_header.posting_count {
             0 => None,
-            len => Some(len as DimId - 1)
+            len => Some(len as DimId - 1),
         }
     }
 }
@@ -148,7 +149,7 @@ impl<W: Weight> InvertedIndexCompressedMmap<W> {
             *id as u64 * size_of::<PostingListFileHeader<W>>() as u64,
             1u32,
         )[0]
-            .clone();
+        .clone();
 
         // remainders 的起始位置紧跟着 ids 和 chunks 之后
         let remainders_start = header.ids_start
@@ -163,7 +164,7 @@ impl<W: Weight> InvertedIndexCompressedMmap<W> {
                 (*id + 1) as u64 * size_of::<PostingListFileHeader<W>>() as u64,
                 1u32,
             )[0]
-                .ids_start
+            .ids_start
         } else {
             self.mmap.len() as u64
         };
@@ -209,11 +210,11 @@ impl<W: Weight> InvertedIndexCompressedMmap<W> {
         // 计算整个索引文件的长度
         let file_length = total_posting_headers_size
             + index
-            .postings
-            .as_slice()
-            .iter()
-            .map(|p| p.view().store_size().total)
-            .sum::<usize>();
+                .postings
+                .as_slice()
+                .iter()
+                .map(|p| p.view().store_size().total)
+                .sum::<usize>();
         let file_path = Self::index_file_path(path.as_ref());
         let file = create_and_ensure_length(file_path.as_ref(), file_length)?;
 

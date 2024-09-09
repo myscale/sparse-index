@@ -1,9 +1,5 @@
-use crate::core::common::mmap_ops::{
-    create_and_ensure_length, open_read_mmap, open_write_mmap, transmute_from_u8,
-    transmute_from_u8_to_slice, transmute_to_u8, transmute_to_u8_slice,
-};
+use crate::core::common::ops::*;
 use crate::core::common::types::{DimId, DimOffset, ElementOffsetType};
-use crate::core::common::{madvise, StorageVersion};
 use crate::core::inverted_index::inverted_index_ram::InvertedIndexRam;
 use crate::core::inverted_index::{InvertedIndex, INDEX_FILE_NAME};
 use crate::core::posting_list::{PostingElementEx, PostingListIterator};
@@ -14,7 +10,8 @@ use std::borrow::Cow;
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use crate::common::file_operations::{atomic_save_json, read_json};
+
+use super::StorageVersion;
 
 const POSTING_HEADER_SIZE: usize = size_of::<PostingListFileHeader>();
 const INDEX_CONFIG_FILE_NAME: &str = "inverted_index_config.json";
@@ -252,13 +249,11 @@ impl InvertedIndexMmap {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
-    use tempfile::Builder;
-    use crate::core::inverted_index::inverted_index_ram_builder::InvertedIndexBuilder;
     use super::*;
+    use crate::core::inverted_index::inverted_index_ram_builder::InvertedIndexBuilder;
+    use tempfile::Builder;
 
     fn compare_indexes(
         inverted_index_ram: &InvertedIndexRam,

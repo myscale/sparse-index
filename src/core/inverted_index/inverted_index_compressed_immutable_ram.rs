@@ -1,11 +1,13 @@
-use std::borrow::Cow;
-use std::path::Path;
 use crate::core::common::types::{DimId, DimOffset, ElementOffsetType, Weight};
 use crate::core::inverted_index::inverted_index_compressed_mmap::InvertedIndexCompressedMmap;
 use crate::core::inverted_index::inverted_index_ram::InvertedIndexRam;
 use crate::core::inverted_index::InvertedIndex;
-use crate::core::posting_list::{CompressedPostingBuilder, CompressedPostingList, CompressedPostingListIterator, PostingListIter};
+use crate::core::posting_list::{
+    CompressedPostingBuilder, CompressedPostingList, CompressedPostingListIterator, PostingListIter,
+};
 use crate::core::sparse_vector::RemappedSparseVector;
+use std::borrow::Cow;
+use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InvertedIndexCompressedImmutableRam<W: Weight> {
@@ -112,11 +114,11 @@ impl<W: Weight> InvertedIndex for InvertedIndexCompressedImmutableRam<W> {
 
 #[cfg(test)]
 mod tests {
-    use tempfile::Builder;
-    use crate::core::common::types::QuantizedU8;
     use super::*;
+    use crate::core::common::types::QuantizedU8;
     use crate::core::inverted_index::inverted_index_ram_builder::InvertedIndexBuilder;
     use crate::core::sparse_vector::utils::random_sparse_vector;
+    use tempfile::Builder;
 
     #[test]
     fn test_save_load_tiny() {
@@ -154,7 +156,8 @@ mod tests {
             InvertedIndexCompressedImmutableRam::<W>::from_ram_index(
                 Cow::Borrowed(inverted_index_ram),
                 tmp_dir_path.path(),
-            ).unwrap();
+            )
+            .unwrap();
         inverted_index_immutable_ram
             .save(tmp_dir_path.path())
             .unwrap();

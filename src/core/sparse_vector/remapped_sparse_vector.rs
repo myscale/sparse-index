@@ -1,7 +1,7 @@
 use super::utils::*;
 use crate::core::common::types::{DimId, DimOffset, DimWeight, ScoreType};
-use validator::{Validate, ValidationErrors};
 use crate::ffi::TupleElement;
+use validator::{Validate, ValidationErrors};
 
 /// Same as `SparseVector` but with `DimOffset` indices.
 /// Meaning that is uses internal segment-specific indices. // 表示内部 segment 特定的索引？
@@ -59,8 +59,8 @@ impl TryFrom<Vec<TupleElement>> for RemappedSparseVector {
 
         for element in tuples {
             let weight = match element.value_type {
-                0 => element.weight_f32,      // f32 直接使用
-                1 => element.weight_u8 as f32, // u8 转换为 f32
+                0 => element.weight_f32,        // f32 直接使用
+                1 => element.weight_u8 as f32,  // u8 转换为 f32
                 2 => element.weight_u32 as f32, // u32 转换为 f32
                 _ => 0.0f32,
             };
@@ -85,20 +85,16 @@ impl<const N: usize> From<[TupleElement; N]> for RemappedSparseVector {
 
         for element in value {
             let weight = match element.value_type {
-                0 => element.weight_f32,      // f32 直接使用
-                1 => element.weight_u8 as f32, // u8 转换为 f32
+                0 => element.weight_f32,        // f32 直接使用
+                1 => element.weight_u8 as f32,  // u8 转换为 f32
                 2 => element.weight_u32 as f32, // u32 转换为 f32
                 _ => 0.0f32,
-
             };
             indices.push(element.dim_id);
             values.push(weight);
         }
 
-        RemappedSparseVector {
-            indices,
-            values,
-        }
+        RemappedSparseVector { indices, values }
     }
 }
 

@@ -1,10 +1,10 @@
-use std::cmp::Ordering;
+use crate::core::common::types::{DimWeight, ElementOffsetType, Weight};
+use crate::core::posting_list::compressed::comp_posting_list_view::CompressedPostingListView;
+use crate::core::posting_list::compressed::{count_le_sorted, BitPackerImpl};
+use crate::core::posting_list::{PostingElement, PostingElementEx, PostingListIter};
 use bitpacking::BitPacker;
 use serde_json::de::Read;
-use crate::core::common::types::{DimWeight, ElementOffsetType, Weight};
-use crate::core::posting_list::compressed::{count_le_sorted, BitPackerImpl};
-use crate::core::posting_list::compressed::comp_posting_list_view::CompressedPostingListView;
-use crate::core::posting_list::{PostingElement, PostingElementEx, PostingListIter};
+use std::cmp::Ordering;
 
 #[derive(Clone)]
 pub struct CompressedPostingListIterator<'a, W: Weight> {
@@ -57,10 +57,7 @@ impl<'a, W: Weight> PostingListIter for CompressedPostingListIterator<'a, W> {
         if pos / BitPackerImpl::BLOCK_LEN < self.list.chunks.len() {
             if !self.unpacked {
                 self.list
-                    .decompress_chunk(
-                        pos / BitPackerImpl::BLOCK_LEN,
-                        &mut self.decompressed_chunk
-                    );
+                    .decompress_chunk(pos / BitPackerImpl::BLOCK_LEN, &mut self.decompressed_chunk);
                 self.unpacked = true;
             }
 

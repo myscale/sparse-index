@@ -1,6 +1,9 @@
 use std::str::Utf8Error;
 use thiserror::Error;
-use crate::common::file_operations::FileOperationError;
+
+use crate::core::FileOperationError;
+
+
 
 pub const PROCESS_CANCELLED_BY_SERVICE_MESSAGE: &str = "process cancelled by service";
 
@@ -12,7 +15,6 @@ pub enum SparseIndexLibError {
     #[error(transparent)]
     CxxConvertError(#[from] CxxConvertError),
 }
-
 
 #[derive(Debug, Clone, Error)]
 #[allow(dead_code)]

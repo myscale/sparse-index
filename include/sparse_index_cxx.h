@@ -733,7 +733,7 @@ struct FFIError final {
 #ifndef CXXBRIDGE1_STRUCT_SPARSE$ScoredPointOffset
 #define CXXBRIDGE1_STRUCT_SPARSE$ScoredPointOffset
 struct ScoredPointOffset final {
-  ::std::uint32_t idx;
+  ::std::uint32_t row_id;
   float score;
 
   using IsRelocatable = ::std::true_type;
@@ -794,9 +794,15 @@ struct TupleElement final {
 };
 #endif // CXXBRIDGE1_STRUCT_SPARSE$TupleElement
 
+::SPARSE::FFIBoolResult ffi_create_index(::std::string const &index_path) noexcept;
+
 ::SPARSE::FFIBoolResult ffi_create_index_with_parameter(::std::string const &index_path, ::std::string const &index_json_parameter) noexcept;
 
 ::SPARSE::FFIBoolResult ffi_commit_index(::std::string const &index_path) noexcept;
 
 ::SPARSE::FFIBoolResult ffi_insert_sparse_vector(::std::string const &index_path, ::std::uint32_t row_id, ::rust::Vec<::SPARSE::TupleElement> const &sparse_vector) noexcept;
+
+::SPARSE::FFIBoolResult ffi_load_index(::std::string const &index_path) noexcept;
+
+::SPARSE::FFIScoreResult ffi_sparse_search(::std::string const &index_path, ::rust::Vec<::SPARSE::TupleElement> const &sparse_vector, ::rust::Vec<::std::uint8_t> const &filter, ::std::uint32_t top_k) noexcept;
 } // namespace SPARSE

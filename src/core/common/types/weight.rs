@@ -1,15 +1,8 @@
 use half::slice::HalfFloatSliceExt;
 use itertools::{Itertools, MinMaxResult};
-use std::collections::hash_map::Values;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use super::DimWeight;
 
-pub type ScoreType = f32;
-
-pub type ElementOffsetType = u32;
-
-pub type DimOffset = u32;
-pub type DimId = u32;
-pub type DimWeight = f32;
 
 pub trait Weight: PartialEq + Copy + Debug + 'static {
     type QuantizationParams: Copy + PartialEq + Debug;

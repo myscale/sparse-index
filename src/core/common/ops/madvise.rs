@@ -24,6 +24,7 @@ static ADVICE: parking_lot::RwLock<Advice> = parking_lot::RwLock::new(Advice::Ra
 /// The `segment` crate itself does not modify the global [`Advice`] value.
 ///
 /// The default global [`Advice`] value is [`Advice::Random`].
+#[allow(dead_code)]
 pub fn set_global(advice: Advice) {
     *ADVICE.write() = advice;
 }

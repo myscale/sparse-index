@@ -4,7 +4,9 @@ use std::path::Path;
 
 use atomicwrites::{AllowOverwrite, AtomicFile};
 use semver::Version;
-use crate::common::file_operations::FileOperationError;
+
+use crate::core::common::ops::FileOperationError;
+
 
 pub const VERSION_FILE: &str = "version.info";
 
@@ -35,7 +37,7 @@ pub trait StorageVersion {
         };
         file.read_to_string(&mut contents)?;
         let version = contents.parse().map_err(|err| {
-            FileOperationError::New(format!(
+            FileOperationError::FileOperationError(format!(
                 "Can't parse version from {version_file:?}, error: {err}"
             ))
         })?;
@@ -48,7 +50,9 @@ pub trait StorageVersion {
         let current_version = Self::current_raw();
         af.write(|f| f.write_all(current_version.as_bytes()))
             .map_err(|err| {
-                FileOperationError::New(format!("Can't write {version_file:?}, error: {err}"))
+                FileOperationError::FileOperationError(format!(
+                    "Can't write {version_file:?}, error: {err}"
+                ))
             })
     }
 }

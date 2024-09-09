@@ -1,10 +1,11 @@
 mod api;
-mod index;
-mod core;
 mod common;
+mod core;
+mod sparse_index;
+// mod index;
 
-use std::cmp::Ordering;
 use ordered_float::OrderedFloat;
+use std::cmp::Ordering;
 
 use crate::api::cpp::*;
 use crate::ffi::ScoredPointOffset;
@@ -47,8 +48,6 @@ pub mod ffi {
         pub error: FFIError,
     }
 
-
-
     /// value_type: `0 - f32`, `1 - u8`, `2 - u32`
     #[derive(Debug, Clone)]
     pub struct TupleElement {
@@ -59,26 +58,32 @@ pub mod ffi {
         pub value_type: u8,
     }
 
-
     extern "Rust" {
-        pub fn ffi_create_index(
-            index_path: &CxxString,
-        ) -> FFIBoolResult;
+        pub fn ffi_create_index(index_path: &CxxString) -> FFIBoolResult;
 
         pub fn ffi_create_index_with_parameter(
             index_path: &CxxString,
             index_json_parameter: &CxxString,
         ) -> FFIBoolResult;
 
-        pub fn ffi_commit_index(
-            index_path: &CxxString
-        ) -> FFIBoolResult;
+        pub fn ffi_commit_index(index_path: &CxxString) -> FFIBoolResult;
 
         pub fn ffi_insert_sparse_vector(
             index_path: &CxxString,
             row_id: u32,
             sparse_vector: &Vec<TupleElement>,
         ) -> FFIBoolResult;
+
+        pub fn ffi_load_index(
+            index_path: &CxxString,
+        ) -> FFIBoolResult;
+
+        pub fn ffi_sparse_search(
+            index_path: &CxxString,
+            sparse_vector: &Vec<TupleElement>,
+            filter: &Vec<u8>,
+            top_k: u32,
+        ) -> FFIScoreResult;
     }
 }
 
@@ -108,20 +113,34 @@ mod tests {
 
     use crate::ffi::ScoredPointOffset;
 
-
     #[test]
     fn test_equality() {
-        let a = ScoredPointOffset { row_id: 1, score: 1.0 };
-        let b = ScoredPointOffset { row_id: 2, score: 1.0 };
-        let c = ScoredPointOffset { row_id: 3, score: 2.0 };
+        let a = ScoredPointOffset {
+            row_id: 1,
+            score: 1.0,
+        };
+        let b = ScoredPointOffset {
+            row_id: 2,
+            score: 1.0,
+        };
+        let c = ScoredPointOffset {
+            row_id: 3,
+            score: 2.0,
+        };
         assert_eq!(a, b);
         assert_ne!(a, c);
     }
 
     #[test]
     fn test_ordering() {
-        let a = ScoredPointOffset { row_id: 1, score: 1.0 };
-        let b = ScoredPointOffset { row_id: 2, score: 2.0 };
+        let a = ScoredPointOffset {
+            row_id: 1,
+            score: 1.0,
+        };
+        let b = ScoredPointOffset {
+            row_id: 2,
+            score: 2.0,
+        };
         assert!(a < b);
         assert_eq!(a.cmp(&b), Ordering::Less);
         assert_eq!(b.cmp(&a), Ordering::Greater);
@@ -129,9 +148,18 @@ mod tests {
 
     #[test]
     fn test_partial_cmp() {
-        let a = ScoredPointOffset { row_id: 1, score: 1.0 };
-        let b = ScoredPointOffset { row_id: 2, score: 1.0 };
-        let c = ScoredPointOffset { row_id: 3, score: 2.0 };
+        let a = ScoredPointOffset {
+            row_id: 1,
+            score: 1.0,
+        };
+        let b = ScoredPointOffset {
+            row_id: 2,
+            score: 1.0,
+        };
+        let c = ScoredPointOffset {
+            row_id: 3,
+            score: 2.0,
+        };
         assert_eq!(a.partial_cmp(&b), Some(Ordering::Equal));
         assert_eq!(a.partial_cmp(&c), Some(Ordering::Less));
         assert_eq!(c.partial_cmp(&a), Some(Ordering::Greater));

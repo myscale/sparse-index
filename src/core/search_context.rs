@@ -1,13 +1,15 @@
-use std::cmp::{max, min, Ordering};
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering::Relaxed;
-use crate::common::{TopK};
 use crate::core::common::types::{DimId, DimWeight, ElementOffsetType};
 use crate::core::inverted_index::InvertedIndex;
 use crate::core::posting_list::{PostingListIter, PostingListIterator};
 use crate::core::scores::PooledScoresHandle;
 use crate::core::sparse_vector::RemappedSparseVector;
 use crate::ffi::ScoredPointOffset;
+use std::cmp::{max, min, Ordering};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering::Relaxed;
+
+use super::scores::TopK;
+
 
 /// Iterator over posting lists with a reference to the corresponding query index and weight
 pub struct IndexedPostingListIterator<T: PostingListIter> {
@@ -35,17 +37,15 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
     pub fn new(
         query: RemappedSparseVector,
         top: usize,
-        inverted_index: &'a impl InvertedIndex<Iter<'a>=T>,
+        inverted_index: &'a impl InvertedIndex<Iter<'a> = T>,
         pooled: PooledScoresHandle<'b>,
         is_stopped: &'a AtomicBool,
-    ) -> SearchContext<'a, 'b, T>
-    {
+    ) -> SearchContext<'a, 'b, T> {
         let mut postings_iterators: Vec<IndexedPostingListIterator<T>> = Vec::new();
         let mut max_record_id = 0;
         let mut min_record_id = u32::MAX;
 
-        for (query_weight_offset, id) in query.indices.iter().enumerate()
-        {
+        for (query_weight_offset, id) in query.indices.iter().enumerate() {
             if let Some(mut it) = inverted_index.get(id) {
                 if let (Some(first), Some(last_id)) = (it.peek(), it.last_id()) {
                     let min_record_id_posting = first.row_id;
@@ -58,13 +58,11 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
                     let query_weight = query.values[query_weight_offset];
 
                     // 将 query（sparse vector）涉及到的 PostingListIterator 存储起来
-                    postings_iterators.push(
-                        IndexedPostingListIterator {
-                            posting_list_iterator: it,
-                            query_index,
-                            query_weight,
-                        }
-                    )
+                    postings_iterators.push(IndexedPostingListIterator {
+                        posting_list_iterator: it,
+                        query_index,
+                        query_weight,
+                    })
                 }
             }
         }
@@ -76,21 +74,20 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
         let use_pruning = T::reliable_max_next_weight() && query.values.iter().all(|v| *v >= 0.0);
         let min_record_id = Some(min_record_id);
         SearchContext {
-            postings_iterators,  // 根据 query(sparse-vector) 收集到的所有相关的 posting lists iterator
-            query,               // query sparse-vector
-            top,                 // top 个候选值
-            is_stopped,          // 暂时不清楚什么作用
-            top_results,         // K 个候选值
-            min_record_id,       // query(sparse-vector) 涉及到的最小 row_id
-            max_record_id,       // query(sparse-vector) 涉及到的最大 row_id
-            pooled,              // 分数池
-            use_pruning,         // 是否进行加速剪枝
+            postings_iterators, // 根据 query(sparse-vector) 收集到的所有相关的 posting lists iterator
+            query,              // query sparse-vector
+            top,                // top 个候选值
+            is_stopped,         // 暂时不清楚什么作用
+            top_results,        // K 个候选值
+            min_record_id,      // query(sparse-vector) 涉及到的最小 row_id
+            max_record_id,      // query(sparse-vector) 涉及到的最大 row_id
+            pooled,             // 分数池
+            use_pruning,        // 是否进行加速剪枝
         }
     }
 
     /// Plain search against the given ids without any pruning
-    pub fn plain_search(&mut self, ids: &[ElementOffsetType]) -> Vec<ScoredPointOffset>
-    {
+    pub fn plain_search(&mut self, ids: &[ElementOffsetType]) -> Vec<ScoredPointOffset> {
         // sort ids to fully leverage posting list iterator traversal
         let mut sorted_ids = ids.to_vec();
         sorted_ids.sort_unstable();
@@ -133,9 +130,8 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
         &mut self,
         batch_start_id: ElementOffsetType,
         batch_last_id: ElementOffsetType,
-        filter_condition: &F,  // 符合 filter_condition 的才会被纳入计算
-    )
-    {
+        filter_condition: &F, // 符合 filter_condition 的才会被纳入计算
+    ) {
         // init batch scores
         let batch_len = batch_last_id - batch_start_id + 1;
         // pooled.scores 就是一个数组
@@ -146,9 +142,10 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
         // TODO: 这块儿设计的也太不清晰了，写点儿人能看懂的
         for posting in self.postings_iterators.iter_mut() {
             posting.posting_list_iterator.for_each_till_id(
-                batch_last_id,  // id
-                self.pooled.scores.as_mut_slice(),  // Ctx
-                |scores, id, weight| { // impl FnMut(&mut Ctx, ElementOffsetType, DimWeight)
+                batch_last_id,                     // id
+                self.pooled.scores.as_mut_slice(), // Ctx
+                |scores, id, weight| {
+                    // impl FnMut(&mut Ctx, ElementOffsetType, DimWeight)
                     let element_score = weight * posting.query_weight;
                     let local_id = (id - batch_start_id) as usize;
                     // SAFETY: `id` is within `batch_start_id..=batch_last_id`
@@ -177,9 +174,9 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
 
     /// Compute scores for the last posting list quickly
     fn process_last_posting_list<F: Fn(ElementOffsetType) -> bool>(
-        &mut self, filter_condition: &F
-    )
-    {
+        &mut self,
+        filter_condition: &F,
+    ) {
         // TODO 怎么觉得这个 self.postings_iterators 的长度不一定是 1 呢？
         debug_assert_eq!(self.postings_iterators.len(), 1);
         let posting = &mut self.postings_iterators[0];
@@ -192,7 +189,8 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
                     return;
                 }
                 let score = weight * posting.query_weight;
-                self.top_results.push(ScoredPointOffset { score, row_id: id });
+                self.top_results
+                    .push(ScoredPointOffset { score, row_id: id });
             },
         );
     }
@@ -248,8 +246,7 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
     pub fn search<F: Fn(ElementOffsetType) -> bool>(
         &mut self,
         filter_condition: &F,
-    ) -> Vec<ScoredPointOffset>
-    {
+    ) -> Vec<ScoredPointOffset> {
         if self.postings_iterators.is_empty() {
             return Vec::new();
         }
@@ -365,15 +362,19 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
                             let max_weight_from_list = element.weight.max(element.max_next_weight);
 
                             // longest_posting 只是对应了一个维度, 也就是对应 query 的一个 index, 这里计算两个点的内积
-                            let max_score_contribution = max_weight_from_list * longest_posting_iterator.query_weight;
+                            let max_score_contribution =
+                                max_weight_from_list * longest_posting_iterator.query_weight;
 
                             // 点积结果出发了剪枝
                             if max_score_contribution <= min_score {
                                 // prune to next_min_id
-                                let longest_posting_iterator = &mut self.postings_iterators[0].posting_list_iterator;
-                                let position_before_pruning = longest_posting_iterator.current_index();
+                                let longest_posting_iterator =
+                                    &mut self.postings_iterators[0].posting_list_iterator;
+                                let position_before_pruning =
+                                    longest_posting_iterator.current_index();
                                 longest_posting_iterator.skip_to(next_min_id);
-                                let position_after_pruning = longest_posting_iterator.current_index();
+                                let position_after_pruning =
+                                    longest_posting_iterator.current_index();
                                 // check if pruning took place
                                 return position_before_pruning != position_after_pruning;
                             }
@@ -384,7 +385,8 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
                     // the current posting list is the only one left, we can potentially skip it to the end
                     // check against the max possible score using the `max_next_weight`
                     let max_weight_from_list = element.weight.max(element.max_next_weight);
-                    let max_score_contribution = max_weight_from_list * longest_posting_iterator.query_weight;
+                    let max_score_contribution =
+                        max_weight_from_list * longest_posting_iterator.query_weight;
                     if max_score_contribution <= min_score {
                         // prune to the end!
                         let longest_posting_iterator = &mut self.postings_iterators[0];
@@ -397,19 +399,17 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
         // no pruning took place
         false
     }
-
 }
-
 
 #[cfg(test)]
 mod test2 {
-    use std::sync::atomic::AtomicBool;
-    use std::sync::OnceLock;
+    use crate::core::inverted_index::InvertedIndexBuilder;
     use crate::core::inverted_index::InvertedIndexRam;
     use crate::core::scores::{PooledScoresHandle, ScoresMemoryPool};
-    use crate::core::inverted_index::InvertedIndexBuilder;
     use crate::core::search_context::SearchContext;
     use crate::core::sparse_vector::RemappedSparseVector;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::OnceLock;
 
     static TEST_SCORES_POOL: OnceLock<ScoresMemoryPool> = OnceLock::new();
 
@@ -443,11 +443,10 @@ mod test2 {
             &is_stopped,
         );
 
-        let scores = search_context.plain_search(&[0,1,2,3,4,5,6,7,8,9,10]);
+        let scores = search_context.plain_search(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         println!("{:?}", scores);
     }
 }
-
 
 #[cfg(test)]
 // 允许创建可以接受泛型参数的测试模块
@@ -461,11 +460,11 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::core::inverted_index::*;
     use crate::core::common::*;
+    use crate::core::inverted_index::*;
     use crate::core::scores::ScoresMemoryPool;
-    use crate::core::sparse_vector::SparseVector;
     use crate::core::sparse_vector::utils::random_sparse_vector;
+    use crate::core::sparse_vector::SparseVector;
     // ---- Test instantiations ----
 
     #[instantiate_tests(<InvertedIndexRam>)]
@@ -769,7 +768,10 @@ mod tests {
                     score: 30.0,
                     row_id: 1
                 },
-                ScoredPointOffset { score: 6.0, row_id: 9 },
+                ScoredPointOffset {
+                    score: 6.0,
+                    row_id: 9
+                },
             ]
         );
     }
@@ -1032,4 +1034,3 @@ mod tests {
         );
     }
 }
-

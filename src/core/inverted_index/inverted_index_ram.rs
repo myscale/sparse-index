@@ -1,5 +1,5 @@
 use crate::core::common::types::{DimId, ElementOffsetType};
-use crate::core::common::StorageVersion;
+use super::StorageVersion;
 use crate::core::inverted_index::InvertedIndex;
 use crate::core::posting_list::{PostingElementEx, PostingList, PostingListIterator};
 use crate::core::sparse_vector::RemappedSparseVector;

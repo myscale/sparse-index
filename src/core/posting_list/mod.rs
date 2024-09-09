@@ -6,11 +6,7 @@ pub use simple::{PostingList, PostingListBuilder, PostingListIterator};
 pub use traits::*;
 
 pub use compressed::{
-    CompressedPostingChunk,
-    CompressedPostingList,
-    CompressedPostingBuilder,
-    CompressedPostingListIterator,
-    CompressedPostingListStdIterator,
-    CompressedPostingListStoreSize,
-    CompressedPostingListView
+    CompressedPostingBuilder, CompressedPostingChunk, CompressedPostingList,
+    CompressedPostingListIterator, CompressedPostingListStdIterator,
+    CompressedPostingListStoreSize, CompressedPostingListView,
 };

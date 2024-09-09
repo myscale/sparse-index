@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::{self, BufRead as _, BufReader, Lines};
+use std::io::{self};
 use std::mem::size_of;
 use std::path::Path;
 
-use crate::core::common::mmap_ops::{open_read_mmap, transmute_from_u8, transmute_from_u8_to_slice};
+use crate::core::common::ops::*;
 use crate::core::sparse_vector::SparseVector;
 use memmap2::Mmap;
 use validator::ValidationErrors;

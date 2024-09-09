@@ -1,11 +1,10 @@
-use crate::core::common::types::ScoreType;
-use crate::core::scores::PooledScores;
 use crate::core::scores::scores_memory_pool::ScoresMemoryPool;
+use crate::core::scores::PooledScores;
 
 #[derive(Debug)]
 pub struct PooledScoresHandle<'a> {
-    pool: &'a ScoresMemoryPool,  // 引用的一个分数池实例
-    pub scores: PooledScores,    // 实际持有的分数数据
+    pool: &'a ScoresMemoryPool, // 引用的一个分数池实例
+    pub scores: PooledScores,   // 实际持有的分数数据
 }
 
 impl<'a> PooledScoresHandle<'a> {

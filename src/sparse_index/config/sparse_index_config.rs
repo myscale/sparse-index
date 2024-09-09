@@ -1,8 +1,6 @@
-use std::path::{Path, PathBuf};
-use schemars::JsonSchema;
+use crate::core::*;
 use serde::{Deserialize, Serialize};
-use crate::common::errors::{SparseIndexLibError};
-use crate::common::file_operations::{atomic_save_json, read_json, FileOperationError};
+use std::path::Path;
 
 pub const SPARSE_INDEX_CONFIG_FILE: &str = "sparse_index_config.json";
 
@@ -37,7 +35,6 @@ impl SparseIndexType {
     }
 }
 
-
 // TODO Copy 和 Clone 啥关系
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default, Copy, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -50,7 +47,6 @@ pub enum VectorStorageDatatype {
     #[serde(rename = "u8")]
     UInt8,
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default, Copy, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -73,12 +69,12 @@ impl SparseIndexConfig {
     pub fn new(
         index_type: SparseIndexType,
         datatype: VectorStorageDatatype,
-        compressed: bool
+        compressed: bool,
     ) -> Self {
         SparseIndexConfig {
             index_type,
             datatype,
-            compressed
+            compressed,
         }
     }
 
@@ -92,7 +88,6 @@ impl SparseIndexConfig {
         Ok(atomic_save_json(&file_path, self)?)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -111,19 +106,21 @@ mod tests {
     fn test_parse_config() {
         let empty_config = "{}";
         let empty_config: SparseIndexConfig = serde_json::from_str(empty_config).expect("");
-        assert_eq!(empty_config, SparseIndexConfig::new(
-            SparseIndexType::default(),
-            VectorStorageDatatype::default(),
-            true
-        ));
+        assert_eq!(
+            empty_config,
+            SparseIndexConfig::new(
+                SparseIndexType::default(),
+                VectorStorageDatatype::default(),
+                true
+            )
+        );
 
         let config = "{\"index_type\":\"mmap\",\"datatype\":\"f16\",\"compressed\":true}";
         let config: SparseIndexConfig = serde_json::from_str(config).expect("");
-        assert_eq!(config, SparseIndexConfig::new(
-            SparseIndexType::Mmap,
-            VectorStorageDatatype::Float16,
-            true
-        ));
+        assert_eq!(
+            config,
+            SparseIndexConfig::new(SparseIndexType::Mmap, VectorStorageDatatype::Float16, true)
+        );
     }
 
     #[test]
@@ -131,11 +128,8 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
         let index_path = temp_dir.path();
 
-        let config = SparseIndexConfig::new(
-            SparseIndexType::Mmap,
-            VectorStorageDatatype::Float16,
-            true
-        );
+        let config =
+            SparseIndexConfig::new(SparseIndexType::Mmap, VectorStorageDatatype::Float16, true);
 
         config.save(index_path).expect("Failed to save config");
 

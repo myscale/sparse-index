@@ -76,6 +76,40 @@ int main(int argc, char** argv) {
             std::cout << "Commit index..." << endl;
             ffi_commit_index(index_path);
         }
+
+        std::cout << "Load index..." << endl;
+        ffi_load_index(index_path);
+
+        std::cout << "Search from index..." << endl;
+        loader.iterateQueryRows([&](const MsMacroQuery& row) {
+            std::cout << row.id << std::endl;
+            rust::Vec<TupleElement> sparse_vector;
+            for (size_t i = 0; i < row.dim_ids.size(); i++) {
+                sparse_vector.emplace_back(
+                    TupleElement{
+                        row.dim_ids[i],
+                        row.weights[i],
+                        0,
+                        0,
+                        0
+                    }
+                );
+            }
+            rust::Vec<uint8_t> filter;
+            std::cout<<"Hello begin" <<std::endl;
+            const auto& result = ffi_sparse_search(
+                index_path, 
+                sparse_vector,
+                filter,
+                5
+            );
+            std::cout<<"Hello" <<std::endl;
+            std::cout<<"res is ok? " << !result.error.is_error <<std::endl;
+            std::cout<<"res[0].row_id: " << result.result[0].row_id <<std::endl;
+        }, 100);
+
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+
         // MsMacroLoader::getInstance().loadQueryTerms(query_term_path);
         // MsMacroLoader::getInstance().setIndexDirectory(index_path);
         // MsMacroLoader::getInstance().setDatasetFilePath(docs_path);
@@ -85,14 +119,14 @@ int main(int argc, char** argv) {
 
 
         // Run all benchmark
-        int benchmark_argc = 2;
-        char* benchmark_program = argv[0];
-        char benchmark_tabular_arg[] = "--benchmark_counters_tabular=true";
-        char* benchmark_argv[] = { benchmark_program, benchmark_tabular_arg };
-        ::benchmark::Initialize(&benchmark_argc, benchmark_argv);
-        if (::benchmark::ReportUnrecognizedArguments(benchmark_argc, benchmark_argv)) return 1;
-        ::benchmark::RunSpecifiedBenchmarks();
-        ::benchmark::Shutdown();
+        // int benchmark_argc = 2;
+        // char* benchmark_program = argv[0];
+        // char benchmark_tabular_arg[] = "--benchmark_counters_tabular=true";
+        // char* benchmark_argv[] = { benchmark_program, benchmark_tabular_arg };
+        // ::benchmark::Initialize(&benchmark_argc, benchmark_argv);
+        // if (::benchmark::ReportUnrecognizedArguments(benchmark_argc, benchmark_argv)) return 1;
+        // ::benchmark::RunSpecifiedBenchmarks();
+        // ::benchmark::Shutdown();
         return 0;
     } catch (const bpo::error &e) {
         return 1;

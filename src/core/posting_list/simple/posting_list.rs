@@ -1,8 +1,8 @@
-use std::cmp::max;
-use ordered_float::OrderedFloat;
-use crate::core::common::types::{DimWeight, ElementOffsetType};
 use super::super::traits::{PostingElementEx, DEFAULT_MAX_NEXT_WEIGHT};
 use super::{PostingListBuilder, PostingListIterator};
+use crate::core::common::types::{DimWeight, ElementOffsetType};
+use ordered_float::OrderedFloat;
+use std::cmp::max;
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct PostingList {

@@ -1,11 +1,9 @@
 use std::borrow::Cow;
-use std::hash::Hash;
 
 use super::utils::*;
 use crate::core::common::types::{DimId, DimWeight, ScoreType};
-use itertools::Itertools;
-use validator::{Validate, ValidationErrors};
 use crate::core::sparse_vector::RemappedSparseVector;
+use validator::{Validate, ValidationErrors};
 
 /// Sparse vector structure
 #[derive(Debug, PartialEq, Clone, Default)]

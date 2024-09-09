@@ -1,9 +1,5 @@
-pub mod madvise;
-pub mod mmap_ops;
-mod storage_version;
 pub mod types;
-mod sparse_index_base;
+pub mod ops;
 
-pub use storage_version::*;
-
-pub use types::{QuantizedU8, };
+pub use types::*;
+pub use ops::*;

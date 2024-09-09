@@ -1,6 +1,6 @@
-use std::str::Utf8Error;
-use cxx::{vector::VectorElement, CxxString, CxxVector};
 use crate::common::errors::CxxConvertError;
+use cxx::{vector::VectorElement, CxxString, CxxVector};
+use std::str::Utf8Error;
 
 pub trait ConvertStrategy<T, U> {
     fn convert(&self, item: &T) -> Result<U, CxxConvertError>;
@@ -80,7 +80,7 @@ where
 impl<T, U, S> Converter<T, U, S>
 where
     S: ConvertStrategy<T, U>,
-// T: VectorElement,
+    // T: VectorElement,
 {
     pub fn new(strategy: S) -> Self {
         Converter {

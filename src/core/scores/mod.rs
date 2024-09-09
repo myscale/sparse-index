@@ -1,8 +1,9 @@
-use lazy_static::lazy_static;
 use crate::core::common::types::ScoreType;
+use lazy_static::lazy_static;
 
 mod pooled_scores_handle;
 mod scores_memory_pool;
+mod top_k;
 
 type PooledScores = Vec<ScoreType>;
 
@@ -13,3 +14,5 @@ lazy_static! {
 }
 pub use pooled_scores_handle::PooledScoresHandle;
 pub use scores_memory_pool::ScoresMemoryPool;
+
+pub use top_k::TopK;

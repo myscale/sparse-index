@@ -1,10 +1,10 @@
+use crate::core::common::types::{DimWeight, ElementOffsetType, Weight};
+use crate::core::posting_list::compressed::comp_posting_list::CompressedPostingList;
+use crate::core::posting_list::compressed::comp_posting_list_view::CompressedPostingListView;
+use crate::core::posting_list::compressed::{BitPackerImpl, CompressedPostingChunk};
+use crate::core::posting_list::{GenericPostingElement, PostingElement};
 use bitpacking::BitPacker;
 use itertools::Itertools;
-use crate::core::common::types::{DimWeight, ElementOffsetType, Weight};
-use crate::core::posting_list::compressed::{BitPackerImpl, CompressedPostingChunk};
-use crate::core::posting_list::compressed::comp_posting_list::CompressedPostingList;
-use crate::core::posting_list::{GenericPostingElement, PostingElement};
-use crate::core::posting_list::compressed::comp_posting_list_view::CompressedPostingListView;
 
 pub struct CompressedPostingBuilder {
     elements: Vec<PostingElement>,

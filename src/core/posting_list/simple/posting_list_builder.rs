@@ -1,6 +1,6 @@
-use crate::core::common::types::{DimWeight, ElementOffsetType};
 use super::super::traits::PostingElementEx;
 use super::PostingList;
+use crate::core::common::types::{DimWeight, ElementOffsetType};
 
 pub struct PostingListBuilder {
     elements: Vec<PostingElementEx>,

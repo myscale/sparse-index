@@ -52,14 +52,9 @@ impl FFIResult<Vec<ScoredPointOffset>> for FFIScoreResult {
     }
 }
 
-
-
-
-
 pub struct ApiUtils;
 
 impl ApiUtils {
-
     pub fn handle_error<T, E>(func_name: &str, prefix: &str, error: String) -> T
     where
         T: FFIResult<E>,
@@ -67,5 +62,4 @@ impl ApiUtils {
         let error_message = format!("{}, {}", prefix, error);
         T::from_error(error_message)
     }
-
 }
