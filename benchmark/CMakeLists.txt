@@ -14,5 +14,10 @@ target_link_libraries(sparse_index_benchmark
     PUBLIC
     sparse_index_contrib_lib
     rust::sparse_index
-    "-framework CoreFoundation"
 )
+if(APPLE)
+    target_link_libraries(sparse_index_benchmark
+        PUBLIC
+        "-framework CoreFoundation"
+    )
+endif()
