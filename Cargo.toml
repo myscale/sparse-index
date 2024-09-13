@@ -41,6 +41,11 @@ flurry = "0.5.1"
 [build-dependencies]
 cxx-build = "1.0.119"
 
+
+[profile.release]
+debug = true
+
+
 [profile.relwithdebinfo]
 inherits = "release"
 debug = true
