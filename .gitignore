@@ -2,3 +2,4 @@
 target
 build
 datasets/*.json
+.cargo/config.toml

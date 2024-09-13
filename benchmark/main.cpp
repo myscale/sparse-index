@@ -1,6 +1,7 @@
 #include <BM25SearchBenchmark.h>
 #include <IndexDocumentBenchmark.h>
 #include <benchmark/benchmark.h>
+#include <sparse_index.h>
 using namespace std;
 using namespace SPARSE;
 namespace  bpo = boost::program_options;
