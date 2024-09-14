@@ -85,6 +85,10 @@ impl SparseIndexConfig {
 
     pub fn save(&self, index_path: &Path) -> Result<(), FileOperationError> {
         let file_path = index_path.join(SPARSE_INDEX_CONFIG_FILE);
+        // 确保索引路径存在
+        if !index_path.exists() {
+            std::fs::create_dir_all(index_path).map_err(|e| FileOperationError::IoError(e))?;
+        }
         Ok(atomic_save_json(&file_path, self)?)
     }
 }
