@@ -40,8 +40,16 @@ pub fn ffi_create_index_with_parameter(
         }
     };
     // 存储索引配置
-    let config: SparseIndexConfig = serde_json::from_str(&index_json_parameter).expect("");
-    config.save(Path::new(&index_path)).expect("can't save");
+    let config: SparseIndexConfig = match serde_json::from_str(&index_json_parameter) {
+        Ok(conf) => conf,
+        Err(e) => {
+            return ApiUtils::handle_error(FUNC_NAME, "Can't serde frome 'index_json_parameter'", e.to_string());
+        }
+    };
+    match config.save(Path::new(&index_path)) {
+        Ok(_) => (),
+        Err(e) => return ApiUtils::handle_error(FUNC_NAME, "Can't save json parameter to disk", e.to_string()),
+    };
 
     // TODO insert 到 cache 里的时候没有用到 mut，但是使用的时候可以重新声明为 mut?
     let builder = InvertedIndexBuilder::new();
