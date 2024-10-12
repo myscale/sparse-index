@@ -1,4 +1,4 @@
-use crate::api::cpp::utils::ApiUtils;
+use crate::api::clickhouse::utils::ApiUtils;
 use crate::common::constants::CXX_STRING_CONVERTER;
 
 use crate::common::*;

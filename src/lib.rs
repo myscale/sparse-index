@@ -15,7 +15,7 @@ use ordered_float::OrderedFloat;
 use std::cmp::Ordering;
 use std::path::Path;
 
-use crate::api::cpp::*;
+use crate::api::clickhouse::*;
 use crate::ffi::ScoredPointOffset;
 
 /// 每个 Segment 存储的 SparseVector 数量上限是 u32
@@ -122,6 +122,7 @@ pub mod ffi {
     }
 
     extern "Rust" {
+        /* index manager */
         pub fn ffi_create_index(index_path: &CxxString) -> FFIBoolResult;
 
         pub fn ffi_create_index_with_parameter(
@@ -136,8 +137,12 @@ pub mod ffi {
             row_id: u32,
             sparse_vector: &Vec<TupleElement>,
         ) -> FFIBoolResult;
+        pub fn ffi_free_index_writer(index_path: &CxxString) -> FFIBoolResult;
 
-        pub fn ffi_load_index(index_path: &CxxString) -> FFIBoolResult;
+        /* index searcher */
+        pub fn ffi_load_index_reader(index_path: &CxxString) -> FFIBoolResult;
+
+        pub fn ffi_free_index_reader(index_path: &CxxString) -> FFIBoolResult;
 
         pub fn ffi_sparse_search(
             index_path: &CxxString,

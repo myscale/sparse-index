@@ -802,7 +802,11 @@ struct TupleElement final {
 
 ::SPARSE::FFIBoolResult ffi_insert_sparse_vector(::std::string const &index_path, ::std::uint32_t row_id, ::rust::Vec<::SPARSE::TupleElement> const &sparse_vector) noexcept;
 
-::SPARSE::FFIBoolResult ffi_load_index(::std::string const &index_path) noexcept;
+::SPARSE::FFIBoolResult ffi_free_index_writer(::std::string const &index_path) noexcept;
+
+::SPARSE::FFIBoolResult ffi_load_index_reader(::std::string const &index_path) noexcept;
+
+::SPARSE::FFIBoolResult ffi_free_index_reader(::std::string const &index_path) noexcept;
 
 ::SPARSE::FFIScoreResult ffi_sparse_search(::std::string const &index_path, ::rust::Vec<::SPARSE::TupleElement> const &sparse_vector, ::rust::Vec<::std::uint8_t> const &filter, ::std::uint32_t top_k) noexcept;
 } // namespace SPARSE

@@ -6,9 +6,9 @@ pub fn parse_index_type(config: SparseIndexConfig) -> Result<InvertedIndexEnum, 
     let (index_type, storage_type, compressed) =
         (config.index_type, config.datatype, config.compressed);
     match (index_type, storage_type, compressed) {
-        (SparseIndexType::ImmutableRam, VectorStorageDatatype::Float32, false) => {
-            Ok(InvertedIndexEnum::InvertedIndexImmutableRam)
-        }
+        // (SparseIndexType::ImmutableRam, VectorStorageDatatype::Float32, false) => {
+        //     Ok(InvertedIndexEnum::InvertedIndexImmutableRam)
+        // }
         (SparseIndexType::Mmap, VectorStorageDatatype::Float32, false) => {
             Ok(InvertedIndexEnum::InvertedIndexMmap)
         }

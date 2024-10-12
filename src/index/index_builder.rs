@@ -38,11 +38,11 @@ impl IndexBuilder {
 
     /// 使用内存模式创建索引
     pub fn create_in_ram(self) -> Result<Index, SparseError> {
-        // 需要 index 类型为 ram
-        assert_eq!(
-            self.index_settings.config.index_type,
-            SparseIndexType::MutableRam
-        );
+        // TODO 需要 index 类型为 ram
+        // assert_eq!(
+        //     self.index_settings.config.index_type,
+        //     SparseIndexType::MutableRam
+        // );
 
         let ram_directory = RamDirectory::create();
         self.create(ram_directory)

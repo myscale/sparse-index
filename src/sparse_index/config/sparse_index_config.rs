@@ -6,11 +6,11 @@ pub const SPARSE_INDEX_CONFIG_FILE: &str = "sparse_index_config.json";
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default, Clone, Copy)]
 pub enum SparseIndexType {
-    #[serde(rename = "mutable_ram")]
-    MutableRam,
+    // #[serde(rename = "mutable_ram")]
+    // MutableRam,
 
-    #[serde(rename = "immutable_ram")]
-    ImmutableRam,
+    // #[serde(rename = "immutable_ram")]
+    // ImmutableRam,
 
     #[default]
     #[serde(rename = "mmap")]
@@ -18,20 +18,21 @@ pub enum SparseIndexType {
 }
 
 impl SparseIndexType {
-    pub fn is_appendable(&self) -> bool {
-        *self == Self::MutableRam
-    }
+    // pub fn is_appendable(&self) -> bool {
+    //     *self == Self::MutableRam
+    // }
 
-    pub fn is_immutable(&self) -> bool {
-        *self != Self::MutableRam
-    }
+    // pub fn is_immutable(&self) -> bool {
+    //     *self != Self::MutableRam
+    // }
 
     pub fn is_on_disk(&self) -> bool {
         *self == Self::Mmap
     }
 
     pub fn is_persisted(&self) -> bool {
-        *self == Self::Mmap || *self == Self::ImmutableRam
+        // *self == Self::Mmap || *self == Self::ImmutableRam
+        *self == Self::Mmap
     }
 }
 
@@ -42,10 +43,10 @@ pub enum VectorStorageDatatype {
     #[default]
     #[serde(rename = "f32")]
     Float32,
-    #[serde(rename = "f16")]
-    Float16,
-    #[serde(rename = "u8")]
-    UInt8,
+    // #[serde(rename = "f16")]
+    // Float16,
+    // #[serde(rename = "u8")]
+    // UInt8,
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default, Copy, Clone)]
@@ -100,9 +101,6 @@ mod tests {
 
     #[test]
     fn test_sparse_index_type() {
-        assert!(SparseIndexType::MutableRam.is_appendable());
-        assert!(SparseIndexType::ImmutableRam.is_immutable());
-        assert!(!SparseIndexType::ImmutableRam.is_on_disk());
         assert!(SparseIndexType::Mmap.is_persisted());
     }
 
@@ -119,11 +117,11 @@ mod tests {
             )
         );
 
-        let config = "{\"index_type\":\"mmap\",\"datatype\":\"f16\",\"compressed\":true}";
+        let config = "{\"index_type\":\"mmap\",\"datatype\":\"f32\",\"compressed\":true}";
         let config: SparseIndexConfig = serde_json::from_str(config).expect("");
         assert_eq!(
             config,
-            SparseIndexConfig::new(SparseIndexType::Mmap, VectorStorageDatatype::Float16, true)
+            SparseIndexConfig::new(SparseIndexType::Mmap, VectorStorageDatatype::Float32, true)
         );
     }
 
@@ -133,7 +131,7 @@ mod tests {
         let index_path = temp_dir.path();
 
         let config =
-            SparseIndexConfig::new(SparseIndexType::Mmap, VectorStorageDatatype::Float16, true);
+            SparseIndexConfig::new(SparseIndexType::Mmap, VectorStorageDatatype::Float32, true);
 
         config.save(index_path).expect("Failed to save config");
 

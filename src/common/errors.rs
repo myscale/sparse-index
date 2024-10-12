@@ -2,6 +2,7 @@ use std::{fmt, io};
 use std::{path::PathBuf, str::Utf8Error, sync::Arc};
 use thiserror::Error;
 
+use crate::directory::error;
 use crate::{
     core::FileOperationError,
     directory::error::{
@@ -157,7 +158,7 @@ impl fmt::Debug for DataCorruption {
 // }
 
 /// The library's error enum
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Error)]
 pub enum SparseError {
     /// IO Error.
     #[error("An IO error occurred: '{0}'")]
@@ -199,6 +200,11 @@ pub enum SparseError {
     /// A thread holding the locked panicked and poisoned the lock.
     #[error("A thread holding the locked panicked and poisoned the lock")]
     Poisoned,
+
+    #[error("'{0:?}'")]
+    FileOperationError(#[from] FileOperationError),
+    #[error("'{0}'")]
+    Error(String),
 }
 
 impl From<io::Error> for SparseError {
@@ -226,5 +232,11 @@ impl From<LockError> for SparseError {
 impl From<serde_json::Error> for SparseError {
     fn from(serde_error: serde_json::Error) -> SparseError {
         SparseError::SystemError(serde_error.to_string())
+    }
+}
+
+impl From<String> for SparseError {
+    fn from(value: String) -> Self {
+        SparseError::Error(value)
     }
 }

@@ -4,4 +4,4 @@ mod warming;
 use searcher::{Searcher, SearcherGeneration, SearcherInner};
 pub use warming::Warmer;
 
-pub use index_reader::{IndexReader, IndexReaderBuilder};
+pub use index_reader::{IndexReader, IndexReaderBuilder, ReloadPolicy};
