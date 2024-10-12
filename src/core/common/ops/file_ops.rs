@@ -80,7 +80,6 @@ impl<'de> Deserialize<'de> for FileOperationError {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,11 +132,11 @@ mod tests {
     #[test]
     fn test_file_operation_error() {
         let non_existent_path = Path::new("non_existent_file.json");
-        
+
         // Test read_json with non-existent file
         let result = read_json::<TestData>(non_existent_path);
         assert!(result.is_err());
-        
+
         // Test read_bin with non-existent file
         let result = read_bin::<TestData>(non_existent_path);
         assert!(result.is_err());

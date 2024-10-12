@@ -7,7 +7,7 @@ use crate::ffi::*;
 use crate::sparse_index::{parse_index_type, SparseIndexConfig};
 
 use cxx::CxxString;
-use half::f16;
+// use half::f16;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -41,43 +41,43 @@ pub fn ffi_load_index(index_path: &CxxString) -> FFIBoolResult {
             let pinned = INVERTED_INDEX_MMAP_CACHE.pin();
             pinned.insert(index_path.clone(), Arc::new(index));
         }
-        InvertedIndexEnum::InvertedIndexCompressedImmutableRamF32 => {
-            let index = InvertedIndexCompressedImmutableRam::<f32>::open(Path::new(&index_path))
-                .expect("can't open compressed immutable ram f32 index");
-            let pinned = INVERTED_INDEX_COMPRESSED_IMMUTABLE_RAM_F32_CACHE.pin();
-            pinned.insert(index_path.clone(), Arc::new(index));
-        }
-        InvertedIndexEnum::InvertedIndexCompressedImmutableRamF16 => {
-            let index = InvertedIndexCompressedImmutableRam::<f16>::open(Path::new(&index_path))
-                .expect("can't open compressed immutable ram f16 index");
-            let pinned = INVERTED_INDEX_COMPRESSED_IMMUTABLE_RAM_F16_CACHE.pin();
-            pinned.insert(index_path.clone(), Arc::new(index));
-        }
-        InvertedIndexEnum::InvertedIndexCompressedImmutableRamU8 => {
-            let index =
-                InvertedIndexCompressedImmutableRam::<QuantizedU8>::open(Path::new(&index_path))
-                    .expect("can't open compressed immutable ram u8 index");
-            let pinned = INVERTED_INDEX_COMPRESSED_IMMUTABLE_RAM_U8_CACHE.pin();
-            pinned.insert(index_path.clone(), Arc::new(index));
-        }
-        InvertedIndexEnum::InvertedIndexCompressedMmapF32 => {
-            let index = InvertedIndexCompressedMmap::<f32>::open(Path::new(&index_path))
-                .expect("can't open compressed mmap f32 index");
-            let pinned = INVERTED_INDEX_COMPRESSED_MMAP_F32_CACHE.pin();
-            pinned.insert(index_path.clone(), Arc::new(index));
-        }
-        InvertedIndexEnum::InvertedIndexCompressedMmapF16 => {
-            let index = InvertedIndexCompressedMmap::<f16>::open(Path::new(&index_path))
-                .expect("can't open compressed mmap f16 index");
-            let pinned = INVERTED_INDEX_COMPRESSED_MMAP_F16_CACHE.pin();
-            pinned.insert(index_path.clone(), Arc::new(index));
-        }
-        InvertedIndexEnum::InvertedIndexCompressedMmapU8 => {
-            let index = InvertedIndexCompressedMmap::<QuantizedU8>::open(Path::new(&index_path))
-                .expect("can't open compressed mmap u8 index");
-            let pinned = INVERTED_INDEX_COMPRESSED_MMAP_U8_CACHE.pin();
-            pinned.insert(index_path.clone(), Arc::new(index));
-        }
+        // InvertedIndexEnum::InvertedIndexCompressedImmutableRamF32 => {
+        //     let index = InvertedIndexCompressedImmutableRam::<f32>::open(Path::new(&index_path))
+        //         .expect("can't open compressed immutable ram f32 index");
+        //     let pinned = INVERTED_INDEX_COMPRESSED_IMMUTABLE_RAM_F32_CACHE.pin();
+        //     pinned.insert(index_path.clone(), Arc::new(index));
+        // }
+        // InvertedIndexEnum::InvertedIndexCompressedImmutableRamF16 => {
+        //     let index = InvertedIndexCompressedImmutableRam::<f16>::open(Path::new(&index_path))
+        //         .expect("can't open compressed immutable ram f16 index");
+        //     let pinned = INVERTED_INDEX_COMPRESSED_IMMUTABLE_RAM_F16_CACHE.pin();
+        //     pinned.insert(index_path.clone(), Arc::new(index));
+        // }
+        // InvertedIndexEnum::InvertedIndexCompressedImmutableRamU8 => {
+        //     let index =
+        //         InvertedIndexCompressedImmutableRam::<QuantizedU8>::open(Path::new(&index_path))
+        //             .expect("can't open compressed immutable ram u8 index");
+        //     let pinned = INVERTED_INDEX_COMPRESSED_IMMUTABLE_RAM_U8_CACHE.pin();
+        //     pinned.insert(index_path.clone(), Arc::new(index));
+        // }
+        // InvertedIndexEnum::InvertedIndexCompressedMmapF32 => {
+        //     let index = InvertedIndexCompressedMmap::<f32>::open(Path::new(&index_path))
+        //         .expect("can't open compressed mmap f32 index");
+        //     let pinned = INVERTED_INDEX_COMPRESSED_MMAP_F32_CACHE.pin();
+        //     pinned.insert(index_path.clone(), Arc::new(index));
+        // }
+        // InvertedIndexEnum::InvertedIndexCompressedMmapF16 => {
+        //     let index = InvertedIndexCompressedMmap::<f16>::open(Path::new(&index_path))
+        //         .expect("can't open compressed mmap f16 index");
+        //     let pinned = INVERTED_INDEX_COMPRESSED_MMAP_F16_CACHE.pin();
+        //     pinned.insert(index_path.clone(), Arc::new(index));
+        // }
+        // InvertedIndexEnum::InvertedIndexCompressedMmapU8 => {
+        //     let index = InvertedIndexCompressedMmap::<QuantizedU8>::open(Path::new(&index_path))
+        //         .expect("can't open compressed mmap u8 index");
+        //     let pinned = INVERTED_INDEX_COMPRESSED_MMAP_U8_CACHE.pin();
+        //     pinned.insert(index_path.clone(), Arc::new(index));
+        // }
     }) {
         FFIBoolResult {
             result: false,
@@ -141,37 +141,37 @@ pub fn ffi_sparse_search(
             Ok(search_context.search(&f))
         }
         InvertedIndexEnum::InvertedIndexMmap => Err("NotSupported".to_string()),
-        InvertedIndexEnum::InvertedIndexCompressedImmutableRamF32 => {
-            Err("NotSupported".to_string())
-        }
-        InvertedIndexEnum::InvertedIndexCompressedImmutableRamF16 => {
-            Err("NotSupported".to_string())
-        }
-        InvertedIndexEnum::InvertedIndexCompressedImmutableRamU8 => Err("NotSupported".to_string()),
-        InvertedIndexEnum::InvertedIndexCompressedMmapF32 => {
-            let index = InvertedIndexCompressedMmap::<f32>::open(Path::new(&index_path))
-                .expect("can't open immutable ram file");
-            let pinned = INVERTED_INDEX_COMPRESSED_MMAP_F32_CACHE.pin();
-            pinned.insert(index_path.clone(), Arc::new(index));
-            let res = pinned.get(&index_path).unwrap();
+        // InvertedIndexEnum::InvertedIndexCompressedImmutableRamF32 => {
+        //     Err("NotSupported".to_string())
+        // }
+        // InvertedIndexEnum::InvertedIndexCompressedImmutableRamF16 => {
+        //     Err("NotSupported".to_string())
+        // }
+        // InvertedIndexEnum::InvertedIndexCompressedImmutableRamU8 => Err("NotSupported".to_string()),
+        // InvertedIndexEnum::InvertedIndexCompressedMmapF32 => {
+        //     let index = InvertedIndexCompressedMmap::<f32>::open(Path::new(&index_path))
+        //         .expect("can't open immutable ram file");
+        //     let pinned = INVERTED_INDEX_COMPRESSED_MMAP_F32_CACHE.pin();
+        //     pinned.insert(index_path.clone(), Arc::new(index));
+        //     let res = pinned.get(&index_path).unwrap();
 
-            // TODO 简化逻辑
-            let is_stopped = AtomicBool::default();
-            let scores_memory_pool = ScoresMemoryPool::new();
+        //     // TODO 简化逻辑
+        //     let is_stopped = AtomicBool::default();
+        //     let scores_memory_pool = ScoresMemoryPool::new();
 
-            let memory_handle = scores_memory_pool.get();
-            let mut search_context = SearchContext::new(
-                sparse_vector.clone().try_into().unwrap(),
-                top_k as usize,
-                res.as_ref(),
-                memory_handle,
-                &is_stopped,
-            );
-            let f = |id| true;
-            Ok(search_context.search(&f))
-        },
-        InvertedIndexEnum::InvertedIndexCompressedMmapF16 => Err("NotSupported".to_string()),
-        InvertedIndexEnum::InvertedIndexCompressedMmapU8 => Err("NotSupported".to_string()),
+        //     let memory_handle = scores_memory_pool.get();
+        //     let mut search_context = SearchContext::new(
+        //         sparse_vector.clone().try_into().unwrap(),
+        //         top_k as usize,
+        //         res.as_ref(),
+        //         memory_handle,
+        //         &is_stopped,
+        //     );
+        //     let f = |id| true;
+        //     Ok(search_context.search(&f))
+        // }
+        // InvertedIndexEnum::InvertedIndexCompressedMmapF16 => Err("NotSupported".to_string()),
+        // InvertedIndexEnum::InvertedIndexCompressedMmapU8 => Err("NotSupported".to_string()),
     };
 
     println!("{:?}", search_result);

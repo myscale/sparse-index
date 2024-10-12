@@ -1,14 +1,77 @@
 mod api;
 mod common;
 mod core;
+mod directory;
+mod future_result;
+mod index;
+mod indexer;
+mod macros;
+mod reader;
 mod sparse_index;
-// mod index;
 
+use common::errors::SparseError;
+use once_cell::sync::Lazy;
 use ordered_float::OrderedFloat;
 use std::cmp::Ordering;
+use std::path::Path;
 
 use crate::api::cpp::*;
 use crate::ffi::ScoredPointOffset;
+
+/// 每个 Segment 存储的 SparseVector 数量上限是 u32
+pub type SparseVectorId = u32;
+/// 每个 Segment 存储的 SparseVector 数量上限是 u32
+pub type RowId = u32;
+pub type SegmentOrdinal = u32;
+pub type Opstamp = u64;
+pub type Result<T> = std::result::Result<T, SparseError>;
+
+/// The meta file contains all the information about the list of segments and the schema
+/// of the index.
+pub static META_FILEPATH: Lazy<&'static Path> = Lazy::new(|| Path::new("meta.json"));
+
+pub static INDEX_CONFIG_FILEPATH: Lazy<&'static Path> =
+    Lazy::new(|| Path::new("index_config.json"));
+
+/// The managed file contains a list of files that were created by the tantivy
+/// and will therefore be garbage collected when they are deemed useless by tantivy.
+///
+/// Removing this file is safe, but will prevent the garbage collection of all of the file that
+/// are currently in the directory
+pub static MANAGED_FILEPATH: Lazy<&'static Path> = Lazy::new(|| Path::new(".managed.json"));
+/// Index format version.
+pub const INDEX_FORMAT_VERSION: u32 = 6;
+/// Oldest index format version this tantivy version can read.
+pub const INDEX_FORMAT_OLDEST_SUPPORTED_VERSION: u32 = 4;
+
+// #[macro_export]
+// /// Enable fail_point if feature is enabled.
+// macro_rules! fail_point {
+//     ($name:expr) => {{
+//         #[cfg(feature = "failpoints")]
+//         {
+//             fail::eval($name, |_| {
+//                 panic!("Return is not supported for the fail point \"{}\"", $name);
+//             });
+//         }
+//     }};
+//     ($name:expr, $e:expr) => {{
+//         #[cfg(feature = "failpoints")]
+//         {
+//             if let Some(res) = fail::eval($name, $e) {
+//                 return res;
+//             }
+//         }
+//     }};
+//     ($name:expr, $cond:expr, $e:expr) => {{
+//         #[cfg(feature = "failpoints")]
+//         {
+//             if $cond {
+//                 fail::fail_point!($name, $e);
+//             }
+//         }
+//     }};
+// }
 
 #[cxx::bridge(namespace = "SPARSE")]
 pub mod ffi {
@@ -74,9 +137,7 @@ pub mod ffi {
             sparse_vector: &Vec<TupleElement>,
         ) -> FFIBoolResult;
 
-        pub fn ffi_load_index(
-            index_path: &CxxString,
-        ) -> FFIBoolResult;
+        pub fn ffi_load_index(index_path: &CxxString) -> FFIBoolResult;
 
         pub fn ffi_sparse_search(
             index_path: &CxxString,

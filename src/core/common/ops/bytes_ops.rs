@@ -1,6 +1,6 @@
 use std::mem::{align_of, size_of};
 
-/// transmute `byte slice` to `T`.
+/// convert `byte slice [u8]` to `T`.
 pub fn transmute_from_u8<T>(v: &[u8]) -> &T {
     debug_assert_eq!(v.len(), size_of::<T>());
 
@@ -22,12 +22,12 @@ pub fn transmute_from_u8<T>(v: &[u8]) -> &T {
     }
 }
 
-/// transmute `T` to `byte slice`.
+/// convert `T` to `byte slice [u8]`.
 pub fn transmute_to_u8<T>(v: &T) -> &[u8] {
     unsafe { std::slice::from_raw_parts(v as *const T as *const u8, std::mem::size_of_val(v)) }
 }
 
-/// transmute `T slice` to `byte slice`.
+/// transmute `T slice [T]` to `byte slice [u8]`.
 pub fn transmute_to_u8_slice<T>(v: &[T]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, std::mem::size_of_val(v)) }
 }

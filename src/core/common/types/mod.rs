@@ -1,5 +1,5 @@
-mod weight;
 mod aliases;
+mod weight;
 
-pub use weight::*;
 pub use aliases::*;
+pub use weight::*;

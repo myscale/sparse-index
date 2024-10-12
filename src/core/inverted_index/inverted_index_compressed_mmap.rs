@@ -2,12 +2,12 @@ use crate::core::common::ops::*;
 use crate::core::common::types::{DimId, DimOffset, ElementOffsetType, Weight};
 use crate::core::inverted_index::inverted_index_compressed_immutable_ram::InvertedIndexCompressedImmutableRam;
 use crate::core::inverted_index::inverted_index_ram::InvertedIndexRam;
-use crate::core::inverted_index::{InvertedIndex, INDEX_FILE_NAME};
+use crate::core::inverted_index::{InvertedIndex};
 use crate::core::posting_list::{
     CompressedPostingChunk, CompressedPostingListIterator, CompressedPostingListView,
     GenericPostingElement,
 };
-use crate::core::sparse_vector::RemappedSparseVector;
+use crate::core::sparse_vector::SparseVector;
 use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -17,9 +17,8 @@ use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use super::StorageVersion;
+use super::{InvertedIndexConfig, StorageVersion};
 
-const INDEX_CONFIG_FILE_NAME: &str = "inverted_index_config.json";
 
 pub struct Version;
 
@@ -57,21 +56,28 @@ impl<W: Weight> InvertedIndex for InvertedIndexCompressedMmap<W> {
     type Iter<'a> = CompressedPostingListIterator<'a, W>;
     type Version = Version;
 
+
+    fn open_with_config(path: &Path, config: InvertedIndexConfig) -> std::io::Result<Self> {
+        Self::load_with_config(path, config)
+    }
     fn open(path: &Path) -> std::io::Result<Self> {
         Self::load(path)
     }
 
-    fn save(&self, path: &Path) -> std::io::Result<()> {
+    fn save_with_config(&self, path: &Path, config: InvertedIndexConfig) -> std::io::Result<()> {
         debug_assert_eq!(path, self.path);
-        // If Self instance exists, it's either constructed by using `open()` (which reads core
-        // files), or using `from_ram_index()` (which writes them). Both assume that the files
-        // exist. If any of the files are missing, then something went wrong.
-        for file in Self::files(path) {
+        // mmap 不需要通过该函数保存
+        for file in Self::files(path, config) {
             debug_assert!(file.exists());
         }
-
         Ok(())
     }
+    fn save(&self, path: &Path) -> std::io::Result<()> {
+        Self::save_with_config(&self, path, InvertedIndexConfig::default())
+    }
+
+
+
 
     fn get(&self, id: &DimOffset) -> Option<Self::Iter<'_>> {
         // fn get<'a>(&'a self, id: &DimOffset) -> Option<CompressedPostingListIterator<'a,W>> {
@@ -87,22 +93,22 @@ impl<W: Weight> InvertedIndex for InvertedIndexCompressedMmap<W> {
         self.get(id).map(|posting_list| posting_list.len())
     }
 
-    fn files(path: &Path) -> Vec<PathBuf> {
+    fn files(path: &Path, config: InvertedIndexConfig) -> Vec<PathBuf> {
         vec![
-            Self::index_file_path(path),
-            Self::index_config_file_path(path),
+            path.join(config.data_file_name()),
+            path.join(config.meta_file_name()),
         ]
     }
 
-    fn remove(&mut self, id: ElementOffsetType, old_vector: RemappedSparseVector) {
+    fn remove(&mut self, id: ElementOffsetType, old_vector: SparseVector) {
         panic!("Cannot remove from a read-only mmap inverted core")
     }
 
     fn upsert(
         &mut self,
         id: ElementOffsetType,
-        vector: RemappedSparseVector,
-        old_vector: Option<RemappedSparseVector>,
+        vector: SparseVector,
+        old_vector: Option<SparseVector>,
     ) {
         panic!("Cannot upsert into a read-only mmap inverted core")
     }
@@ -110,9 +116,10 @@ impl<W: Weight> InvertedIndex for InvertedIndexCompressedMmap<W> {
     fn from_ram_index<P: AsRef<Path>>(
         ram_index: Cow<InvertedIndexRam>,
         path: P,
+        config: Option<InvertedIndexConfig>
     ) -> std::io::Result<Self> {
-        let index = InvertedIndexCompressedImmutableRam::from_ram_index(ram_index, &path)?;
-        Self::convert_and_save(&index, path)
+        let index = InvertedIndexCompressedImmutableRam::from_ram_index(ram_index, &path, config.clone())?;
+        Self::convert_and_save(&index, path, config.unwrap_or_default())
     }
 
     fn vector_count(&self) -> usize {
@@ -125,16 +132,12 @@ impl<W: Weight> InvertedIndex for InvertedIndexCompressedMmap<W> {
             len => Some(len as DimId - 1),
         }
     }
+    
+
 }
 
-impl<W: Weight> InvertedIndexCompressedMmap<W> {
-    pub fn index_file_path(path: &Path) -> PathBuf {
-        path.join(INDEX_FILE_NAME)
-    }
 
-    pub fn index_config_file_path(path: &Path) -> PathBuf {
-        path.join(INDEX_CONFIG_FILE_NAME)
-    }
+impl<W: Weight> InvertedIndexCompressedMmap<W> {
 
     /// 从索引中将维度 id 对应的 Posting List 给取出来
     // pub fn get<'a>(&'a self, id: &DimId) -> Option<CompressedPostingListView<'a, W>> {
@@ -202,6 +205,7 @@ impl<W: Weight> InvertedIndexCompressedMmap<W> {
     pub fn convert_and_save<P: AsRef<Path>>(
         index: &InvertedIndexCompressedImmutableRam<W>,
         path: P,
+        config: InvertedIndexConfig
     ) -> std::io::Result<Self> {
         // 每个 postingList 都会对应一个 PostingListFileHeader
         let total_posting_headers_size =
@@ -215,7 +219,7 @@ impl<W: Weight> InvertedIndexCompressedMmap<W> {
                 .iter()
                 .map(|p| p.view().store_size().total)
                 .sum::<usize>();
-        let file_path = Self::index_file_path(path.as_ref());
+        let file_path = path.as_ref().join(config.data_file_name());
         let file = create_and_ensure_length(file_path.as_ref(), file_length)?;
 
         let mut buf = BufWriter::new(file);
@@ -252,7 +256,8 @@ impl<W: Weight> InvertedIndexCompressedMmap<W> {
             posting_count: index.postings.as_slice().len(),
             vector_count: index.vector_count,
         };
-        atomic_save_json(&Self::index_config_file_path(path.as_ref()), &file_header)?;
+        let meta_path = path.as_ref().join(config.meta_file_name());
+        atomic_save_json(&meta_path, &file_header)?;
 
         Ok(Self {
             path: path.as_ref().to_owned(),
@@ -262,20 +267,27 @@ impl<W: Weight> InvertedIndexCompressedMmap<W> {
         })
     }
 
-    pub fn load<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
-        // read core config file
-        let config_file_path = Self::index_config_file_path(path.as_ref());
-        // if the file header does not exist, the core is malformed
-        let file_header: InvertedIndexFileHeader = read_json(&config_file_path)?;
-        // read core data into mmap
-        let file_path = Self::index_file_path(path.as_ref());
+
+
+    pub fn load_with_config<P: AsRef<Path>>(path: P, config: InvertedIndexConfig) -> std::io::Result<Self> {
+        // read meta data file
+        let meta_path = path.as_ref().join(config.meta_file_name());
+        let file_header: InvertedIndexFileHeader = read_json(&meta_path)?;
+
+        // read index data file in mmap);
+        let file_path = path.as_ref().join(config.data_file_name());
         let mmap = open_read_mmap(file_path.as_ref())?;
         madvise::madvise(&mmap, madvise::Advice::Normal)?;
+
         Ok(Self {
             path: path.as_ref().to_owned(),
             mmap: Arc::new(mmap),
             file_header,
             _phantom: PhantomData,
         })
+    }
+
+    pub fn load<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+        return Self::load_with_config(path, InvertedIndexConfig::default());
     }
 }

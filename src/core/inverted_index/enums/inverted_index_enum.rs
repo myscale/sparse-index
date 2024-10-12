@@ -5,11 +5,11 @@ pub enum InvertedIndexEnum {
     InvertedIndexMmap,
 
     // Compressed
-    InvertedIndexCompressedImmutableRamF32,
-    InvertedIndexCompressedImmutableRamF16,
-    InvertedIndexCompressedImmutableRamU8,
+    // InvertedIndexCompressedImmutableRamF32,
+    // InvertedIndexCompressedImmutableRamF16,
+    // InvertedIndexCompressedImmutableRamU8,
 
-    InvertedIndexCompressedMmapF32,
-    InvertedIndexCompressedMmapF16,
-    InvertedIndexCompressedMmapU8,
+    // InvertedIndexCompressedMmapF32,
+    // InvertedIndexCompressedMmapF16,
+    // InvertedIndexCompressedMmapU8,
 }

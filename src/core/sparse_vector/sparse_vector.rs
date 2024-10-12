@@ -3,16 +3,26 @@ use std::borrow::Cow;
 use super::utils::*;
 use crate::core::common::types::{DimId, DimWeight, ScoreType};
 use crate::core::sparse_vector::RemappedSparseVector;
+use crate::ffi::TupleElement;
+use crate::RowId;
 use validator::{Validate, ValidationErrors};
 
 /// Sparse vector structure
-#[derive(Debug, PartialEq, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 // #[serde(rename_all = "snake_case")]
 pub struct SparseVector {
     /// 非零权重的索引, 必须是唯一的
     pub indices: Vec<DimId>,
     /// 稀疏向量的在特定维度上的权重, indices 与 values 需要保持一致
     pub values: Vec<DimWeight>,
+}
+
+impl Eq for SparseVector {}
+
+impl PartialEq for SparseVector {
+    fn eq(&self, other: &Self) -> bool {
+        self.indices == other.indices
+    }
 }
 
 impl SparseVector {
@@ -132,6 +142,25 @@ impl SparseVector {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Default)]
+pub struct SparseRowContent {
+    // TODO 将 row_id 的类型和暴露出去的 row_id 类型统一起来
+    // 用不用把这个 row_id 做成一个唯一的类型，要么就是在 index 向量的时候提供一个 auto 的 row_id 这样 row_id 可以自增，这样就需要考虑使用原子类型
+    pub row_id: RowId,
+
+    pub sparse_vector: SparseVector,
+}
+
+impl SparseRowContent {
+    fn new(row_id: RowId, sparse_vector: SparseVector) -> Self {
+        Self {
+            row_id,
+            sparse_vector,
+        }
+    }
+}
+
+
 // TODO 默认针对 u32, f32 的场景, 不能写 hard code
 /// try_into() 函数会使用到这个 TryFrom 的内部实现
 ///
@@ -154,6 +183,53 @@ impl Validate for SparseVector {
     }
 }
 
+impl TryFrom<Vec<TupleElement>> for SparseVector {
+    type Error = ValidationErrors;
+
+    fn try_from(tuples: Vec<TupleElement>) -> Result<Self, Self::Error> {
+        let mut indices = Vec::new();
+        let mut values = Vec::new();
+
+        for element in tuples {
+            let weight = match element.value_type {
+                0 => element.weight_f32,        // f32 直接使用
+                1 => element.weight_u8 as f32,  // u8 转换为 f32
+                2 => element.weight_u32 as f32, // u32 转换为 f32
+                _ => 0.0f32,
+            };
+            indices.push(element.dim_id);
+            values.push(weight);
+        }
+
+        SparseVector::new(indices, values)
+    }
+}
+
+impl<const N: usize> From<[(u32, f32); N]> for SparseVector {
+    fn from(value: [(u32, f32); N]) -> Self {
+        value.to_vec().try_into().unwrap()
+    }
+}
+
+impl<const N: usize> From<[TupleElement; N]> for SparseVector {
+    fn from(value: [TupleElement; N]) -> Self {
+        let mut indices = Vec::with_capacity(N);
+        let mut values = Vec::with_capacity(N);
+
+        for element in value {
+            let weight = match element.value_type {
+                0 => element.weight_f32,        // f32 直接使用
+                1 => element.weight_u8 as f32,  // u8 转换为 f32
+                2 => element.weight_u32 as f32, // u32 转换为 f32
+                _ => 0.0f32,
+            };
+            indices.push(element.dim_id);
+            values.push(weight);
+        }
+
+        SparseVector { indices, values }
+    }
+}
 // #[cfg(test)]
 // impl<const N: usize> From<[(u32, f32); N]> for SparseVector {
 //     fn from(value: [(u32, f32); N]) -> Self {

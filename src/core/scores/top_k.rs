@@ -3,7 +3,6 @@ use std::cmp::Reverse;
 use crate::{core::common::ScoreType, ffi::ScoredPointOffset};
 use ordered_float::Float;
 
-
 /// TopK implementation following the median algorithm described in
 /// <https://quickwit.io/blog/top-k-complexity>.
 ///
@@ -49,6 +48,13 @@ impl TopK {
                 self.threshold = median_el.0.score;
                 self.elements.truncate(self.k);
             }
+        }
+    }
+
+    // TODO 优化 combine 函数, 在 combine 时可以考虑不同 TopK 的上下界, 不符合上下界的可以直接跳过
+    pub fn combine(&mut self, other: &TopK) {
+        for element in &other.elements {
+            self.push(element.0.clone());
         }
     }
 

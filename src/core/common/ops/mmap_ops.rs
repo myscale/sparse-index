@@ -74,7 +74,6 @@ pub fn open_write_mmap(path: &Path) -> Result<MmapMut, io::Error> {
     Ok(mmap)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

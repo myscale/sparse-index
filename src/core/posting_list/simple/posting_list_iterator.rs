@@ -1,5 +1,6 @@
 use crate::core::common::types::{DimWeight, ElementOffsetType};
 use crate::core::posting_list::traits::{PostingElement, PostingElementEx, PostingListIter};
+use crate::RowId;
 
 #[derive(Debug, Clone)]
 pub struct PostingListIterator<'a> {
@@ -33,7 +34,7 @@ impl<'a> PostingListIterator<'a> {
         self.elements.len() - self.current_index
     }
 
-    pub fn skip_to(&mut self, row_id: ElementOffsetType) -> Option<PostingElementEx> {
+    pub fn skip_to(&mut self, row_id: RowId) -> Option<PostingElementEx> {
         if self.current_index >= self.elements.len() {
             return None;
         }
@@ -89,7 +90,7 @@ impl<'a> PostingListIter for PostingListIterator<'a> {
 
     fn for_each_till_id<Ctx: ?Sized>(
         &mut self,
-        id: ElementOffsetType,
+        id: RowId,
         ctx: &mut Ctx,
         // f 必须声明为 mut, 否则在调用 f 时会报错
         mut f: impl FnMut(&mut Ctx, ElementOffsetType, DimWeight),
@@ -100,6 +101,22 @@ impl<'a> PostingListIter for PostingListIterator<'a> {
                 break;
             }
             f(ctx, element.row_id, element.weight);
+            current_index += 1;
+        }
+        self.current_index = current_index;
+    }
+
+    fn for_each_till_row_id(
+        &mut self,
+        row_id: RowId,
+        mut f: impl FnMut(&PostingElementEx),
+    ) {
+        let mut current_index = self.current_index;
+        for element in &self.elements[current_index..] {
+            if element.row_id > row_id {
+                break;
+            }
+            f(element);
             current_index += 1;
         }
         self.current_index = current_index;

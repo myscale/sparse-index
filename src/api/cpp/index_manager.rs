@@ -2,7 +2,8 @@ use crate::api::cpp::utils::ApiUtils;
 use crate::common::constants::CXX_STRING_CONVERTER;
 use crate::common::RAM_BUILDER_CACHE;
 use crate::core::{
-    InvertedIndex, InvertedIndexBuilder, InvertedIndexCompressedImmutableRam, InvertedIndexCompressedMmap, InvertedIndexEnum, InvertedIndexImmutableRam, InvertedIndexMmap, QuantizedU8
+    InvertedIndex, InvertedIndexBuilder, InvertedIndexEnum, InvertedIndexImmutableRam, InvertedIndexMmap,
+    QuantizedU8,
 };
 use crate::ffi::*;
 use crate::sparse_index::{parse_index_type, SparseIndexConfig};
@@ -43,12 +44,22 @@ pub fn ffi_create_index_with_parameter(
     let config: SparseIndexConfig = match serde_json::from_str(&index_json_parameter) {
         Ok(conf) => conf,
         Err(e) => {
-            return ApiUtils::handle_error(FUNC_NAME, "Can't serde frome 'index_json_parameter'", e.to_string());
+            return ApiUtils::handle_error(
+                FUNC_NAME,
+                "Can't serde frome 'index_json_parameter'",
+                e.to_string(),
+            );
         }
     };
     match config.save(Path::new(&index_path)) {
         Ok(_) => (),
-        Err(e) => return ApiUtils::handle_error(FUNC_NAME, "Can't save json parameter to disk", e.to_string()),
+        Err(e) => {
+            return ApiUtils::handle_error(
+                FUNC_NAME,
+                "Can't save json parameter to disk",
+                e.to_string(),
+            )
+        }
     };
 
     // TODO insert 到 cache 里的时候没有用到 mut，但是使用的时候可以重新声明为 mut?
@@ -128,6 +139,7 @@ pub fn ffi_commit_index(index_path: &CxxString) -> FFIBoolResult {
                 let index = InvertedIndexImmutableRam::from_ram_index(
                     Cow::Owned(builder.build()),
                     index_path.clone(),
+                    None
                 )
                 .expect("");
                 let _ = index
@@ -139,69 +151,76 @@ pub fn ffi_commit_index(index_path: &CxxString) -> FFIBoolResult {
                 let _ = InvertedIndexMmap::from_ram_index(
                     Cow::Owned(builder.build()),
                     index_path.clone(),
+                    None
                 )
                 .expect("can't create mmap index");
             }
-            InvertedIndexEnum::InvertedIndexCompressedImmutableRamF32 => {
-                let index = InvertedIndexCompressedImmutableRam::<f32>::from_ram_index(
-                    Cow::Owned(builder.build()),
-                    index_path.clone(),
-                )
-                .expect("can't create compressed immutable ram index f32");
-                let _ = index
-                    .save(Path::new(&index_path.clone()))
-                    .expect("can't save compressed immutable ram file 32.");
-            }
-            InvertedIndexEnum::InvertedIndexCompressedImmutableRamF16 => {
-                let index = InvertedIndexCompressedImmutableRam::<f16>::from_ram_index(
-                    Cow::Owned(builder.build()),
-                    index_path.clone(),
-                )
-                .expect("can't create compressed immutable ram index f16");
-                let _ = index
-                    .save(Path::new(&index_path.clone()))
-                    .expect("can't save compressed immutable ram file 16.");
-            }
-            InvertedIndexEnum::InvertedIndexCompressedImmutableRamU8 => {
-                let index = InvertedIndexCompressedImmutableRam::<QuantizedU8>::from_ram_index(
-                    Cow::Owned(builder.build()),
-                    index_path.clone(),
-                )
-                .expect("can't create compressed immutable ram index u8");
-                let _ = index
-                    .save(Path::new(&index_path.clone()))
-                    .expect("can't save compressed immutable ram file u8.");
-            }
-            InvertedIndexEnum::InvertedIndexCompressedMmapF32 => {
-                let index = InvertedIndexCompressedMmap::<f32>::from_ram_index(
-                    Cow::Owned(builder.build()),
-                    index_path.clone(),
-                )
-                .expect("can't create compressed mmap index f32");
-                let _ = index
-                    .save(Path::new(&index_path.clone()))
-                    .expect("can't save compressed mmap file 32.");
-            }
-            InvertedIndexEnum::InvertedIndexCompressedMmapF16 => {
-                let index = InvertedIndexCompressedMmap::<f16>::from_ram_index(
-                    Cow::Owned(builder.build()),
-                    index_path.clone(),
-                )
-                .expect("can't create compressed mmap index f16");
-                let _ = index
-                    .save(Path::new(&index_path.clone()))
-                    .expect("can't save compressed mmap file 16.");
-            }
-            InvertedIndexEnum::InvertedIndexCompressedMmapU8 => {
-                let index = InvertedIndexCompressedMmap::<QuantizedU8>::from_ram_index(
-                    Cow::Owned(builder.build()),
-                    index_path.clone(),
-                )
-                .expect("can't create compressed mmap index u8");
-                let _ = index
-                    .save(Path::new(&index_path.clone()))
-                    .expect("can't save compressed mmap file u8.");
-            }
+            // InvertedIndexEnum::InvertedIndexCompressedImmutableRamF32 => {
+            //     let index = InvertedIndexCompressedImmutableRam::<f32>::from_ram_index(
+            //         Cow::Owned(builder.build()),
+            //         index_path.clone(),
+            //         None
+            //     )
+            //     .expect("can't create compressed immutable ram index f32");
+            //     let _ = index
+            //         .save(Path::new(&index_path.clone()))
+            //         .expect("can't save compressed immutable ram file 32.");
+            // }
+            // InvertedIndexEnum::InvertedIndexCompressedImmutableRamF16 => {
+            //     let index = InvertedIndexCompressedImmutableRam::<f16>::from_ram_index(
+            //         Cow::Owned(builder.build()),
+            //         index_path.clone(),
+            //         None
+            //     )
+            //     .expect("can't create compressed immutable ram index f16");
+            //     let _ = index
+            //         .save(Path::new(&index_path.clone()))
+            //         .expect("can't save compressed immutable ram file 16.");
+            // }
+            // InvertedIndexEnum::InvertedIndexCompressedImmutableRamU8 => {
+            //     let index = InvertedIndexCompressedImmutableRam::<QuantizedU8>::from_ram_index(
+            //         Cow::Owned(builder.build()),
+            //         index_path.clone(),
+            //         None
+            //     )
+            //     .expect("can't create compressed immutable ram index u8");
+            //     let _ = index
+            //         .save(Path::new(&index_path.clone()))
+            //         .expect("can't save compressed immutable ram file u8.");
+            // }
+            // InvertedIndexEnum::InvertedIndexCompressedMmapF32 => {
+            //     let index = InvertedIndexCompressedMmap::<f32>::from_ram_index(
+            //         Cow::Owned(builder.build()),
+            //         index_path.clone(),
+            //         None
+            //     )
+            //     .expect("can't create compressed mmap index f32");
+            //     let _ = index
+            //         .save(Path::new(&index_path.clone()))
+            //         .expect("can't save compressed mmap file 32.");
+            // }
+            // InvertedIndexEnum::InvertedIndexCompressedMmapF16 => {
+            //     let index = InvertedIndexCompressedMmap::<f16>::from_ram_index(
+            //         Cow::Owned(builder.build()),
+            //         index_path.clone(),
+            //         None
+            //     )
+            //     .expect("can't create compressed mmap index f16");
+            //     let _ = index
+            //         .save(Path::new(&index_path.clone()))
+            //         .expect("can't save compressed mmap file 16.");
+            // }
+            // InvertedIndexEnum::InvertedIndexCompressedMmapU8 => {
+            //     let index = InvertedIndexCompressedMmap::<QuantizedU8>::from_ram_index(
+            //         Cow::Owned(builder.build()),
+            //         index_path.clone(),
+            //         None
+            //     )
+            //     .expect("can't create compressed mmap index u8");
+            //     let _ = index
+            //         .save(Path::new(&index_path.clone()))
+            //         .expect("can't save compressed mmap file u8.");
+            // }
         }
     }) {
         FFIBoolResult {

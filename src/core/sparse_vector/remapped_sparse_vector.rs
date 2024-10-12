@@ -13,6 +13,7 @@ pub struct RemappedSparseVector {
     pub values: Vec<DimWeight>,
 }
 
+
 impl RemappedSparseVector {
     pub fn new(indices: Vec<DimId>, values: Vec<DimWeight>) -> Result<Self, ValidationErrors> {
         let vector = Self { indices, values };

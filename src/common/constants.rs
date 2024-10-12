@@ -21,5 +21,3 @@ where
 {
     Converter::new(CxxVectorStrategy::new())
 }
-
-

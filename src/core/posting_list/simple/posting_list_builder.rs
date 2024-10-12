@@ -1,9 +1,12 @@
+use std::mem::size_of;
+
 use super::super::traits::PostingElementEx;
 use super::PostingList;
 use crate::core::common::types::{DimWeight, ElementOffsetType};
 
 pub struct PostingListBuilder {
     elements: Vec<PostingElementEx>,
+    memory: usize,
 }
 
 impl Default for PostingListBuilder {
@@ -16,12 +19,19 @@ impl PostingListBuilder {
     pub fn new() -> Self {
         Self {
             elements: Vec::new(),
+            memory: 0,
         }
     }
 
     // add a new Element to the posting list.
     pub fn add(&mut self, row_id: ElementOffsetType, weight: DimWeight) {
         self.elements.push(PostingElementEx::new(row_id, weight));
+        self.memory += size_of::<ElementOffsetType>() + size_of::<DimWeight>();
+    }
+
+    // 返回 elements 占据的内存字节大小
+    pub fn memory_usage(&self) -> usize {
+        self.memory
     }
 
     // 消费 self 并返回新的 PostingList 结构

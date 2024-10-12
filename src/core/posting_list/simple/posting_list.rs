@@ -10,6 +10,16 @@ pub struct PostingList {
 }
 
 impl PostingList {
+    pub fn size(&self) -> usize {
+        return self.elements.len();
+    }
+    pub fn get(&self, idx: usize) -> &PostingElementEx {
+        if idx>=self.elements.len() {
+            panic!("idx overflow.");
+        }
+        return &self.elements[idx];
+    }
+
     pub fn from(records: Vec<(ElementOffsetType, DimWeight)>) -> PostingList {
         let mut posting_list = PostingListBuilder::new();
         for (row_id, weight) in records {

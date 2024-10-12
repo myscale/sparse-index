@@ -1,8 +1,7 @@
+use super::DimWeight;
 use half::slice::HalfFloatSliceExt;
 use itertools::{Itertools, MinMaxResult};
 use std::fmt::Debug;
-use super::DimWeight;
-
 
 pub trait Weight: PartialEq + Copy + Debug + 'static {
     type QuantizationParams: Copy + PartialEq + Debug;

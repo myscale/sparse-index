@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
 
     bpo::options_description desc("Benchmark Options");
     desc.add_options()
-    ("index-path,ip", bpo::value<std::string>(&index_path)->default_value("/tmp/sparse_index/benchmark/index_path"), "tantivy index files directory")
+    ("index-path,ip", bpo::value<std::string>(&index_path)->default_value("/Users/mochi/temp/sparse_index/multi/path_4"), "tantivy index files directory")
     ("query-file,qf", bpo::value<std::string>(&query_file)->default_value("ms-macro-sparse-test.json"), "query json file path")
     ("train-file,tf", bpo::value<std::string>(&train_file)->default_value("ms-macro-sparse-train.json"), "train json file path")
     ("train-rows-limit,trl", bpo::value<size_t>(&train_rows_limit)->default_value(-1), "train rows limit")
@@ -58,22 +58,31 @@ int main(int argc, char** argv) {
             ffi_create_index_with_parameter(index_path, "{}");
             std::cout << "Build index..." << endl;
 
-            loader.iterateTrainRows([&](const MsMacroRow& row) {
-                std::cout << row.row_id << std::endl;
-                rust::Vec<TupleElement> sparse_vector;
-                for (size_t i = 0; i < row.dim_ids.size(); i++) {
-                    sparse_vector.emplace_back(
-                        TupleElement{
-                            row.dim_ids[i],
-                            row.weights[i],
-                            0,
-                            0,
-                            0
-                        }
-                    );
-                }
-                ffi_insert_sparse_vector(index_path, row.row_id, sparse_vector);
-            }, train_rows_limit);
+            size_t offset = 4000000;
+            for (size_t i = 0; i < 1; i++)
+            {
+                size_t total_count = 0;
+                loader.iterateTrainRows([&](const MsMacroRow& row) {
+                    std::cout << row.row_id + offset << std::endl;
+                    rust::Vec<TupleElement> sparse_vector;
+                    for (size_t i = 0; i < row.dim_ids.size(); i++) {
+                        sparse_vector.emplace_back(
+                            TupleElement{
+                                row.dim_ids[i],
+                                row.weights[i],
+                                0,
+                                0,
+                                0
+                            }
+                        );
+                    }
+                    total_count+=1;
+                    ffi_insert_sparse_vector(index_path, row.row_id + offset, sparse_vector);
+                }, train_rows_limit);
+                offset+=total_count;
+            }
+            
+
             std::cout << "Commit index..." << endl;
             ffi_commit_index(index_path);
         }

@@ -7,7 +7,6 @@ use semver::Version;
 
 use crate::core::common::ops::FileOperationError;
 
-
 pub const VERSION_FILE: &str = "version.info";
 
 /// Structure to save and load version with which the storage was create
