@@ -31,7 +31,7 @@ pub type Result<T> = std::result::Result<T, SparseError>;
 pub static META_FILEPATH: Lazy<&'static Path> = Lazy::new(|| Path::new("meta.json"));
 
 pub static INDEX_CONFIG_FILEPATH: Lazy<&'static Path> =
-    Lazy::new(|| Path::new("index_config.json"));
+    Lazy::new(|| Path::new("sparse_index_config.json"));
 
 /// The managed file contains a list of files that were created by the tantivy
 /// and will therefore be garbage collected when they are deemed useless by tantivy.

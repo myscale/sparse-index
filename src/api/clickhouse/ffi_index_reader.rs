@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use cxx::CxxString;
-use crate::{api::clickhouse::utils::{ApiUtils, IndexManager}, cache::{IndexReaderBridge, FFI_INDEX_SEARCHER_CACHE}, common::{constants::CXX_STRING_CONVERTER, errors::SparseError}, ffi::{FFIBoolResult, FFIError, FFIScoreResult, TupleElement}};
+use crate::{api::clickhouse::utils::{ApiUtils, IndexManager}, common::{constants::CXX_STRING_CONVERTER, errors::SparseError}, ffi::{FFIBoolResult, FFIError, FFIScoreResult, TupleElement}};
+use crate::api::clickhouse::cache::{IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE};
 
 
 

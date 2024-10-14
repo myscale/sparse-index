@@ -1,5 +1,5 @@
 use crate::api::clickhouse::utils::{ApiUtils, IndexManager};
-use crate::cache::FFI_INDEX_WRITER_CACHE;
+use crate::api::clickhouse::cache::{IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE};
 use crate::common::constants::CXX_STRING_CONVERTER;
 use crate::core::SparseRowContent;
 use crate::{ffi::*, RowId};
@@ -41,6 +41,7 @@ pub fn ffi_create_index_with_parameter(
         return ApiUtils::handle_error("", "", error.to_string());
     }
 
+    // TODO 放到 Sparse Index 内部完成
     if let Err(error) = IndexManager::persist_index_params(&index_path, &index_json_parameter) {
         return ApiUtils::handle_error("", "", error.to_string());
     }
@@ -61,7 +62,7 @@ pub fn ffi_create_index_with_parameter(
 
     if let Err(error) = FFI_INDEX_WRITER_CACHE
         .set_index_writer_bridge(index_path.to_string(), Arc::new(bridge)) {
-            return ApiUtils::handle_error("", "", error);
+            return ApiUtils::handle_error("", "set writer bridge error", error);
         }
     
     FFIBoolResult{

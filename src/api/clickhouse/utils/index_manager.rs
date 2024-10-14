@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use log::error;
-use crate::cache::{IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE};
+use crate::api::clickhouse::cache::{IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE};
 use crate::common::errors::SparseError;
 use crate::index::Index;
 use crate::indexer::LogMergePolicy;
@@ -18,7 +18,11 @@ pub struct IndexManager;
 impl IndexManager {
     pub(crate) fn free_index_writer(index_path: &str) -> crate::Result<bool> { 
         // get index writer bridge from CACHE
-        let bridge = IndexManager::get_index_writer_bridge(index_path)?;
+        let bridge = IndexManager::get_index_writer_bridge(index_path);
+        if bridge.is_err() {
+            return Ok(false);
+        }
+        let bridge = bridge.unwrap();
 
         bridge.wait_merging_threads().map_err(|e| {
             let error_info = format!("Can't wait merging threads, exception: {}", e);
@@ -39,7 +43,7 @@ impl IndexManager {
     
 
     pub(crate) fn prepare_directory(index_path: &str) -> crate::Result<()> {
-        Self::free_index_reader(index_path)?;
+        let _ = Self::free_index_reader(index_path);
         Self::free_index_writer(index_path)?;
         Ok(())
     }
