@@ -1,9 +1,9 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use log::error;
 use crate::api::clickhouse::cache::{IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE};
 use crate::common::errors::SparseError;
+use crate::error_ck;
 use crate::index::Index;
 use crate::indexer::LogMergePolicy;
 use crate::reader::{IndexReader, ReloadPolicy};
@@ -26,7 +26,7 @@ impl IndexManager {
 
         bridge.wait_merging_threads().map_err(|e| {
             let error_info = format!("Can't wait merging threads, exception: {}", e);
-            error!("{}", error_info);
+            error_ck!("{}", error_info);
             SparseError::Error(error_info)
         })?;
     
@@ -59,7 +59,8 @@ impl IndexManager {
         index_path: &str
     ) -> crate::Result<IndexWriterBridge> {
         let writer = index.writer_with_num_threads(BUILD_THREADS, MEMORY_32MB).map_err(|e| {
-            let error_info = format!("Failed to create tantivy writer: {}", e);
+            let error_info = format!("Failed to create sparse index writer: {}", e);
+            error_ck!("{}", error_info);
             SparseError::Error(error_info)
         })?;
 
@@ -68,7 +69,6 @@ impl IndexManager {
         writer.set_merge_policy(Box::new(merge_policy));
 
         Ok(IndexWriterBridge {
-            index: index.clone(),
             path: index_path.trim_end_matches('/').to_string(),
             writer: Mutex::new(Some(writer)),
         })
@@ -136,7 +136,6 @@ impl IndexManager {
     
         // Save IndexReaderBridge to cache.
         let index_reader_bridge = IndexReaderBridge {
-            index,
             reader,
             path: index_path.trim_end_matches('/').to_string(),
         };

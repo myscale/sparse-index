@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use cxx::CxxString;
-use crate::{api::clickhouse::utils::{ApiUtils, IndexManager}, common::{constants::CXX_STRING_CONVERTER, errors::SparseError}, ffi::{FFIBoolResult, FFIError, FFIScoreResult, TupleElement}};
-use crate::api::clickhouse::cache::{IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE};
+use crate::{api::clickhouse::{cache::FFI_INDEX_SEARCHER_CACHE, utils::{ApiUtils, IndexManager}}, common::constants::CXX_STRING_CONVERTER, ffi::{FFIBoolResult, FFIError, FFIScoreResult, TupleElement}};
+use crate::api::clickhouse::cache::IndexReaderBridge;
 
 
 
@@ -12,7 +12,7 @@ pub fn ffi_load_index_reader(index_path: &CxxString) -> FFIBoolResult {
     let index_path: String = match CXX_STRING_CONVERTER.convert(index_path) {
         Ok(path) => path,
         Err(e) => {
-            return ApiUtils::handle_error(FUNC_NAME, "Can't convert 'index_path'", e.to_string());
+            return ApiUtils::handle_error(FUNC_NAME, "failed convert 'index_path'", e.to_string());
         }
     };
 
@@ -25,7 +25,7 @@ pub fn ffi_load_index_reader(index_path: &CxxString) -> FFIBoolResult {
             },
         },
         Err(e) => {
-            ApiUtils::handle_error(FUNC_NAME, "Error loading index reader", e.to_string())
+            ApiUtils::handle_error(FUNC_NAME, "failed load index reader bridge", e.to_string())
         }
     }
 }
@@ -36,12 +36,12 @@ pub fn ffi_free_index_reader(index_path: &CxxString) -> FFIBoolResult {
     let index_path: String = match CXX_STRING_CONVERTER.convert(index_path) {
         Ok(path) => path,
         Err(e) => {
-            return ApiUtils::handle_error(FUNC_NAME, "Can't convert 'index_path'", e.to_string());
+            return ApiUtils::handle_error(FUNC_NAME, "failed convert 'index_path'", e.to_string());
         }
     };
 
     if let Err(error) = IndexManager::free_index_reader(&index_path) {
-        return ApiUtils::handle_error("", "", error.to_string());
+        return ApiUtils::handle_error(FUNC_NAME, "failed free index reader", error.to_string());
     } else {
         FFIBoolResult {
             result: true,
@@ -61,12 +61,12 @@ pub fn ffi_sparse_search(
     filter: &Vec<u8>,
     top_k: u32,
 ) -> FFIScoreResult {
-    let func_name = "ffi_sparse_search";
+    static FUNC_NAME: &str = "ffi_sparse_search";
     // ApiUtils::handle_error("ffi_sparse_commit_index", "Error creating index", "".to_string());
     let index_path: String = match CXX_STRING_CONVERTER.convert(index_path) {
         Ok(path) => path,
         Err(e) => {
-            return ApiUtils::handle_error(func_name, "Error parse index_path", e.to_string())
+            return ApiUtils::handle_error(FUNC_NAME, "failed convert 'index_path'", e.to_string())
         }
     };
 
@@ -74,14 +74,14 @@ pub fn ffi_sparse_search(
         .get_index_reader_bridge(index_path.to_string()) {
             Ok(res) => res,
             Err(error) => {
-                return ApiUtils::handle_error("", "", error);
+                return ApiUtils::handle_error(FUNC_NAME, "failed get index reader bridge", error);
             },
         };
     
     let searcher = reader_bridge.reader.searcher();
     let res = match searcher.search(sparse_vector.clone().try_into().unwrap(), top_k) {
         Ok(res) => res,
-        Err(error) => {return ApiUtils::handle_error("", "", error.to_string());},
+        Err(error) => {return ApiUtils::handle_error(FUNC_NAME, "failed execute search", error.to_string());},
     };
 
     FFIScoreResult {

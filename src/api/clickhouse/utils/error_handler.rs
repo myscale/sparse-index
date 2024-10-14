@@ -1,4 +1,4 @@
-use crate::ffi::*;
+use crate::{error_ck, ffi::*};
 
 pub trait FFIResult<T> {
     fn from_error(error_message: String) -> Self;
@@ -60,6 +60,7 @@ impl ApiUtils {
         T: FFIResult<E>,
     {
         let error_message = format!("{}, {}", prefix, error);
+        error_ck!(function: func_name, "{}", error_message);
         T::from_error(error_message)
     }
 

@@ -1,21 +1,17 @@
 use std::sync::Arc;
-
 use flurry::HashMap;
-use log::{debug, info, warn};
 use once_cell::sync::OnceCell;
-
-use crate::{common::{errors::SparseError, executor::Executor}, index::Index, reader::IndexReader};
+use crate::{common::{errors::SparseError, executor::Executor}, debug_ck, info_ck, reader::IndexReader, warn_ck};
 
 
 pub struct IndexReaderBridge {
     pub path: String,
-    pub index: Index,
     pub reader: IndexReader,
 }
 
 impl Drop for IndexReaderBridge {
     fn drop(&mut self) {
-        info!(
+        info_ck!(
             "IndexReaderBridge has been dropped. index_path:[{}]",
             self.path
         );
@@ -56,7 +52,7 @@ impl IndexReaderBridgeCache {
         if pinned.contains_key(&trimmed_key) {
             pinned.insert(trimmed_key.clone(), value.clone());
             let message = format!("IndexReaderBridge already exists with given key: [{}], it has been overwritten.", trimmed_key);
-            warn!("{}", message)
+            warn_ck!("{}", message)
         } else {
             pinned.insert(trimmed_key, value.clone());
         }
@@ -79,7 +75,7 @@ impl IndexReaderBridgeCache {
             pinned.remove(&trimmed_key);
         } else {
             let message: String = format!("IndexReaderBridge doesn't exist, can't remove it with given key [{}]", trimmed_key);
-            debug!("{}", message);
+            debug_ck!("{}", message);
             SparseError::Error(message);
         }
         Ok(())

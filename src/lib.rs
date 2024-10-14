@@ -73,6 +73,11 @@ pub const INDEX_FORMAT_OLDEST_SUPPORTED_VERSION: u32 = 4;
 //     }};
 // }
 
+
+
+// re-export log ffi function.
+pub use api::clickhouse::{sparse_index_log4rs_initialize, sparse_index_log4rs_initialize_with_callback};
+
 #[cxx::bridge(namespace = "SPARSE")]
 pub mod ffi {
 

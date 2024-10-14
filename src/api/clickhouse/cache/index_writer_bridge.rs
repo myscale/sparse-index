@@ -1,14 +1,10 @@
 use std::sync::{Arc, Mutex};
-
 use flurry::HashMap;
-use log::{debug, info, warn};
-
-use crate::{core::SparseRowContent, index::Index, indexer::IndexWriter, Opstamp};
+use crate::{core::SparseRowContent, debug_ck, indexer::IndexWriter, info_ck, warn_ck, Opstamp};
 
 
 pub struct IndexWriterBridge {
     pub path: String,
-    pub index: Index,
     pub writer: Mutex<Option<IndexWriter>>,
 }
 
@@ -54,7 +50,7 @@ impl IndexWriterBridge {
 
 impl Drop for IndexWriterBridge {
     fn drop(&mut self) {
-        info!("IndexW has been dropped. index_path:[{}]", self.path);
+        info_ck!("IndexW has been dropped. index_path:[{}]", self.path);
     }
 }
 
@@ -94,7 +90,7 @@ impl IndexWriterBridgeCache {
         let trimmed_key: String = key.trim_end_matches('/').to_string();
         if pinned.contains_key(&trimmed_key) {
             pinned.insert(trimmed_key.clone(), value.clone());
-            warn!(
+            warn_ck!(
                 "{}",
                 format!(
                     "Index writer already exists with given key: [{}], it has been overwritten.",
@@ -116,7 +112,7 @@ impl IndexWriterBridgeCache {
                 "IndexWriterBridge doesn't exist, can't remove it with given key: [{}]",
                 trimmed_key
             );
-            debug!("{}", message)
+            debug_ck!("{}", message)
         }
         Ok(())
     }
