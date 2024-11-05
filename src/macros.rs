@@ -52,7 +52,6 @@ macro_rules! error_ck {
     }};
 }
 
-
 #[macro_export]
 macro_rules! warn_ck {
     // provide `target`, `function` and `message`
@@ -84,7 +83,6 @@ macro_rules! warn_ck {
         }
     }};
 }
-
 
 #[macro_export]
 macro_rules! info_ck {
@@ -118,7 +116,6 @@ macro_rules! info_ck {
     }};
 }
 
-
 #[macro_export]
 macro_rules! debug_ck {
     // provide `target`, `function` and `message`
@@ -150,7 +147,6 @@ macro_rules! debug_ck {
         }
     }};
 }
-
 
 #[macro_export]
 macro_rules! trace_ck {

@@ -150,7 +150,8 @@ mod tests {
         segment_register.remove_segment(&segment_id_a);
         segment_register.remove_segment(&segment_id_b);
         {
-            let segment_meta_merged = inventory.new_segment_meta(PathBuf::default(), segment_id_merged, 0u32);
+            let segment_meta_merged =
+                inventory.new_segment_meta(PathBuf::default(), segment_id_merged, 0u32);
             let segment_entry = SegmentEntry::new(segment_meta_merged, None);
             segment_register.add_segment_entry(segment_entry);
         }

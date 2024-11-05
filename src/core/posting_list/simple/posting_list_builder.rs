@@ -1,63 +1,101 @@
 use std::mem::size_of;
 
+use log::{error, warn};
+
 use super::super::traits::PostingElementEx;
 use super::PostingList;
-use crate::core::common::types::{DimWeight, ElementOffsetType};
+use crate::{
+    core::{common::types::DimWeight, DEFAULT_MAX_NEXT_WEIGHT},
+    RowId,
+};
 
+#[derive(Default)]
 pub struct PostingListBuilder {
-    elements: Vec<PostingElementEx>,
-    memory: usize,
+    posting: PostingList,
+    propagate_while_upserting: bool,
+    finally_sort: bool,
+    finally_propagate: bool,
 }
 
-impl Default for PostingListBuilder {
-    fn default() -> Self {
-        Self::new()
+// Builder pattern
+impl PostingListBuilder {
+    pub fn new() -> Self {
+        Self {
+            posting: PostingList::new(),
+            finally_sort: false,
+            propagate_while_upserting: false,
+            finally_propagate: true,
+        }
+    }
+
+    pub fn with_finally_sort(mut self, sort: bool) -> Self {
+        self.finally_sort = sort;
+        self
+    }
+
+    pub fn with_finally_propagate(mut self, propagate: bool) -> Self {
+        self.finally_propagate = propagate;
+        self
+    }
+
+    pub fn with_propagate_while_upserting(mut self, propagate: bool) -> Self {
+        self.propagate_while_upserting = propagate;
+        self
     }
 }
 
 impl PostingListBuilder {
-    pub fn new() -> Self {
-        Self {
-            elements: Vec::new(),
-            memory: 0,
+    /// ## brief
+    /// add a new Element to the posting list.
+    /// ## return
+    /// bool: `ture` means the `insert` operation, `false` means `update`.
+    pub fn add(&mut self, row_id: RowId, weight: DimWeight) -> bool {
+        if self.propagate_while_upserting {
+            self.posting
+                .upsert_with_propagate(PostingElementEx::new(row_id, weight))
+        } else {
+            self.posting.upsert(PostingElementEx::new(row_id, weight)).1
         }
     }
 
-    // add a new Element to the posting list.
-    pub fn add(&mut self, row_id: ElementOffsetType, weight: DimWeight) {
-        self.elements.push(PostingElementEx::new(row_id, weight));
-        self.memory += size_of::<ElementOffsetType>() + size_of::<DimWeight>();
-    }
-
-    // 返回 elements 占据的内存字节大小
+    /// ## brief
+    /// 返回 elements 占据的内存字节大小
     pub fn memory_usage(&self) -> usize {
-        self.memory
+        self.posting.len() * size_of::<PostingElementEx>()
     }
 
-    // 消费 self 并返回新的 PostingList 结构
+    /// ## brief
+    /// 消费 self 并返回新的 PostingList 结构
     pub fn build(mut self) -> PostingList {
         // 根据 row_id 进行排序
-        self.elements.sort_unstable_by_key(|e| e.row_id);
-        // 检查在一个 PostingList 中是否存在重复的 row_id
+        if self.finally_sort {
+            self.posting.elements.sort_unstable_by_key(|e| e.row_id);
+        }
+        // 检查在一个 PostingList 中是否存在重复的 row_id, 以及这个 Posting 是否是正确排序了的
         #[cfg(debug_assertions)]
         {
             if let Some(res) = self
+                .posting
                 .elements
                 .windows(2)
-                .find(|e| e[0].row_id == e[1].row_id)
+                .find(|e| e[0].row_id >= e[1].row_id)
             {
-                panic!("Duplicated row_id {} in posting list.", res[0].row_id);
+                error!("Duplicated row_id, or Posting is not sorted by row_id correctly, left: {:?}, right: {:?}.", res[0], res[1]);
+                panic!("Duplicated row_id, or Posting is not sorted by row_id correctly, left: {:?}, right: {:?}.", res[0], res[1]);
             }
         }
         // 从后往前修改每个 element 的 max_next_weight
-        let mut max_next_weight = f32::NEG_INFINITY;
-        for element in self.elements.iter_mut().rev() {
-            element.max_next_weight = max_next_weight;
-            max_next_weight = max_next_weight.max(element.weight);
+        if self.finally_propagate {
+            let mut max_next_weight = DEFAULT_MAX_NEXT_WEIGHT;
+            for element in self.posting.elements.iter_mut().rev() {
+                element.max_next_weight = max_next_weight;
+                max_next_weight = max_next_weight.max(element.weight);
+            }
+        } else {
+            warn!("Skip propagating the Posting finally, please make sure it has already been propagated.")
         }
-        PostingList {
-            elements: self.elements,
-        }
+
+        self.posting
     }
 }
 

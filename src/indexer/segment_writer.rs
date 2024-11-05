@@ -1,17 +1,14 @@
 use std::borrow::Cow;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::thread;
 
 use super::operation::AddOperation;
-use crate::core::{
-    InvertedIndex, InvertedIndexBuilder, InvertedIndexConfig, InvertedIndexMmap,
-};
+use crate::core::{InvertedIndex, InvertedIndexBuilder, InvertedIndexMmap};
 use crate::directory::Directory;
 use crate::index::Segment;
 
 use crate::RowId;
 use log::debug;
-
 
 pub struct SegmentWriter {
     pub(crate) num_rows_count: RowId,
@@ -34,24 +31,24 @@ impl SegmentWriter {
         })
     }
 
-    pub fn finalize(self) -> crate::Result<Vec<u64>> {
-        debug!("[{}] - [finalize] segment: {}, rows_count: {}", thread::current().name().unwrap_or_default(), self.segment.clone().id(), self.num_rows_count);
+    pub fn finalize(self) -> crate::Result<Vec<PathBuf>> {
+        debug!(
+            "[{}] - [finalize] segment: {}, rows_count: {}",
+            thread::current().name().unwrap_or_default(),
+            self.segment.clone().id(),
+            self.num_rows_count
+        );
 
         let index_path = self.segment.index().directory().get_path();
+        let segment_id = self.segment.id().uuid_string();
 
-        // 使用 segment uuid 作为 index 的名字
-        let mut config: InvertedIndexConfig = InvertedIndexConfig::default();
-        config.with_data_prefix(self.segment.id().uuid_string().as_str());
-        config.with_meta_prefix(self.segment.id().uuid_string().as_str());
-
-        // let _index = InvertedIndexCompressedMmap::<f32>::from_ram_index(
-        let _index = InvertedIndexMmap::from_ram_index(
+        let index = InvertedIndexMmap::from_ram_index(
             Cow::Owned(self.index_ram_builder.build()),
             index_path,
-            Some(config.clone())
+            Some(&segment_id),
         )?;
 
-        return Ok(Vec::new());
+        return Ok(index.files(Some(&segment_id)));
     }
 
     /// 检查 memory 使用
@@ -60,17 +57,18 @@ impl SegmentWriter {
     }
 
     /// 索引一行数据
-    pub fn index_row_content(
-        &mut self,
-        add_operation: AddOperation,
-    ) -> crate::Result<bool> {
+    pub fn index_row_content(&mut self, add_operation: AddOperation) -> crate::Result<bool> {
         let AddOperation {
             opstamp: _,
             row_content,
         } = add_operation;
-        self.index_ram_builder.add(row_content.row_id, row_content.sparse_vector);
-        self.num_rows_count += 1;
-        Ok(true)
+        let is_insert_operation = self
+            .index_ram_builder
+            .add(row_content.row_id, row_content.sparse_vector);
+        if is_insert_operation {
+            self.num_rows_count += 1;
+        }
+        Ok(is_insert_operation)
     }
 
     pub fn rows_count(&self) -> RowId {

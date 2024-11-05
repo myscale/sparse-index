@@ -26,7 +26,7 @@ impl WatchCallback {
 ///
 /// It registers callbacks (See `.subscribe(...)`) and
 /// calls them upon calls to `.broadcast(...)`.
-/// 
+///
 /// 用于在 `Directory` trait 实现中管理回调函数的注册和触发
 #[derive(Default)]
 pub struct WatchCallbackList {
@@ -37,7 +37,7 @@ pub struct WatchCallbackList {
 ///
 /// After all the clones of `WatchHandle` are dropped, the associated will not be called when a
 /// file change is detected.
-/// 
+///
 /// 控制回调函数生命周期的句柄, 所有的 WatchHandle clone 对象都被丢弃的时候，相关的回调函数将不会再被使用
 #[must_use = "This `WatchHandle` controls the lifetime of the watch and should therefore be used."]
 #[derive(Clone)]

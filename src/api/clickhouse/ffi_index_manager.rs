@@ -1,9 +1,11 @@
+use crate::api::clickhouse::cache::{
+    IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE,
+};
+use crate::api::clickhouse::converter::CXX_STRING_CONVERTER;
 use crate::api::clickhouse::utils::{ApiUtils, IndexManager};
-use crate::api::clickhouse::cache::{IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE};
-use crate::common::constants::CXX_STRING_CONVERTER;
 use crate::core::SparseRowContent;
+use crate::index::{Index, IndexSettings};
 use crate::{ffi::*, RowId};
-use crate::index::Index;
 use cxx::{let_cxx_string, CxxString};
 use std::path::Path;
 use std::sync::Arc;
@@ -43,34 +45,48 @@ pub fn ffi_create_index_with_parameter(
 
     // TODO 放到 Sparse Index 内部完成
     if let Err(error) = IndexManager::persist_index_params(&index_path, &index_json_parameter) {
-        return ApiUtils::handle_error(FUNC_NAME, "failed to persist index json params", error.to_string());
+        return ApiUtils::handle_error(
+            FUNC_NAME,
+            "failed to persist index json params",
+            error.to_string(),
+        );
     }
 
-    let index = match  Index::create_in_dir(Path::new(&index_path)) {
+    // TODO 将 json_parameter 里面的参数传递给 IndexSettings
+    let index = match Index::create_in_dir(Path::new(&index_path), IndexSettings::default()) {
         Ok(res) => res,
         Err(error) => {
-            return ApiUtils::handle_error(FUNC_NAME, "failed create index in directory", error.to_string());
-        },
+            return ApiUtils::handle_error(
+                FUNC_NAME,
+                "failed create index in directory",
+                error.to_string(),
+            );
+        }
     };
 
     let bridge = match IndexManager::create_writer(&index, &index_path) {
         Ok(res) => res,
         Err(error) => {
-            return ApiUtils::handle_error(FUNC_NAME, "failed create index writer bridge", error.to_string());
-        },
+            return ApiUtils::handle_error(
+                FUNC_NAME,
+                "failed create index writer bridge",
+                error.to_string(),
+            );
+        }
     };
 
-    if let Err(error) = FFI_INDEX_WRITER_CACHE
-        .set_index_writer_bridge(index_path.to_string(), Arc::new(bridge)) {
-            return ApiUtils::handle_error(FUNC_NAME, "ffailed set index writer bridge", error);
-        }
-    
-    FFIBoolResult{
+    if let Err(error) =
+        FFI_INDEX_WRITER_CACHE.set_index_writer_bridge(index_path.to_string(), Arc::new(bridge))
+    {
+        return ApiUtils::handle_error(FUNC_NAME, "ffailed set index writer bridge", error);
+    }
+
+    FFIBoolResult {
         result: true,
         error: FFIError {
             is_error: false,
             message: "".to_string(),
-        }
+        },
     }
 }
 
@@ -92,18 +108,26 @@ pub fn ffi_insert_sparse_vector(
     let bridge = match IndexManager::get_index_writer_bridge(&index_path) {
         Ok(res) => res,
         Err(error) => {
-            return ApiUtils::handle_error(FUNC_NAME, "failed get index writer bridge", error.to_string());
-        },
+            return ApiUtils::handle_error(
+                FUNC_NAME,
+                "failed get index writer bridge",
+                error.to_string(),
+            );
+        }
     };
 
-    let res = bridge.add_row(SparseRowContent{
+    let res = bridge.add_row(SparseRowContent {
         row_id,
         sparse_vector: sparse_vector.clone().try_into().unwrap(),
     });
 
     if res.is_err() {
-        return ApiUtils::handle_error(FUNC_NAME, "failed add sparse row content to index", res.err().unwrap());
-    }else {
+        return ApiUtils::handle_error(
+            FUNC_NAME,
+            "failed add sparse row content to index",
+            res.err().unwrap(),
+        );
+    } else {
         FFIBoolResult {
             result: true,
             error: FFIError {
@@ -125,12 +149,15 @@ pub fn ffi_commit_index(index_path: &CxxString) -> FFIBoolResult {
         }
     };
 
-
     let bridge = match IndexManager::get_index_writer_bridge(&index_path) {
         Ok(res) => res,
         Err(error) => {
-            return ApiUtils::handle_error(FUNC_NAME, "failed get index writer bridge", error.to_string());
-        },
+            return ApiUtils::handle_error(
+                FUNC_NAME,
+                "failed get index writer bridge",
+                error.to_string(),
+            );
+        }
     };
 
     if let Err(error) = bridge.commit() {
@@ -147,7 +174,6 @@ pub fn ffi_commit_index(index_path: &CxxString) -> FFIBoolResult {
         },
     }
 }
-
 
 pub fn ffi_free_index_writer(index_path: &CxxString) -> FFIBoolResult {
     static FUNC_NAME: &str = "ffi_free_index_writer";

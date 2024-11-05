@@ -31,7 +31,7 @@ impl IndexBuilder {
         }
     }
 
-    pub fn settings(mut self, settings: IndexSettings) -> Self {
+    pub fn with_settings(mut self, settings: IndexSettings) -> Self {
         self.index_settings = settings;
         self
     }
@@ -63,6 +63,7 @@ impl IndexBuilder {
 
     /// 该函数未经过测试 </br>
     /// 它期望给一个空的目录，并且不会创建任何的垃圾回收操作。
+    /// 猜测这个函数是避免 segment 合并和垃圾清理的工作, 应该就是在 Index 层面创建 1 个 sparse index, 并且将数据索引到 1 个 segment 里面
     pub fn single_segment_index_writer(
         self,
         dir: impl Into<Box<dyn Directory>>,

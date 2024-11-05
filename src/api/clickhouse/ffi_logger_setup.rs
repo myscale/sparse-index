@@ -2,7 +2,9 @@ use std::ffi::{c_char, CStr};
 
 use crate::error_ck;
 
-use super::utils::{empty_log_callback, LogCallback, LoggerConfig, SparseIndexLogger, LOG4RS_HANDLE, LOG_CALLBACK};
+use super::utils::{
+    empty_log_callback, LogCallback, LoggerConfig, SparseIndexLogger, LOG4RS_HANDLE, LOG_CALLBACK,
+};
 
 #[no_mangle]
 pub extern "C" fn sparse_index_log4rs_initialize(
@@ -91,6 +93,6 @@ pub extern "C" fn sparse_index_log4rs_initialize_with_callback(
             return false;
         }
     };
-    
+
     true
 }

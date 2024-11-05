@@ -8,9 +8,9 @@ use std::slice;
 pub enum SegmentComponent {
     /// 倒排索引数据部分
     /// TODO 后续可以考虑拆分成多个文件存储，这样说不定访问效率会大大增加
-    InvertedIndexData,
+    InvertedIndexPostings,
+    InvertedIndexOffsets,
     InvertedIndexMeta,
-
     // 临时索引文件存储
     // TempInvertedIndex,
 
@@ -21,8 +21,9 @@ pub enum SegmentComponent {
 impl SegmentComponent {
     /// Iterates through the components.
     pub fn iterator() -> slice::Iter<'static, SegmentComponent> {
-        static SEGMENT_COMPONENTS: [SegmentComponent; 2] = [
-            SegmentComponent::InvertedIndexData,
+        static SEGMENT_COMPONENTS: [SegmentComponent; 3] = [
+            SegmentComponent::InvertedIndexPostings,
+            SegmentComponent::InvertedIndexOffsets,
             SegmentComponent::InvertedIndexMeta,
         ];
         SEGMENT_COMPONENTS.iter()

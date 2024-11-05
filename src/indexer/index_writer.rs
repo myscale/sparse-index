@@ -1,5 +1,5 @@
 use std::ops::Range;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
@@ -11,7 +11,7 @@ use super::operation::{AddOperation, UserOperation};
 use super::segment_updater::SegmentUpdater;
 use super::{AddBatch, AddBatchReceiver, AddBatchSender, PreparedCommit};
 use crate::common::errors::SparseError;
-use crate::core::{InvertedIndexConfig, SparseRowContent};
+use crate::core::SparseRowContent;
 use crate::directory::{DirectoryLock, GarbageCollectionResult};
 
 use crate::future_result::FutureResult;
@@ -21,7 +21,6 @@ use crate::indexer::stamper::Stamper;
 use crate::indexer::{MergePolicy, SegmentEntry, SegmentWriter};
 
 use crate::Opstamp;
-
 
 /// 用于设置 memory_arena 的边界大小, 当 memory_area 中剩余内存低于该值时(1MB), 关闭 segment
 pub const MARGIN_IN_BYTES: usize = 1_000_000;
@@ -37,7 +36,6 @@ pub const MAX_NUM_THREAD: usize = 8;
 /// Add document will block if the number of docs waiting in the queue to be indexed reaches `PIPELINE_MAX_SIZE_IN_DOCS`
 const PIPELINE_MAX_SIZE_IN_DOCS: usize = 10_000;
 
-
 fn error_in_index_worker_thread(context: &str) -> SparseError {
     SparseError::ErrorInThread(format!(
         "{context}. A worker thread encountered an error (io::Error most likely) or panicked."
@@ -46,7 +44,7 @@ fn error_in_index_worker_thread(context: &str) -> SparseError {
 
 /// `IndexWriter` 用于往一个 Index 中插入数据 </br>
 /// 它管理了一些 indexing 线程, 以及一个共享的 indexing 队列 </br>
-/// 
+///
 /// 每个 indexing 线程都在通过 `SegmentWriter` 去 构建 独立的 Segment
 pub struct IndexWriter {
     // the lock is just used to bind the lifetime of the lock with that of the IndexWriter.
@@ -76,7 +74,6 @@ pub struct IndexWriter {
     committed_opstamp: Opstamp,
 }
 
-
 /// 在 index worker 内部会 loop 不断获取 AddBatch 并尝试调用 index_documents.
 /// - memory_budget: 索引单个 segment 的内存预算
 /// - grouped_sv_iterator: 从 Chanel 获取 sv
@@ -87,15 +84,12 @@ fn index_documents(
     grouped_sv_iterator: &mut dyn Iterator<Item = AddBatch>,
     segment_updater: &SegmentUpdater,
 ) -> crate::Result<()> {
-    info!("{} [index documents] enter", thread::current().name().unwrap_or_default());
+    info!(
+        "{} [index documents] enter",
+        thread::current().name().unwrap_or_default()
+    );
     // 初始化 segment writer
     let mut segment_writer = SegmentWriter::for_segment(memory_budget, segment.clone())?;
-    // TODO 优化文件写入
-    let mut config: InvertedIndexConfig = InvertedIndexConfig::default();
-    config.with_data_prefix(segment.id().uuid_string().as_str());
-    config.with_meta_prefix(segment.id().uuid_string().as_str());
-    let res = segment.index().directory().register_file_as_managed(Path::new(&config.data_file_name())).expect("msg");
-    let res = segment.index().directory().register_file_as_managed(Path::new(&config.meta_file_name())).expect("msg");
 
     // 遍历接收到的 svs
     for sv_group in grouped_sv_iterator {
@@ -105,7 +99,12 @@ fn index_documents(
             segment_writer.index_row_content(sv)?;
         }
         let mem_usage = segment_writer.mem_usage();
-        trace!("{} [index_documents] mem_usage {}, true budget {}", thread::current().name().unwrap_or_default(), mem_usage, memory_budget - MARGIN_IN_BYTES);
+        trace!(
+            "{} [index_documents] mem_usage {}, true budget {}",
+            thread::current().name().unwrap_or_default(),
+            mem_usage,
+            memory_budget - MARGIN_IN_BYTES
+        );
         // 统计当前的内存超过了限制, 就停止继续索引, 后面会 构建 新的 segment
         if mem_usage >= memory_budget - MARGIN_IN_BYTES {
             info!(
@@ -129,7 +128,13 @@ fn index_documents(
 
     // 序列化存储
     // TODO 目前这个 doc_opstamps 不会直接使用到, 是和 delete 相关的，可以先直接删除了
-    let _doc_opstamps: Vec<Opstamp> = segment_writer.finalize()?;
+    let file_relative_paths: Vec<PathBuf> = segment_writer.finalize()?;
+    for path in file_relative_paths {
+        segment
+            .index()
+            .directory()
+            .register_file_as_managed(&path)?;
+    }
 
     let segment_with_rows_count = segment.clone().with_rows_count(rows_count);
 
@@ -143,7 +148,6 @@ fn index_documents(
     segment_updater.schedule_add_segment(segment_entry).wait()?;
     Ok(())
 }
-
 
 impl IndexWriter {
     pub(crate) fn new(
@@ -172,8 +176,7 @@ impl IndexWriter {
 
         let stamper = Stamper::new(current_opstamp);
 
-        let segment_updater =
-            SegmentUpdater::create(index.clone(), stamper.clone())?;
+        let segment_updater = SegmentUpdater::create(index.clone(), stamper.clone())?;
 
         let mut index_writer = Self {
             _directory_lock: Some(directory_lock),
@@ -189,7 +192,6 @@ impl IndexWriter {
             num_threads,
 
             // delete_queue,
-
             committed_opstamp: current_opstamp,
             stamper,
 
@@ -460,7 +462,10 @@ impl IndexWriter {
         //
         // This will move uncommitted segments to the state of
         // committed segments.
-        info!("[{}] [prepare_commit] tring prepare commit", thread::current().name().unwrap_or_default());
+        info!(
+            "[{}] [prepare_commit] tring prepare commit",
+            thread::current().name().unwrap_or_default()
+        );
 
         // this will drop the current document channel
         // and recreate a new one.
@@ -480,7 +485,11 @@ impl IndexWriter {
 
         let commit_opstamp = self.stamper.stamp();
         let prepared_commit = PreparedCommit::new(self, commit_opstamp);
-        info!("[{}] [prepare_commit] commit has been finished, opstamp: {}", thread::current().name().unwrap_or_default(), commit_opstamp);
+        info!(
+            "[{}] [prepare_commit] commit has been finished, opstamp: {}",
+            thread::current().name().unwrap_or_default(),
+            commit_opstamp
+        );
 
         Ok(prepared_commit)
     }

@@ -9,14 +9,11 @@ use crate::common::errors::SparseError;
 use crate::index::{SegmentId, SegmentMeta};
 use crate::indexer::SegmentEntry;
 
-
-
 #[derive(PartialEq, Eq)]
 pub(crate) enum SegmentsStatus {
     Committed,
     Uncommitted,
 }
-
 
 #[derive(Default)]
 struct SegmentRegisters {
@@ -63,9 +60,9 @@ impl Debug for SegmentManager {
 }
 
 impl SegmentManager {
-    // Lock poisoning should never happen :
-    // The lock is acquired and released within this class,
-    // and the operations cannot panic.
+    /// Lock poisoning should never happen :
+    /// The lock is acquired and released within this class,
+    /// and the operations cannot panic.
     fn read(&self) -> RwLockReadGuard<'_, SegmentRegisters> {
         self.registers
             .read()
@@ -80,9 +77,7 @@ impl SegmentManager {
 
     /// 初始化 SegmentManager </br>
     /// 提供的 seg metas 参数均被视为 committed
-    pub fn from_segments(
-        segment_metas: Vec<SegmentMeta>,
-    ) -> SegmentManager {
+    pub fn from_segments(segment_metas: Vec<SegmentMeta>) -> SegmentManager {
         SegmentManager {
             registers: RwLock::new(SegmentRegisters {
                 uncommitted: SegmentRegister::default(),
@@ -93,7 +88,7 @@ impl SegmentManager {
 
     /// 从 committed 和 uncommitted 集合内获取可以进行合并的 seg ids </br>
     /// 提供的 `in_merge_segment_ids` 存储了正在合并的 ids
-    /// 
+    ///
     /// return (committed mergeable, uncommitted mergeable)
     pub fn get_mergeable_segments(
         &self,
@@ -116,8 +111,6 @@ impl SegmentManager {
         segment_entries.extend(registers_lock.committed.segment_entries());
         segment_entries
     }
-
-
 
     /// 删除 segment management 记录中所有空的 seg ids
     fn remove_empty_segments(&self) {

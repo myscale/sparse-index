@@ -75,7 +75,7 @@ impl<W: Weight> InvertedIndex for InvertedIndexCompressedImmutableRam<W> {
         self.postings.len()
     }
 
-    fn posting_list_len(&self, id: &DimOffset) -> Option<usize> {
+    fn posting_size(&self, id: &DimOffset) -> Option<usize> {
         self.get(id).map(|posting_list| posting_list.len_to_end())
     }
 

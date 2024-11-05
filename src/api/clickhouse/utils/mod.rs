@@ -8,11 +8,7 @@ pub(super) use index_manager::IndexManager;
 
 // pub use logger_bridge::LOG_CALLBACK;
 pub use logger_bridge::{
-    SparseIndexLogger,
-    LOG_CALLBACK,
-    LOG4RS_HANDLE,
-    empty_log_callback,
-    LogCallback
+    empty_log_callback, LogCallback, SparseIndexLogger, LOG4RS_HANDLE, LOG_CALLBACK,
 };
 
 pub use logger_config::LoggerConfig;

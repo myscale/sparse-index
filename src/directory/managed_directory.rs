@@ -160,7 +160,11 @@ impl ManagedDirectory {
                 Ok(_meta_lock) => {
                     // 调用回掉函数, 拿到存活的文件列表
                     let living_files = get_living_files();
-                    debug!("[{}] [garbage_collect] directory managed_paths: {:?}", thread::current().name().unwrap_or_default(), &meta_informations_rlock.managed_paths);
+                    debug!(
+                        "[{}] [garbage_collect] directory managed_paths: {:?}",
+                        thread::current().name().unwrap_or_default(),
+                        &meta_informations_rlock.managed_paths
+                    );
                     // 如果 .managed.json 中记录的文件不在这个 living files 里面, 就需要删除它
                     for managed_path in &meta_informations_rlock.managed_paths {
                         if !living_files.contains(managed_path) {
@@ -205,7 +209,6 @@ impl ManagedDirectory {
 
         info!("[{}] - [garbage_collect] files_to_delete size: {}, failed delete: {}, success delete: {}", thread::current().name().unwrap_or_default(), files_to_delete.len(), failed_to_delete_files.len(), deleted_files.len());
 
-
         // 删除垃圾文件之后更新 .managed.json 文件
         if !deleted_files.is_empty() {
             // update the list of managed files by removing
@@ -239,12 +242,15 @@ impl ManagedDirectory {
     /// File starting by "." are reserved to locks.
     /// They are not managed and cannot be subjected
     /// to garbage collection.
-    /// 
+    ///
     /// - `filepath`: 是相对路径
     pub fn register_file_as_managed(&self, filepath: &Path) -> io::Result<()> {
         // Files starting by "." (e.g. lock files) are not managed.
         if !is_managed(filepath) {
-            info!("[register_file_as_managed] file is not belong to managed: {:?}", filepath);
+            info!(
+                "[register_file_as_managed] file is not belong to managed: {:?}",
+                filepath
+            );
             return Ok(());
         }
         let mut meta_wlock = self
@@ -255,7 +261,10 @@ impl ManagedDirectory {
         if !has_changed {
             return Ok(());
         } else {
-            info!("[register_file_as_managed] managed_paths inserted item: {:?}", filepath);
+            info!(
+                "[register_file_as_managed] managed_paths inserted item: {:?}",
+                filepath
+            );
         }
         save_managed_paths(self.directory.as_ref(), &meta_wlock)?;
         // This is not the first file we add.

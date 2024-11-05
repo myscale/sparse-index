@@ -44,39 +44,10 @@ pub const INDEX_FORMAT_VERSION: u32 = 6;
 /// Oldest index format version this tantivy version can read.
 pub const INDEX_FORMAT_OLDEST_SUPPORTED_VERSION: u32 = 4;
 
-// #[macro_export]
-// /// Enable fail_point if feature is enabled.
-// macro_rules! fail_point {
-//     ($name:expr) => {{
-//         #[cfg(feature = "failpoints")]
-//         {
-//             fail::eval($name, |_| {
-//                 panic!("Return is not supported for the fail point \"{}\"", $name);
-//             });
-//         }
-//     }};
-//     ($name:expr, $e:expr) => {{
-//         #[cfg(feature = "failpoints")]
-//         {
-//             if let Some(res) = fail::eval($name, $e) {
-//                 return res;
-//             }
-//         }
-//     }};
-//     ($name:expr, $cond:expr, $e:expr) => {{
-//         #[cfg(feature = "failpoints")]
-//         {
-//             if $cond {
-//                 fail::fail_point!($name, $e);
-//             }
-//         }
-//     }};
-// }
-
-
-
 // re-export log ffi function.
-pub use api::clickhouse::{sparse_index_log4rs_initialize, sparse_index_log4rs_initialize_with_callback};
+pub use api::clickhouse::{
+    sparse_index_log4rs_initialize, sparse_index_log4rs_initialize_with_callback,
+};
 
 #[cxx::bridge(namespace = "SPARSE")]
 pub mod ffi {

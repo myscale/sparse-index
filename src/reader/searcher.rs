@@ -44,8 +44,7 @@ impl SearcherGeneration {
         // 存储 segment_id 和 delete opstamp 的映射
         let mut segment_id_to_del_opstamp = BTreeMap::new();
         for segment_reader in segment_readers {
-            segment_id_to_del_opstamp
-                .insert(segment_reader.segment_id(), None);
+            segment_id_to_del_opstamp.insert(segment_reader.segment_id(), None);
         }
         Self {
             segments: segment_id_to_del_opstamp,
@@ -155,15 +154,17 @@ impl Searcher {
         executor: &Executor,
         brute_force: bool,
     ) -> crate::Result<Vec<ScoredPointOffset>> {
-
         let mut topk_combine = TopK::new(limits as usize);
-        let results: Vec<TopK> = executor.map(|seg_reader|{
-            if brute_force {
-                seg_reader.brute_force_search(sparse_vector.clone(), limits)
-            } else {
-                seg_reader.search(sparse_vector.clone(), limits)
-            }
-        }, self.segment_readers().iter())?;
+        let results: Vec<TopK> = executor.map(
+            |seg_reader| {
+                if brute_force {
+                    seg_reader.brute_force_search(sparse_vector.clone(), limits)
+                } else {
+                    seg_reader.search(sparse_vector.clone(), limits)
+                }
+            },
+            self.segment_readers().iter(),
+        )?;
         for res in results {
             topk_combine.combine(&res);
         }

@@ -4,16 +4,17 @@ use log::{debug, error};
 
 use crate::{ffi::ScoredPointOffset, RowId};
 
-use super::{DimId, DimWeight, InvertedIndex, InvertedIndexMmap, PostingListIter, PostingListIterator, ScoreType, SparseVector, TopK};
+use super::{
+    DimId, DimWeight, InvertedIndex, InvertedIndexMmap, PostingListIter, PostingListIterator,
+    ScoreType, SparseVector, TopK,
+};
 const ADVANCE_BATCH_SIZE: usize = 10_000;
-
 
 struct IndexedPostingListIterator<'a> {
     posting_list_iterator: PostingListIterator<'a>,
     query_index: DimId,
     query_weight: DimWeight,
 }
-
 
 pub struct SearchEnv<'a> {
     postings_iterators: Vec<IndexedPostingListIterator<'a>>,
@@ -27,12 +28,10 @@ pub struct SearchEnv<'a> {
     top_k: TopK,
 }
 
-
 #[derive(Clone)]
 pub struct IndexSearcher {
     inverted_index: InvertedIndexMmap,
 }
-
 
 fn get_min_row_id(posting_iterators: &mut [IndexedPostingListIterator<'_>]) -> Option<RowId> {
     let mut min_row_id = RowId::MAX;
@@ -43,17 +42,14 @@ fn get_min_row_id(posting_iterators: &mut [IndexedPostingListIterator<'_>]) -> O
     }
     if min_row_id == RowId::MAX {
         return None;
-    }else {
+    } else {
         return Some(min_row_id);
     }
 }
 
-
 impl IndexSearcher {
     pub fn new(inverted_index: InvertedIndexMmap) -> Self {
-        return Self {
-            inverted_index,
-        };
+        return Self { inverted_index };
     }
 
     pub fn get_inverted_index(&self) -> &InvertedIndexMmap {
@@ -97,7 +93,7 @@ impl IndexSearcher {
         }
     }
 
-    // TODO 应该将 index 中所有的 row_id 给存储起来 
+    // TODO 应该将 index 中所有的 row_id 给存储起来
     pub fn plain_search(&self, query: SparseVector, limits: u32) -> TopK {
         let mut search_env = self.pre_search(query.clone(), limits);
 
@@ -127,21 +123,25 @@ impl IndexSearcher {
                 row_id: id,
             });
         }
-        
+
         search_env.top_k
     }
 
     /// 遍历 query 涉及到的所有 postings，在每个 postings 中遍历一个 batch 范围内的数据
-    fn advance_batch(&self, batch_start_id: RowId, batch_end_id: RowId, search_env: &mut SearchEnv) {
+    fn advance_batch(
+        &self,
+        batch_start_id: RowId,
+        batch_end_id: RowId,
+        search_env: &mut SearchEnv,
+    ) {
         let batch_size = batch_end_id - batch_start_id + 1;
         let mut batch_scores: Vec<ScoreType> = vec![0.0; batch_size as usize];
 
         // debug!("[advance_batch] batch_scores len (batch_size):{}, batch_start_id:{}, batch_end_id:{}", batch_size, batch_start_id, batch_end_id);
         for posting in search_env.postings_iterators.iter_mut() {
-            posting.posting_list_iterator.for_each_till_row_id(
-                batch_end_id,
-                |element| {
-
+            posting
+                .posting_list_iterator
+                .for_each_till_row_id(batch_end_id, |element| {
                     if element.row_id < batch_start_id || element.row_id > batch_end_id {
                         error!("row id range error when iter posting element till row id.");
                         return;
@@ -151,8 +151,7 @@ impl IndexSearcher {
                     let local_id = (element.row_id - batch_start_id) as usize;
                     // debug!("[advance_batch] local_id:{}, element_row_id:{}", local_id, element.row_id);
                     batch_scores[local_id] += score;
-                } 
-            );
+                });
         }
 
         for (local_id, &score) in batch_scores.iter().enumerate() {
@@ -160,16 +159,13 @@ impl IndexSearcher {
                 // TOOD 判断 element.row_id 是否合法（未被过滤）
 
                 let real_id = local_id + batch_start_id as usize;
-                search_env.top_k.push(
-                    ScoredPointOffset {
-                        row_id: real_id as RowId,
-                        score 
-                    }
-                );
+                search_env.top_k.push(ScoredPointOffset {
+                    row_id: real_id as RowId,
+                    score,
+                });
             }
         }
     }
-
 
     // search env 仅存在 1 个 posting 的时候, 计算分数
     fn process_last_posting_list(&self, search_env: &mut SearchEnv) {
@@ -180,7 +176,10 @@ impl IndexSearcher {
             |element| {
                 // TODO 过滤掉不合法的 rowid
                 let score = element.weight * posting.query_weight;
-                search_env.top_k.push(ScoredPointOffset { score, row_id: element.row_id });
+                search_env.top_k.push(ScoredPointOffset {
+                    score,
+                    row_id: element.row_id,
+                });
             },
         );
     }
@@ -230,39 +229,42 @@ impl IndexSearcher {
                         std::cmp::Ordering::Less => {
                             // 当 right set 中 min row_id 比当前 longest posting 首个 row_id 小的时候, 不可以剪枝
                             return false;
-                        },
+                        }
                         std::cmp::Ordering::Equal => {
                             // 当 right set 中 min row_id 和当前 longest posting 首个 row_id 一样的时候, 也不能剪枝
                             return false;
-                        },
+                        }
                         std::cmp::Ordering::Greater => {
                             // 当 right set 中 min row_id 比当前 longest posting 首个 row_id 大的时候, 可以剪枝
                             // 最好的情形是 longest posting 中最小的 row_id 一直到 right set 中最小的 row_id 这个区间都能够被 cut 掉
 
                             // 获得 longest posting 能够贡献的最大分数
                             let max_weight_in_longest = element.weight.max(element.max_next_weight);
-                            let max_score_contribution = max_weight_in_longest * longest_indexed_posting_iterator.query_weight;
+                            let max_score_contribution = max_weight_in_longest
+                                * longest_indexed_posting_iterator.query_weight;
 
                             // 根据贡献的最大分数判断是否能够剪枝
                             if max_score_contribution <= min_score {
-                                let cursor_before_pruning = longest_posting_iterator.current_index();
+                                let cursor_before_pruning =
+                                    longest_posting_iterator.current_index();
                                 longest_posting_iterator.skip_to(min_row_id_in_right);
                                 let cursor_after_pruning = longest_posting_iterator.current_index();
                                 return cursor_before_pruning != cursor_after_pruning;
                             }
-                        },
+                        }
                     }
-                },
+                }
                 None => {
                     // min_row_id_in_right 为 None 时, 表示仅剩余左侧 1 个 posting
                     // 直接判断左侧 posting 是否能够全部剪掉就行
                     let max_weight_in_longest = element.weight.max(element.max_next_weight);
-                    let max_score_contribution = max_weight_in_longest * longest_indexed_posting_iterator.query_weight;
+                    let max_score_contribution =
+                        max_weight_in_longest * longest_indexed_posting_iterator.query_weight;
                     if max_score_contribution <= min_score {
                         longest_posting_iterator.skip_to_end();
                         return true;
                     }
-                },
+                }
             }
         }
         false
@@ -277,7 +279,6 @@ impl IndexSearcher {
 
         let mut best_min_score = f32::MIN;
 
-
         // 循环处理每个批次
         loop {
             if search_env.min_row_id.is_none() {
@@ -288,11 +289,15 @@ impl IndexSearcher {
                 search_env.min_row_id.unwrap() + ADVANCE_BATCH_SIZE as RowId,
                 search_env.max_row_id.unwrap_or(RowId::MAX),
             );
-            self.advance_batch(search_env.min_row_id.unwrap(), last_batch_id, &mut search_env);
+            self.advance_batch(
+                search_env.min_row_id.unwrap(),
+                last_batch_id,
+                &mut search_env,
+            );
 
             // 剔除已经遍历完成的 posting
-            search_env.postings_iterators.retain(|posting_iterator|{
-                posting_iterator.posting_list_iterator.len_to_end()!=0
+            search_env.postings_iterators.retain(|posting_iterator| {
+                posting_iterator.posting_list_iterator.len_to_end() != 0
             });
 
             // 是否所有的 posting 均被消耗
@@ -325,11 +330,7 @@ impl IndexSearcher {
                     search_env.min_row_id = get_min_row_id(&mut search_env.postings_iterators);
                 }
             }
-
         }
         search_env.top_k
     }
-
 }
-
-

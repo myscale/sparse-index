@@ -97,21 +97,24 @@ impl Index {
         IndexBuilder::new()
     }
 
-    /// 提供 Directory 和 settings
+    /// 提供 自定义的 Directory 和 settings
     pub fn create<T: Into<Box<dyn Directory>>>(
         dir: T,
         settings: IndexSettings,
     ) -> crate::Result<Index> {
         let dir: Box<dyn Directory> = dir.into();
         let builder: IndexBuilder = IndexBuilder::new();
-        builder.settings(settings).create(dir)
+        builder.with_settings(settings).create(dir)
     }
 
     /// 在给定路径下以 mmap 模式创建索引
     pub fn create_in_dir<P: AsRef<Path>>(
         directory_path: P,
+        settings: IndexSettings,
     ) -> crate::Result<Index> {
-        IndexBuilder::new().create_in_dir(directory_path)
+        IndexBuilder::new()
+            .with_settings(settings)
+            .create_in_dir(directory_path)
     }
 
     /// 创建一个新的 segment_meta（仅限高级用户）。
@@ -119,7 +122,8 @@ impl Index {
     /// 只要 `SegmentMeta` 存在，与 `SegmentMeta` 关联的文件就保证不会被垃圾回收，
     /// 无论该段是否被记录为索引的一部分。
     pub fn new_segment_meta(&self, segment_id: SegmentId, rows_count: RowId) -> SegmentMeta {
-        self.inventory.new_segment_meta(self.directory().get_path(), segment_id, rows_count)
+        self.inventory
+            .new_segment_meta(self.directory().get_path(), segment_id, rows_count)
     }
 
     /// 打开一个新的索引写入器。尝试获取一个锁文件。
@@ -138,11 +142,11 @@ impl Index {
         num_threads: usize,
         overall_memory_budget_in_bytes: usize,
     ) -> crate::Result<IndexWriter> {
-        let directory_lock = self
-            .directory
-            .acquire_lock(&INDEX_WRITER_LOCK)
-            .map_err(|err| {
-                SparseError::LockFailure(
+        let directory_lock =
+            self.directory
+                .acquire_lock(&INDEX_WRITER_LOCK)
+                .map_err(|err| {
+                    SparseError::LockFailure(
                     err,
                     Some(
                         "Failed to acquire index lock. If you are using a regular directory, this \
@@ -150,9 +154,9 @@ impl Index {
                          this process or in a different process.".to_string(),
                     ),
                 )
-            })?;
+                })?;
         let memory_arena_in_bytes_per_thread = overall_memory_budget_in_bytes / num_threads;
-        
+
         IndexWriter::new(
             self,
             num_threads,
@@ -188,9 +192,11 @@ impl Index {
 
     /// Creates a new segment.
     pub fn new_segment(&self) -> Segment {
-        let segment_meta = self
-            .inventory
-            .new_segment_meta(self.directory().get_path(), SegmentId::generate_random(), 0);
+        let segment_meta = self.inventory.new_segment_meta(
+            self.directory().get_path(),
+            SegmentId::generate_random(),
+            0,
+        );
         self.segment(segment_meta)
     }
 }
@@ -333,72 +339,100 @@ impl fmt::Debug for Index {
     }
 }
 
-
 #[cfg(test)]
-mod tests{
-    use std::path::Path;
+mod tests {
+    use std::{path::Path, time::Instant};
 
     use log::info;
     use tempfile::TempDir;
 
-    use crate::{core::{SparseRowContent, SparseVector}, index::IndexBuilder, indexer::{index_writer, LogMergePolicy, MergePolicy, NoMergePolicy}};
+    use crate::{
+        core::{SparseRowContent, SparseVector},
+        index::{IndexBuilder, IndexSettings},
+        indexer::{index_writer, LogMergePolicy, MergePolicy, NoMergePolicy},
+    };
 
     use super::Index;
 
+    use rand::Rng;
+
+    fn generate_random_vectors(
+        len: usize,
+        dim_range: u32,
+        value_range: f32,
+    ) -> (Vec<u32>, Vec<f32>) {
+        let mut rng = rand::thread_rng();
+
+        let random_dims: Vec<u32> = (0..len).map(|_| rng.gen_range(0..dim_range)).collect();
+        let random_values: Vec<f32> = (0..len).map(|_| rng.gen_range(0.0..value_range)).collect();
+
+        (random_dims, random_values)
+    }
+
     fn mock_row_content(base: u32, rows: u32) -> impl Iterator<Item = SparseRowContent> {
-        (base*rows..base*rows+rows).map(|i| {
-            let indices = (0..768).map(|j| (i + j) % 1000000).collect();
-            let values = (0..768).map(|j| 0.1 + (i + j) as f32).collect();
-    
+        (base * rows..base * rows + rows).map(|i| {
+            // max_dim 1024 维
+            let indices = (0..384).map(|j| (i + j) % 2048).collect();
+            let values = (0..384).map(|j| 0.1 + ((i + j) / 16) as f32).collect();
+
             SparseRowContent {
                 row_id: i,
-                sparse_vector: SparseVector {
-                    indices,
-                    values,
-                },
+                sparse_vector: SparseVector { indices, values },
             }
         })
     }
 
-
-
-    fn get_logger() -> env_logger::Builder{
+    fn get_logger() -> env_logger::Builder {
         // 创建一个新的日志构建器
         let mut builder = env_logger::Builder::from_default_env();
 
         // 设置日志级别为 Debug
-        builder.filter(None, log::LevelFilter::Debug);
-        
+        builder.filter(None, log::LevelFilter::Info);
+
         return builder;
     }
 
-
     #[test]
-    pub fn test_create_index(){
+    pub fn test_create_index() {
         get_logger().init();
         // let dir = TempDir::new().expect("error create temp dir");
         let dir2 = Path::new("/home/mochix/test/sparse_index_files/temp");
-        let index = Index::create_in_dir(dir2).expect("error create index in dir");
-        let mut index_writer = index.writer(1024 * 1024 * 18).expect("error create index writer");
+        let index = Index::create_in_dir(dir2, IndexSettings::default())
+            .expect("error create index in dir");
+        let mut index_writer = index
+            .writer(1024 * 1024 * 128)
+            .expect("error create index writer");
 
         let mut log_merge_policy = LogMergePolicy::default();
         // log_merge_policy.set_max_docs_before_merge(5);
         index_writer.set_merge_policy(Box::new(log_merge_policy));
         // index_writer.set_merge_policy(Box::new(NoMergePolicy::default()));
 
-        for base in 0..10 {
-            for row in mock_row_content(base, 10000) {
+        let time_begin = Instant::now();
+        for base in 0..1 {
+            for row in mock_row_content(base, 100000) {
                 let res = index_writer.add_document(row);
             }
             let commit_res = index_writer.commit();
-            info!("[BASE-{}] commit res opstamp is: {:?}",base, commit_res.unwrap());   
+            info!(
+                "[BASE-{}] commit res opstamp is: {:?}",
+                base,
+                commit_res.unwrap()
+            );
         }
-        
+
+        let res = index_writer.wait_merging_threads();
+        let time_end = Instant::now();
+        info!(
+            "release merging threads is {}, duration is {}s",
+            res.is_ok(),
+            time_end.duration_since(time_begin).as_secs()
+        );
+
         let searcher = index.reader().expect("error index reader").searcher();
         for row in mock_row_content(5, 100) {
             let res = searcher.search(row.sparse_vector, 4).expect("error search");
             info!("RES: {:?}", res);
-
         }
     }
 }

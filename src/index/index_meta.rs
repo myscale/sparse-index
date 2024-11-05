@@ -1,5 +1,7 @@
 use super::SegmentComponent;
-use crate::core::{INVERTED_INDEX_FILE_DATA_SUFFIX, INVERTED_INDEX_FILE_META_SUFFIX};
+use crate::core::{
+    INVERTED_INDEX_META_FILE_SUFFIX, INVERTED_INDEX_OFFSETS_SUFFIX, INVERTED_INDEX_POSTINGS_SUFFIX,
+};
 use crate::index::SegmentId;
 use crate::{Opstamp, RowId};
 use census::{Inventory, TrackedObject};
@@ -27,7 +29,12 @@ impl SegmentMetaInventory {
     }
 
     /// 创建新的 SegmentMeta 并记录到 inventory 仓库
-    pub fn new_segment_meta(&self, directory: PathBuf, segment_id: SegmentId, rows_count: u32) -> SegmentMeta {
+    pub fn new_segment_meta(
+        &self,
+        directory: PathBuf,
+        segment_id: SegmentId,
+        rows_count: u32,
+    ) -> SegmentMeta {
         let inner = InnerSegmentMeta {
             directory,
             segment_id,
@@ -101,17 +108,19 @@ impl SegmentMeta {
         //         .collect::<HashSet<PathBuf>>()
         // }
         SegmentComponent::iterator()
-        .map(|component| self.relative_path(*component))
-        .collect::<HashSet<PathBuf>>()
+            .map(|component| self.relative_path(*component))
+            .collect::<HashSet<PathBuf>>()
     }
 
     /// 返回一个特定类型 segment 的文件名称
+    /// TODO 在参数里面加上 version 参数，函数内部根据不同的 version 去返回每个版本需要的文件路径
     pub fn relative_path(&self, component: SegmentComponent) -> PathBuf {
         let mut path = self.id().uuid_string();
         path.push_str(&match component {
             // TODO 怎么处理比较好？
-            SegmentComponent::InvertedIndexData => INVERTED_INDEX_FILE_DATA_SUFFIX.to_string(),
-            SegmentComponent::InvertedIndexMeta => INVERTED_INDEX_FILE_META_SUFFIX.to_string(),
+            SegmentComponent::InvertedIndexPostings => INVERTED_INDEX_POSTINGS_SUFFIX.to_string(),
+            SegmentComponent::InvertedIndexOffsets => INVERTED_INDEX_OFFSETS_SUFFIX.to_string(),
+            SegmentComponent::InvertedIndexMeta => INVERTED_INDEX_META_FILE_SUFFIX.to_string(),
             // SegmentComponent::Delete => ".delete".to_string(),
         });
         PathBuf::from(path)
@@ -146,9 +155,7 @@ impl SegmentMeta {
             });
         SegmentMeta { tracked }
     }
-
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct InnerSegmentMeta {
@@ -200,7 +207,6 @@ impl fmt::Debug for IndexMeta {
     }
 }
 
-
 impl IndexMeta {
     /// 创建一个全新的 IndexMeta，不包含任何 segment
     pub fn default() -> Self {
@@ -221,14 +227,11 @@ impl IndexMeta {
     }
 }
 
-
-
-
 /// 在加载 Index 时，需要使用 UntrackedIndexMeta 解析所有的 Segments 文件
 #[derive(Deserialize, Debug)]
 pub struct UntrackedIndexMeta {
-    pub segments: Vec<InnerSegmentMeta>, 
-    
+    pub segments: Vec<InnerSegmentMeta>,
+
     /// 最后一次 `commit` 的操作戳
     pub opstamp: Opstamp,
 
@@ -252,9 +255,6 @@ impl UntrackedIndexMeta {
         }
     }
 }
-
-
-
 
 #[cfg(test)]
 mod tests {

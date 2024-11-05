@@ -1,29 +1,39 @@
 #[cfg(test)]
-mod test{
+mod test {
     use cxx::let_cxx_string;
     use tempfile::TempDir;
 
-    use crate::{ffi::TupleElement, ffi_commit_index, ffi_create_index, ffi_insert_sparse_vector, ffi_load_index_reader, ffi_sparse_search};
+    use crate::{
+        ffi::TupleElement, ffi_commit_index, ffi_create_index, ffi_insert_sparse_vector,
+        ffi_load_index_reader, ffi_sparse_search,
+    };
 
     fn mock_row_content(base: u32, rows: u32) -> impl Iterator<Item = Vec<TupleElement>> {
-        (base*rows..base*rows+rows).map(|i| {
-            (0..768).map(|j| {
-                let dim_id = (i + j) % 1000000;
-                let weight_f32 = 0.1 + (i + j) as f32;
-                
-                TupleElement {
-                    dim_id,
-                    weight_f32,
-                    weight_u8: 0,
-                    weight_u32: 0,
-                    value_type: 0,
-                }
-            }).collect()
+        (base * rows..base * rows + rows).map(|i| {
+            (0..768)
+                .map(|j| {
+                    let dim_id = (i + j) % 1000000;
+                    let weight_f32 = 0.1 + (i + j) as f32;
+
+                    TupleElement {
+                        dim_id,
+                        weight_f32,
+                        weight_u8: 0,
+                        weight_u32: 0,
+                        value_type: 0,
+                    }
+                })
+                .collect()
         })
     }
 
     #[test]
     pub fn test_index_rows() {
+        // 创建一个新的日志构建器
+        let mut builder = env_logger::Builder::from_default_env();
+        // 设置日志级别为 Debug
+        builder.filter(None, log::LevelFilter::Info).init();
+
         let temp_dir = TempDir::new().unwrap().path().to_str().unwrap().to_string();
 
         // let_cxx_string!(index_path = temp_dir);
@@ -31,8 +41,7 @@ mod test{
         let res = ffi_create_index(&index_path);
         println!("create - {:?}", res);
 
-
-        for (row_id, sv) in mock_row_content(0, 10000).enumerate() {
+        for (row_id, sv) in mock_row_content(0, 5000000).enumerate() {
             ffi_insert_sparse_vector(&index_path, row_id as u32, &sv);
         }
         let res = ffi_commit_index(&index_path);

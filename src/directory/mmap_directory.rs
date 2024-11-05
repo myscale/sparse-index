@@ -33,7 +33,6 @@ pub(crate) fn make_io_err(msg: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, msg)
 }
 
-
 /// 尝试对位于 full_path 的文件进行内存映射 </br>
 /// Ok(Some(Mmap)) 表示内存映射成功 </br>
 /// Ok(None) 表示文件为空 </br>
@@ -47,7 +46,6 @@ fn open_mmap(full_path: &Path) -> Result<Option<Mmap>, OpenReadError> {
         }
     })?;
 
-    
     let meta_data = file
         .metadata()
         .map_err(|io_err| OpenReadError::wrap_io_error(io_err, full_path.to_owned()))?;
@@ -228,7 +226,7 @@ impl MmapDirectory {
     /// Opens a MmapDirectory in a directory, with a given access pattern.
     ///
     /// This is only supported on unix platforms.
-    /// 
+    ///
     /// unix 平台上使用给定的 madvice 内存映射访问模式来打开一个 MmapDirectory
     #[cfg(unix)]
     pub fn open_with_madvice(
@@ -311,7 +309,7 @@ impl MmapDirectory {
 /// uses BSD locks (`flock`). The lock is actually released when
 /// the `File` object is dropped and its associated file descriptor
 /// is closed.
-/// 
+///
 /// 用于在文件锁定期间持有文件句柄以及文件路径
 struct ReleaseLockFile {
     _file: File,
@@ -385,11 +383,9 @@ pub(crate) fn atomic_write(path: &Path, content: &[u8]) -> io::Result<()> {
 }
 
 impl Directory for MmapDirectory {
-
     fn get_path(&self) -> PathBuf {
         self.inner.root_path.clone()
     }
-
 
     /// 从 mmap cache 中获得指定路径的内存映射 </br>
     /// 返回该路径对应数据的 OwnedBytes 对象

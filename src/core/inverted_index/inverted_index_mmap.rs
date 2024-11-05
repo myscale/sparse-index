@@ -1,76 +1,87 @@
 use crate::core::common::ops::*;
-use crate::core::common::types::{DimId, DimOffset, ElementOffsetType};
+use crate::core::common::types::{DimId, DimOffset};
 use crate::core::inverted_index::inverted_index_ram::InvertedIndexRam;
 use crate::core::inverted_index::InvertedIndex;
 use crate::core::posting_list::{PostingElementEx, PostingListIterator};
-use crate::core::sparse_vector::SparseVector;
+use crate::core::{
+    INVERTED_INDEX_META_FILE_SUFFIX, INVERTED_INDEX_OFFSETS_SUFFIX, INVERTED_INDEX_POSTINGS_SUFFIX,
+};
 use crate::RowId;
+use log::warn;
 use memmap2::{Mmap, MmapMut};
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use super::{InvertedIndexConfig, StorageVersion};
+use super::{InvertedIndexMeta, Revision, Version, INVERTED_INDEX_FILE_NAME};
 
-const POSTING_HEADER_SIZE: usize = size_of::<PostingListFileHeader>();
-const INDEX_CONFIG_FILE_NAME: &str = "inverted_index_config.json";
+pub const POSTING_OFFSET_SIZE: usize = size_of::<PostingListOffset>();
 
-pub struct Version;
-
-impl StorageVersion for Version {
-    fn current_raw() -> &'static str {
-        "0.1.0"
-    }
-}
-
-// 猜测是在 mmap 里面找到一段 posting List 所在的 offsets
+// 在 mmap 文件里面找到一段 posting List 所在的 offsets
 #[derive(Debug, Default, Clone)]
-struct PostingListFileHeader {
-    pub start_offset: u64,
-    pub end_offset: u64,
+pub struct PostingListOffset {
+    pub start_offset: usize,
+    pub end_offset: usize,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct InvertedIndexFileHeader {
-    pub posting_count: usize, // number oof posting lists
-    pub vector_count: usize,  // number of unique vectors indexed
-    pub min_row_id: RowId,
-    pub max_row_id: RowId,
+// InvertedIndexMmap 索引格式下相关的文件
+pub struct InvertedIndexMmapFileConfig;
+
+impl InvertedIndexMmapFileConfig {
+    pub fn get_posting_offset_file_name(segment_id: Option<&str>) -> String {
+        format!(
+            "{}{}",
+            segment_id.unwrap_or(INVERTED_INDEX_FILE_NAME),
+            INVERTED_INDEX_OFFSETS_SUFFIX
+        )
+    }
+    pub fn get_posting_data_file_name(segment_id: Option<&str>) -> String {
+        format!(
+            "{}{}",
+            segment_id.unwrap_or(INVERTED_INDEX_FILE_NAME),
+            INVERTED_INDEX_POSTINGS_SUFFIX
+        )
+    }
+    pub fn get_inverted_meta_file_name(segment_id: Option<&str>) -> String {
+        format!(
+            "{}{}",
+            segment_id.unwrap_or(INVERTED_INDEX_FILE_NAME),
+            INVERTED_INDEX_META_FILE_SUFFIX
+        )
+    }
+    pub fn get_all_files(segment_id: Option<&str>) -> Vec<String> {
+        vec![
+            Self::get_posting_offset_file_name(segment_id),
+            Self::get_posting_data_file_name(segment_id),
+            Self::get_inverted_meta_file_name(segment_id),
+        ]
+    }
 }
 
 /// Inverted flatten core from dimension id to posting list
 #[derive(Debug, Clone)]
 pub struct InvertedIndexMmap {
-    path: PathBuf,
-    mmap: Arc<Mmap>,
-    pub file_header: InvertedIndexFileHeader,
+    pub path: PathBuf,
+    pub offsets_mmap: Arc<Mmap>,
+    pub postings_mmap: Arc<Mmap>,
+    pub meta: InvertedIndexMeta,
 }
 
 impl InvertedIndex for InvertedIndexMmap {
     type Iter<'a> = PostingListIterator<'a>;
-    type Version = Version;
 
-
-    fn open_with_config(path: &Path, config: InvertedIndexConfig) -> std::io::Result<Self> {
-        Self::load_with_config(path, config)
+    fn open(path: &Path, segment_id: Option<&str>) -> std::io::Result<Self> {
+        Self::load_under_segment(path, segment_id)
     }
 
-    fn open(path: &Path) -> std::io::Result<Self> {
-        Self::open_with_config(path, InvertedIndexConfig::default())
-    }
-
-    fn save_with_config(&self, path: &Path, config: InvertedIndexConfig) -> std::io::Result<()> {
+    /// 实际上没有执行任何存储的逻辑，仅检查了文件路径是否存在
+    fn save(&self, path: &Path, segment_id: Option<&str>) -> std::io::Result<()> {
         debug_assert_eq!(path, self.path);
-        for file in Self::files(path, config) {
+        for file in self.files(segment_id) {
             debug_assert!(file.exists());
         }
         Ok(())
-    }
-
-    fn save(&self, path: &Path) -> std::io::Result<()> {
-        return self.save_with_config(path, InvertedIndexConfig::default());
     }
 
     fn iter(&self, id: &DimOffset) -> Option<Self::Iter<'_>> {
@@ -78,187 +89,253 @@ impl InvertedIndex for InvertedIndexMmap {
         self.get(id).map(PostingListIterator::new)
     }
 
-    fn len(&self) -> usize {
-        self.file_header.posting_count
+    fn size(&self) -> usize {
+        self.meta.posting_count()
     }
 
-    fn posting_list_len(&self, id: &DimOffset) -> Option<usize> {
-        self.get(id).map(|posting_list| posting_list.len())
+    fn vector_count(&self) -> usize {
+        self.meta.vector_count()
     }
 
-    fn files(path: &Path, config: InvertedIndexConfig) -> Vec<PathBuf> {
-        vec![
-            path.join(config.data_file_name()),
-            path.join(config.meta_file_name()),
-        ]
+    fn min_dim_id(&self) -> DimId {
+        self.meta.min_dim_id()
     }
 
-    fn remove(&mut self, id: ElementOffsetType, old_vector: SparseVector) {
-        panic!("Cannot remove from a read-only mmap inverted core")
+    fn max_dim_id(&self) -> DimId {
+        self.meta.max_dim_id()
     }
 
-    fn upsert(
-        &mut self,
-        id: ElementOffsetType,
-        vector: SparseVector,
-        old_vector: Option<SparseVector>,
-    ) {
-        panic!("Cannot upsert into a read-only mmap inverted core")
+    fn posting_size(&self, dim_id: &DimId) -> Option<usize> {
+        self.get(dim_id).map(|posting_list| posting_list.len())
+    }
+
+    fn files(&self, segment_id: Option<&str>) -> Vec<PathBuf> {
+        // 仅仅获得相对路径
+        let get_all_files = InvertedIndexMmapFileConfig::get_all_files(segment_id);
+        get_all_files.iter().map(|p| PathBuf::from(p)).collect()
     }
 
     fn from_ram_index<P: AsRef<Path>>(
         ram_index: Cow<InvertedIndexRam>,
         path: P,
-        config: Option<InvertedIndexConfig>
+        segment_id: Option<&str>,
     ) -> std::io::Result<Self> {
-        Self::convert_and_save(&ram_index, path, config.unwrap_or_default())
+        Self::convert_and_save(&ram_index, path, segment_id)
     }
 
-    fn vector_count(&self) -> usize {
-        self.file_header.vector_count
+    fn remove(&mut self, _row_id: RowId) {
+        panic!("Cannot remove from a read-only mmap inverted core")
     }
 
-    fn max_index(&self) -> Option<DimOffset> {
-        match self.file_header.posting_count {
-            0 => None,
-            len => Some(len as DimId - 1),
-        }
+    fn insert(&mut self, _row_id: RowId, _sparse_vector: crate::core::SparseVector) {
+        panic!("Cannot insert from a read-only mmap inverted core")
+    }
+
+    fn update(
+        &mut self,
+        _row_id: RowId,
+        _new_vector: crate::core::SparseVector,
+        _old_vector: crate::core::SparseVector,
+    ) {
+        panic!("Cannot update from a read-only mmap inverted core")
     }
 }
 
 impl InvertedIndexMmap {
+    /// 获得索引中最小的 row id
     pub fn min_row_id(&self) -> RowId {
-        self.file_header.min_row_id
+        self.meta.min_row_id()
     }
 
+    /// 获得索引中最大的 row_id
     pub fn max_row_id(&self) -> RowId {
-        self.file_header.max_row_id
+        self.meta.max_row_id()
     }
 
-    // 根据 dim-id 拿到对应的 PostingList
-    pub fn get(&self, id: &DimId) -> Option<&[PostingElementEx]> {
+    /// 根据 dim-id 拿到对应的 PostingList
+    pub fn get(&self, dim_id: &DimId) -> Option<&[PostingElementEx]> {
         // check that the id is not out of bounds (posting_count includes the empty zeroth entry)
-        if *id >= self.file_header.posting_count as DimId {
+        if *dim_id >= self.meta.posting_count() as DimId {
+            warn!(
+                "dim_id is overflow, dim_id should smaller than {}",
+                self.meta.posting_count()
+            );
             return None;
         }
-        let header_start = *id as usize * POSTING_HEADER_SIZE;
-        let header = transmute_from_u8::<PostingListFileHeader>(
-            &self.mmap[header_start..header_start + POSTING_HEADER_SIZE],
+        // 加载 posting 对应的 offset obj
+        let offset_left = *dim_id as usize * POSTING_OFFSET_SIZE;
+        let offset_obj = transmute_from_u8::<PostingListOffset>(
+            &self.offsets_mmap[offset_left..(offset_left + POSTING_OFFSET_SIZE)],
         )
-        .clone();
-        let elements_bytes = &self.mmap[header.start_offset as usize..header.end_offset as usize];
+        .clone(); // TODO 将 clone 删除掉会提升性能吗？
+
+        // 根据 offset 去 postings 文件中查找到对应的 posting 数据
+        let elements_bytes =
+            &self.postings_mmap[offset_obj.start_offset as usize..offset_obj.end_offset as usize];
         Some(transmute_from_u8_to_slice(elements_bytes))
     }
 
-    // 将 ram 中的 inverted core 存储至 mmap
+    /// 将 ram 中的 inverted core 存储至 mmap
     pub fn convert_and_save<P: AsRef<Path>>(
         inverted_index_ram: &InvertedIndexRam,
-        path: P,
-        config: InvertedIndexConfig
+        directory: P,
+        segment_id: Option<&str>,
     ) -> std::io::Result<Self> {
-        let total_posting_headers_size = Self::total_posting_headers_size(inverted_index_ram);
-        let total_posting_elements_size = Self::total_posting_elements_size(inverted_index_ram);
+        // compute posting_offsets and elements size.
+        let total_postings_offsets_size: usize = inverted_index_ram.size() * POSTING_OFFSET_SIZE;
+        let total_posting_elements_size: usize = inverted_index_ram
+            .postings()
+            .iter()
+            .map(|posting| posting.len() * size_of::<PostingElementEx>())
+            .sum();
 
-        let file_length = total_posting_headers_size + total_posting_elements_size;
-        let file_path = path.as_ref().join(config.data_file_name());
-        create_and_ensure_length(file_path.as_ref(), file_length)?;
+        // 初始化 3 个文件路径.
+        let meta_file_path =
+            directory
+                .as_ref()
+                .join(InvertedIndexMmapFileConfig::get_inverted_meta_file_name(
+                    segment_id,
+                ));
+        let offsets_mmap_file_path =
+            directory
+                .as_ref()
+                .join(InvertedIndexMmapFileConfig::get_posting_offset_file_name(
+                    segment_id,
+                ));
+        let postings_mmap_file_path =
+            directory
+                .as_ref()
+                .join(InvertedIndexMmapFileConfig::get_posting_data_file_name(
+                    segment_id,
+                ));
 
-        let mut mmap = open_write_mmap(file_path.as_ref())?;
-        madvise::madvise(&mmap, madvise::Advice::Normal)?;
+        // 创建 2 个 mmap 文件.
+        create_and_ensure_length(
+            offsets_mmap_file_path.as_ref(),
+            total_postings_offsets_size as u64,
+        )?;
+        let mut offsets_mmap: MmapMut = open_write_mmap(offsets_mmap_file_path.as_ref())?;
+        madvise::madvise(&offsets_mmap, madvise::Advice::Normal)?;
+
+        create_and_ensure_length(
+            postings_mmap_file_path.as_ref(),
+            total_posting_elements_size as u64,
+        )?;
+        let mut postings_mmap: MmapMut = open_write_mmap(postings_mmap_file_path.as_ref())?;
+        madvise::madvise(&postings_mmap, madvise::Advice::Normal)?;
 
         // file core data
-        Self::save_posting_headers(&mut mmap, inverted_index_ram, total_posting_headers_size);
-        Self::save_posting_elements(&mut mmap, inverted_index_ram, total_posting_headers_size);
-        if file_length > 0 {
-            mmap.flush()?;
+        Self::save_postings_offsets(&mut offsets_mmap, inverted_index_ram);
+
+        Self::save_postings_elements(&mut postings_mmap, inverted_index_ram);
+
+        if total_postings_offsets_size > 0 {
+            offsets_mmap.flush()?;
+        }
+        if total_posting_elements_size > 0 {
+            postings_mmap.flush()?;
         }
 
         // save header properties 实际上就是 meta data
-        let file_header = InvertedIndexFileHeader {
-            posting_count: inverted_index_ram.postings.len(),
-            vector_count: inverted_index_ram.vector_count(),
-            min_row_id: inverted_index_ram.min_row_id,
-            max_row_id: inverted_index_ram.max_row_id,
-        };
-        let meta_file_path = path.as_ref().join(config.meta_file_name());
-        atomic_save_json(&meta_file_path, &file_header)?;
+        let meta = InvertedIndexMeta::new(
+            inverted_index_ram.size(),
+            inverted_index_ram.vector_count(),
+            inverted_index_ram.min_row_id(),
+            inverted_index_ram.max_row_id(),
+            inverted_index_ram.min_dim_id(),
+            inverted_index_ram.max_dim_id(),
+            total_posting_elements_size,
+            total_posting_elements_size,
+            Version::memory(Revision::V1),
+        );
+
+        atomic_save_json(&meta_file_path, &meta)?;
 
         Ok(Self {
-            path: path.as_ref().to_owned(),
-            mmap: Arc::new(mmap.make_read_only()?),
-            file_header,
+            path: directory.as_ref().to_owned(),
+            offsets_mmap: Arc::new(offsets_mmap.make_read_only()?),
+            postings_mmap: Arc::new(postings_mmap.make_read_only()?),
+            meta,
         })
     }
 
-    // 根据给定的索引路径加载 mmap
+    /// 加载指定目录下的 mmap 索引文件
     pub fn load<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
-        Self::load_with_config(path, InvertedIndexConfig::default())
+        Self::load_under_segment(path, None)
     }
 
-    pub fn load_with_config<P: AsRef<Path>>(path: P, config: InvertedIndexConfig) -> std::io::Result<Self> {
+    /// 给定具体配置, 并加载指定目录下的 mmap 索引文件
+    pub fn load_under_segment<P: AsRef<Path>>(
+        path: P,
+        segment_id: Option<&str>,
+    ) -> std::io::Result<Self> {
         // read meta file data.
-        let meta_file = path.as_ref().join(config.meta_file_name());
-        let file_header: InvertedIndexFileHeader = read_json(&meta_file)?;
+        let meta_file_path =
+            path.as_ref()
+                .join(InvertedIndexMmapFileConfig::get_inverted_meta_file_name(
+                    segment_id,
+                ));
+        let meta_data: InvertedIndexMeta = read_json(&meta_file_path)?;
 
         // read inverted index data.
-        let file_path = path.as_ref().join(config.data_file_name());
-        let mmap = open_read_mmap(file_path.as_ref())?;
-        madvise::madvise(&mmap, madvise::Advice::Normal)?;
+        let offsets_mmap_file_path =
+            path.as_ref()
+                .join(InvertedIndexMmapFileConfig::get_posting_offset_file_name(
+                    segment_id,
+                ));
+        let postings_mmap_file_path =
+            path.as_ref()
+                .join(InvertedIndexMmapFileConfig::get_posting_data_file_name(
+                    segment_id,
+                ));
+
+        let offsets_mmap = open_read_mmap(offsets_mmap_file_path.as_ref())?;
+        let postings_mmap = open_read_mmap(postings_mmap_file_path.as_ref())?;
+
+        // TODO 使用顺序读取，观察 QPS 有什么变化
+        madvise::madvise(&offsets_mmap, madvise::Advice::Normal)?;
+        madvise::madvise(&postings_mmap, madvise::Advice::Normal)?;
 
         Ok(Self {
             path: path.as_ref().to_owned(),
-            mmap: Arc::new(mmap),
-            file_header,
+            offsets_mmap: Arc::new(offsets_mmap),
+            postings_mmap: Arc::new(postings_mmap),
+            meta: meta_data,
         })
     }
 
-    fn total_posting_headers_size(inverted_index_ram: &InvertedIndexRam) -> usize {
-        inverted_index_ram.postings.len() * POSTING_HEADER_SIZE
-    }
+    /// 将 posting offsets 存储到 mmap
+    fn save_postings_offsets(mmap: &mut MmapMut, inverted_index_ram: &InvertedIndexRam) {
+        let mut current_element_offset: usize = 0;
 
-    fn total_posting_elements_size(inverted_index_ram: &InvertedIndexRam) -> usize {
-        let mut total_posting_elements_size = 0;
-        for posting in &inverted_index_ram.postings {
-            total_posting_elements_size += posting.elements.len() * size_of::<PostingElementEx>();
-        }
-
-        total_posting_elements_size
-    }
-
-    fn save_posting_headers(
-        mmap: &mut MmapMut,
-        inverted_index_ram: &InvertedIndexRam,
-        total_posting_headers_size: usize,
-    ) {
-        let mut elements_offset: usize = total_posting_headers_size;
-        for (id, posting) in inverted_index_ram.postings.iter().enumerate() {
-            let posting_elements_size = posting.elements.len() * size_of::<PostingElementEx>();
-            let posting_header = PostingListFileHeader {
-                start_offset: elements_offset as u64,
-                end_offset: (elements_offset + posting_elements_size) as u64,
+        for (id, posting) in inverted_index_ram.postings().iter().enumerate() {
+            // generate an offset object.
+            let offset_obj = PostingListOffset {
+                start_offset: current_element_offset,
+                end_offset: current_element_offset
+                    + (posting.len() * size_of::<PostingElementEx>()),
             };
-            elements_offset = posting_header.end_offset as usize;
 
-            // save posting header
-            let posting_header_bytes = transmute_to_u8(&posting_header);
-            let start_posting_offset = id * POSTING_HEADER_SIZE;
-            let end_posting_offset = (id + 1) * POSTING_HEADER_SIZE;
+            // update current element offset.
+            current_element_offset = offset_obj.end_offset;
+
+            // save the offset object to mmap.
+            let posting_header_bytes = transmute_to_u8(&offset_obj);
+            let start_posting_offset = id * POSTING_OFFSET_SIZE;
+            let end_posting_offset = (id + 1) * POSTING_OFFSET_SIZE;
             mmap[start_posting_offset..end_posting_offset].copy_from_slice(posting_header_bytes);
         }
     }
 
-    fn save_posting_elements(
-        mmap: &mut MmapMut,
-        inverted_index_ram: &InvertedIndexRam,
-        total_posting_headers_size: usize,
-    ) {
-        let mut offset = total_posting_headers_size;
-        for posting in &inverted_index_ram.postings {
+    /// 将 postings 内部的 elements 存储到 mmap
+    fn save_postings_elements(mmap: &mut MmapMut, inverted_index_ram: &InvertedIndexRam) {
+        let mut current_element_offset = 0;
+        for posting in inverted_index_ram.postings() {
             // save posting element
             let posting_elements_bytes = transmute_to_u8_slice(&posting.elements);
-            mmap[offset..offset + posting_elements_bytes.len()]
+            mmap[current_element_offset..(current_element_offset + posting_elements_bytes.len())]
                 .copy_from_slice(posting_elements_bytes);
-            offset += posting_elements_bytes.len();
+            current_element_offset += posting_elements_bytes.len();
         }
     }
 }
@@ -273,7 +350,7 @@ mod tests {
         inverted_index_ram: &InvertedIndexRam,
         inverted_index_mmap: &InvertedIndexMmap,
     ) {
-        for id in 0..inverted_index_ram.postings.len() as DimId {
+        for id in 0..inverted_index_ram.size() as DimId {
             let posting_list_ram = inverted_index_ram.get(&id).unwrap().elements.as_slice();
             let posting_list_mmap = inverted_index_mmap.get(&id).unwrap();
             assert_eq!(posting_list_ram.len(), posting_list_mmap.len());
@@ -302,14 +379,15 @@ mod tests {
 
         {
             let inverted_index_mmap =
-                InvertedIndexMmap::convert_and_save(&inverted_index_ram, &tmp_dir_path, InvertedIndexConfig::default()).unwrap();
+                InvertedIndexMmap::convert_and_save(&inverted_index_ram, &tmp_dir_path, None)
+                    .unwrap();
 
             compare_indexes(&inverted_index_ram, &inverted_index_mmap);
         }
         let inverted_index_mmap = InvertedIndexMmap::load(&tmp_dir_path).unwrap();
         // posting_count: 0th entry is always empty + 1st + 2nd + 3rd + 4th empty + 5th
-        assert_eq!(inverted_index_mmap.file_header.posting_count, 6);
-        assert_eq!(inverted_index_mmap.file_header.vector_count, 9);
+        assert_eq!(inverted_index_mmap.size(), 6);
+        assert_eq!(inverted_index_mmap.vector_count(), 9);
 
         compare_indexes(&inverted_index_ram, &inverted_index_mmap);
 

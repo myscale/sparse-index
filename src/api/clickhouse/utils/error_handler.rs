@@ -63,6 +63,4 @@ impl ApiUtils {
         error_ck!(function: func_name, "{}", error_message);
         T::from_error(error_message)
     }
-
-    
 }

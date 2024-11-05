@@ -106,11 +106,7 @@ impl<'a> PostingListIter for PostingListIterator<'a> {
         self.current_index = current_index;
     }
 
-    fn for_each_till_row_id(
-        &mut self,
-        row_id: RowId,
-        mut f: impl FnMut(&PostingElementEx),
-    ) {
+    fn for_each_till_row_id(&mut self, row_id: RowId, mut f: impl FnMut(&PostingElementEx)) {
         let mut current_index = self.current_index;
         for element in &self.elements[current_index..] {
             if element.row_id > row_id {

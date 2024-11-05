@@ -26,7 +26,6 @@ impl Segment {
         Segment { index, meta }
     }
 
-
     /// 获得 `Segment` 的 uuid
     pub fn id(&self) -> SegmentId {
         self.meta.id()
@@ -50,7 +49,6 @@ impl Segment {
             meta: self.meta.with_rows_count(rows_count),
         }
     }
-
 
     /// 返回 segment component 的相对路径 </br>
     /// 可以将相对路径视为 Index 内相关文件的名字, uuid + suffix

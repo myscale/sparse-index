@@ -23,16 +23,22 @@ pub fn transmute_from_u8<T>(v: &[u8]) -> &T {
 }
 
 /// convert `T` to `byte slice [u8]`.
+///
+/// 将一个 T 类型转换为 u8 字节数组
 pub fn transmute_to_u8<T>(v: &T) -> &[u8] {
     unsafe { std::slice::from_raw_parts(v as *const T as *const u8, std::mem::size_of_val(v)) }
 }
 
 /// transmute `T slice [T]` to `byte slice [u8]`.
+///
+/// 把一个 T 类型的切片数组转换为 字节切片数组
 pub fn transmute_to_u8_slice<T>(v: &[T]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, std::mem::size_of_val(v)) }
 }
 
 /// transmute `byte slice` to `T slice`.
+///
+/// 将字节切片数组转换为 T 类型的切片数组
 pub fn transmute_from_u8_to_slice<T>(data: &[u8]) -> &[T] {
     debug_assert_eq!(data.len() % size_of::<T>(), 0);
 

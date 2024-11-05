@@ -6,12 +6,13 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
+use std::time::Duration;
 
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
 use super::segment_manager::SegmentManager;
-use crate::core::{InvertedIndex, InvertedIndexConfig, InvertedIndexMmap};
+use crate::core::{InvertedIndex, InvertedIndexMmap};
 use crate::directory::{Directory, DirectoryClone, GarbageCollectionResult};
 use crate::future_result::FutureResult;
 use crate::index::{Index, IndexMeta, Segment, SegmentId, SegmentMeta};
@@ -24,7 +25,7 @@ use crate::indexer::{
 };
 use crate::{Opstamp, META_FILEPATH};
 
-const NUM_MERGE_THREADS: usize = 1;
+const NUM_MERGE_THREADS: usize = 4;
 
 /// 保存 index meta.json 文件
 pub fn save_metas(metas: &IndexMeta, directory: &dyn Directory) -> crate::Result<()> {
@@ -33,7 +34,13 @@ pub fn save_metas(metas: &IndexMeta, directory: &dyn Directory) -> crate::Result
     writeln!(&mut buffer)?;
     directory.sync_directory()?;
     directory.atomic_write(&META_FILEPATH, &buffer[..])?;
-    debug!("[{}] - [save_metas] segments size: {}, opstamp: {}, payload: {:?}", thread::current().name().unwrap_or_default(), metas.segments.len(), metas.opstamp, metas.payload);
+    debug!(
+        "[{}] - [save_metas] segments size: {}, opstamp: {}, payload: {:?}",
+        thread::current().name().unwrap_or_default(),
+        metas.segments.len(),
+        metas.opstamp,
+        metas.payload
+    );
     Ok(())
 }
 
@@ -41,7 +48,6 @@ pub fn save_metas(metas: &IndexMeta, directory: &dyn Directory) -> crate::Result
 /// 所有的处理均在 1 个 thread 上进行, 使用一个 共享队列 消费任务
 #[derive(Clone)]
 pub(crate) struct SegmentUpdater(Arc<InnerSegmentUpdater>);
-
 
 pub(crate) struct InnerSegmentUpdater {
     /// 存储当前活动的 IndexMeta 副本, 避免在 SegmentUpdater 中每次需要时都从文件加载 </br>
@@ -68,7 +74,6 @@ pub(crate) struct InnerSegmentUpdater {
     merge_operations: MergeOperationInventory,
 }
 
-
 impl Deref for SegmentUpdater {
     type Target = InnerSegmentUpdater;
 
@@ -81,7 +86,11 @@ impl Deref for SegmentUpdater {
 fn garbage_collect_files(
     segment_updater: SegmentUpdater,
 ) -> crate::Result<GarbageCollectionResult> {
-    info!("[{}] - [garbage_collect_files] start running GC with `{}` files.", thread::current().name().unwrap_or_default(), segment_updater.list_files().len());
+    info!(
+        "[{}] - [garbage_collect_files] start running GC with `{}` files.",
+        thread::current().name().unwrap_or_default(),
+        segment_updater.list_files().len()
+    );
     let mut index = segment_updater.index.clone();
     index
         .directory_mut()
@@ -101,16 +110,14 @@ fn merge(
     if total_rows_count == 0 {
         return Ok(None);
     }
+    info!(
+        "[start_merge][merge] future merge rows count: {:?}",
+        total_rows_count
+    );
 
     // 初始化 merge 后的 segment
     let merged_segment = index.new_segment();
-    // 使用 segment uuid 作为 index 的名字
-    let mut config: InvertedIndexConfig = InvertedIndexConfig::default();
-    config.with_data_prefix(merged_segment.id().uuid_string().as_str());
-    config.with_meta_prefix(merged_segment.id().uuid_string().as_str());
-
-    let res = merged_segment.index().directory().register_file_as_managed(Path::new(&config.data_file_name()));
-    let res = merged_segment.index().directory().register_file_as_managed(Path::new(&config.meta_file_name()));
+    let segment_id = merged_segment.id().uuid_string();
 
     // 通过函数传入的一组 segment_entries 获取对应的一组 Segment 对象
     let segments: Vec<Segment> = segment_entries
@@ -118,27 +125,46 @@ fn merge(
         .map(|segment_entry| index.segment(segment_entry.meta().clone()))
         .collect();
 
-    let merger: IndexMerger = IndexMerger::open(&segments[..])?;
+    let merger = IndexMerger::open(&segments[..]);
+    if merger.is_err() {
+        error!("IndexMerger is error: {}", merger.err().unwrap());
+        panic!("...")
+    }
+    info!(
+        "[start_merge][merge] collect old segments, size: {:?}, will call IndexMerger -> merge",
+        segments.len()
+    );
 
-    let inv_index_ram = merger.merge()?;
-    let index_path = merged_segment.index().directory().get_path();
-
-
-
-    // let _index = InvertedIndexCompressedMmap::<f32>::from_ram_index(
-    let inv_index_mmap = InvertedIndexMmap::from_ram_index(
-        Cow::Owned(inv_index_ram),
-        index_path,
-        Some(config.clone())
+    let inv_idx_mmap = merger.unwrap().merge_v2(
+        merged_segment.index().directory().get_path(),
+        Some(&segment_id),
     )?;
 
-    let rows_count = inv_index_mmap.file_header.vector_count as u32;
+    let rows_count = inv_idx_mmap.vector_count() as u32;
     let merged_segment = merged_segment.clone().with_rows_count(rows_count);
 
+    for file_path in inv_idx_mmap.files(Some(&segment_id)) {
+        merged_segment
+            .index()
+            .directory()
+            .register_file_as_managed(&file_path);
+    }
 
-
-    info!("[{}] - [merge] origin segments size: {}, target segmengt-id: {}, rows_count: {}", thread::current().name().unwrap_or_default(), segment_entries.len(), merged_segment.clone().id(), rows_count);
-    debug!("[{}] - [merge] origin segments {:?}", thread::current().name().unwrap_or_default(), segment_entries.iter().map(|entry| entry.segment_id()).collect::<Vec<_>>());
+    info!(
+        "[{}] - [merge] origin segments size: {}, target segmengt-id: {}, rows_count: {}",
+        thread::current().name().unwrap_or_default(),
+        segment_entries.len(),
+        merged_segment.clone().id(),
+        rows_count
+    );
+    debug!(
+        "[{}] - [merge] origin segments {:?}",
+        thread::current().name().unwrap_or_default(),
+        segment_entries
+            .iter()
+            .map(|entry| entry.segment_id())
+            .collect::<Vec<_>>()
+    );
 
     let meta: SegmentMeta = index.new_segment_meta(merged_segment.id(), rows_count);
     meta.untrack_temp_svstore();
@@ -148,15 +174,9 @@ fn merge(
     Ok(Some(segment_entry))
 }
 
-
-
-
 impl SegmentUpdater {
     /// 为 index 创建 segment updater
-    pub fn create(
-        index: Index,
-        stamper: Stamper,
-    ) -> crate::Result<SegmentUpdater> {
+    pub fn create(index: Index, stamper: Stamper) -> crate::Result<SegmentUpdater> {
         let segments: Vec<SegmentMeta> = index.searchable_segment_metas()?;
         debug!("[create] load segment metas, size {}", segments.len());
 
@@ -188,19 +208,17 @@ impl SegmentUpdater {
         let index_meta: IndexMeta = index.load_metas()?;
 
         // 初始化 SegmentUpdater
-        Ok(SegmentUpdater(
-            Arc::new(InnerSegmentUpdater {
-                active_index_meta: RwLock::new(Arc::new(index_meta)),
-                pool,
-                merge_thread_pool,
-                index,
-                segment_manager,
-                merge_policy: RwLock::new(Arc::new(DefaultMergePolicy::default())),
-                killed: AtomicBool::new(false),
-                stamper,
-                merge_operations: Default::default(),
-            })
-        ))
+        Ok(SegmentUpdater(Arc::new(InnerSegmentUpdater {
+            active_index_meta: RwLock::new(Arc::new(index_meta)),
+            pool,
+            merge_thread_pool,
+            index,
+            segment_manager,
+            merge_policy: RwLock::new(Arc::new(DefaultMergePolicy::default())),
+            killed: AtomicBool::new(false),
+            stamper,
+            merge_operations: Default::default(),
+        })))
     }
 
     pub fn get_merge_policy(&self) -> Arc<dyn MergePolicy> {
@@ -237,7 +255,11 @@ impl SegmentUpdater {
 
     // 把一个新的 SegmentEntry 放到段管理器内，并在添加后考虑合并选项
     pub fn schedule_add_segment(&self, segment_entry: SegmentEntry) -> FutureResult<()> {
-        info!("[{}] - [schedule_add_segment] segment-id: {}", thread::current().name().unwrap_or_default(), segment_entry.segment_id());
+        info!(
+            "[{}] - [schedule_add_segment] segment-id: {}",
+            thread::current().name().unwrap_or_default(),
+            segment_entry.segment_id()
+        );
 
         let segment_updater = self.clone();
         self.schedule_task(move || {
@@ -290,7 +312,10 @@ impl SegmentUpdater {
 
     /// 执行 GC 操作
     pub fn schedule_garbage_collect(&self) -> FutureResult<GarbageCollectionResult> {
-        info!("[{}] - [schedule_garbage_collect] entry", thread::current().name().unwrap_or_default());
+        info!(
+            "[{}] - [schedule_garbage_collect] entry",
+            thread::current().name().unwrap_or_default()
+        );
         let self_clone = self.clone();
         self.schedule_task(move || garbage_collect_files(self_clone))
     }
@@ -316,7 +341,11 @@ impl SegmentUpdater {
     ) -> FutureResult<Opstamp> {
         let segment_updater: SegmentUpdater = self.clone();
         self.schedule_task(move || {
-            info!("[{}] - [schedule_commit] schedule commit task, opstamp: {}", thread::current().name().unwrap_or_default(), opstamp);
+            info!(
+                "[{}] - [schedule_commit] schedule commit task, opstamp: {}",
+                thread::current().name().unwrap_or_default(),
+                opstamp
+            );
 
             // 获得 segment management 记录的所有 seg entries
             let segment_entries = segment_updater.segment_manager.segment_entries();
@@ -352,12 +381,12 @@ impl SegmentUpdater {
 
     /// 开始执行一个 MergeOperation 合并操作, 函数将会阻塞直到 MergeOperation 实际开始, 但是函数不会等待 MergeOperation 结束 </br>
     /// 调用线程不应该被长时间阻塞, 因为这仅涉及等待 `SegmentUpdater` 队列, 该队列仅包含轻量级操作.</br>
-    /// 
+    ///
     /// MergeOperation 合并操作发生在不同的线程 </br>
-    /// 
+    ///
     /// 当执行成功时，函数返回 `Future`, 代表合并操作的实际结果, 即 `Result<SegmentMeta>`. </br>
     /// 如果无法启动合并操作, 将返回错误 </br>
-    /// 
+    ///
     /// 函数返回的错误不一定代表发生了故障，也有可能是合并操作的瞬间和实际执行合并之间发生了回滚。
     pub fn start_merge(
         &self,
@@ -382,22 +411,28 @@ impl SegmentUpdater {
                 return err.into();
             }
         };
+        info!(
+            "[start_merge] get segment_entries for merge, segment entries: {:?}",
+            segment_entries
+        );
 
         // 创建一个 FutureResult, 用于处理合并操作的结果
         let (scheduled_result, merging_future_send) =
             FutureResult::create("Merge operation failed.");
 
         self.merge_thread_pool.spawn(move || {
-            info!("[{}] - [start_merge] merging... size:{}, segment ids: {:?}", thread::current().name().unwrap_or_default(), merge_operation.segment_ids().len(), merge_operation.segment_ids());
+            info!(
+                "[{}] - [start_merge] merging... size:{}, segment ids: {:?}",
+                thread::current().name().unwrap_or_default(),
+                merge_operation.segment_ids().len(),
+                merge_operation.segment_ids()
+            );
 
             // The fact that `merge_operation` is moved here is important.
             // Its lifetime is used to track how many merging thread are currently running,
             // as well as which segment is currently in merge and therefore should not be
             // candidate for another merge.
-            match merge(
-                &segment_updater.index,
-                segment_entries,
-            ) {
+            match merge(&segment_updater.index, segment_entries) {
                 Ok(after_merge_segment_entry) => {
                     let res = segment_updater.end_merge(merge_operation, after_merge_segment_entry);
                     let _send_result = merging_future_send.send(res);
@@ -455,12 +490,15 @@ impl SegmentUpdater {
             .map(|merge_candidate: MergeCandidate| {
                 MergeOperation::new(&self.merge_operations, commit_opstamp, merge_candidate.0)
             });
-        
+
         // 执行两个集合中生成的所有 MergeOperation
         merge_candidates.extend(committed_merge_candidates);
 
-
-        debug!("[{}] - [consider_merge_options] candidates size: {:?}", thread::current().name().unwrap_or_default(),  merge_candidates.len());
+        debug!(
+            "[{}] - [consider_merge_options] candidates size: {:?}",
+            thread::current().name().unwrap_or_default(),
+            merge_candidates.len()
+        );
 
         for merge_operation in merge_candidates {
             // 如果 merge 不能进行, 这不是一个 Fatal 错误，我们会使用 warning 记录在 `start_merge`

@@ -1,7 +1,6 @@
-use std::sync::{Arc, Mutex};
-use flurry::HashMap;
 use crate::{core::SparseRowContent, debug_ck, indexer::IndexWriter, info_ck, warn_ck, Opstamp};
-
+use flurry::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub struct IndexWriterBridge {
     pub path: String,
@@ -53,10 +52,6 @@ impl Drop for IndexWriterBridge {
         info_ck!("IndexW has been dropped. index_path:[{}]", self.path);
     }
 }
-
-
-
-
 
 pub struct IndexWriterBridgeCache {
     cache: HashMap<String, Arc<IndexWriterBridge>>,

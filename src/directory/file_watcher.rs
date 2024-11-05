@@ -60,7 +60,11 @@ impl FileWatcher {
                             .map(|current_checksum| current_checksum != checksum)
                             .unwrap_or(true);
                         if metafile_has_changed {
-                            info!("[{}] [FileWatcher] Meta file {:?} was modified", thread::current().name().unwrap_or_default(), path);
+                            info!(
+                                "[{}] [FileWatcher] Meta file {:?} was modified",
+                                thread::current().name().unwrap_or_default(),
+                                path
+                            );
                             current_checksum_opt = Some(checksum);
                             // We actually ignore callbacks failing here.
                             // We just wait for the end of their execution.

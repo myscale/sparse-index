@@ -1,176 +1,197 @@
-use super::{InvertedIndexConfig, StorageVersion};
+use log::error;
+
 use crate::core::common::types::{DimId, ElementOffsetType};
 use crate::core::inverted_index::InvertedIndex;
-use crate::core::posting_list::{PostingElementEx, PostingList, PostingListIterator};
+use crate::core::posting_list::{self, PostingElementEx, PostingList, PostingListIterator};
 use crate::core::sparse_vector::SparseVector;
 use crate::RowId;
 use std::borrow::Cow;
+use std::io::Error;
 use std::path::{Path, PathBuf};
-
-pub struct Version;
-
-impl StorageVersion for Version {
-    fn current_raw() -> &'static str {
-        panic!("InvertedIndexRam is not supposed to be versioned");
-    }
-}
 
 /// Inverted flatten core from dimension id to posting list
 #[derive(Debug, Clone, PartialEq)]
 pub struct InvertedIndexRam {
-    /// Posting lists for each dimension flattened (dimension id -> posting list)
-    /// Gaps are filled with empty posting lists
-    pub postings: Vec<PostingList>,
-    /// Number of unique indexed vectors
-    /// pre-computed on build and upsert to avoid having to traverse the posting lists.
-    /// 存储 unique vector 的数量，在构建和更新的时候计算, 避免遍历 posting list
-    pub vector_count: usize,
+    /// index 中所有的 postings, dim-id 即数组的下标
+    pub(super) postings: Vec<PostingList>,
 
-    pub min_row_id: RowId,
-    pub max_row_id: RowId,
+    /// 记录 index 中 unique vector 的数量, 对估算内存占用比较有用
+    pub(super) vector_count: usize,
+
+    /// index 中最小的 row id
+    pub(super) min_row_id: RowId,
+
+    /// index 中最大的 row id
+    pub(super) max_row_id: RowId,
+
+    /// index 中最小的 dim id
+    pub(super) min_dim_id: DimId,
+
+    /// index 中最大的 dim id
+    pub(super) max_dim_id: DimId,
 }
 
-impl InvertedIndex for InvertedIndexRam {
-    type Iter<'a> = PostingListIterator<'a>;
-
-    type Version = Version;
-
-        
-    fn open_with_config(_path: &Path, _config: InvertedIndexConfig) -> std::io::Result<Self> {
-        panic!("InvertedIndexRam is not supposed to be loaded");
-    }
-    
-    fn save_with_config(&self, _path: &Path, _config: InvertedIndexConfig) -> std::io::Result<()> {
-        panic!("InvertedIndexRam is not supposed to be saved");
+/// metrics
+impl InvertedIndexRam {
+    pub fn min_row_id(&self) -> RowId {
+        self.min_row_id
     }
 
-    fn open(path: &Path) -> std::io::Result<Self> {
-        Self::open_with_config(path, InvertedIndexConfig::default())
+    pub fn max_row_id(&self) -> RowId {
+        self.max_row_id
     }
 
-    fn save(&self, path: &Path) -> std::io::Result<()> {
-        self.save_with_config(path, InvertedIndexConfig::default())
+    pub fn min_dim_id(&self) -> DimId {
+        self.min_dim_id
     }
 
-    fn iter(&self, id: &DimId) -> Option<PostingListIterator> {
-        self.get(id).map(|posting_list| posting_list.iter())
+    pub fn max_dim_id(&self) -> DimId {
+        self.max_dim_id
     }
 
-    fn len(&self) -> usize {
-        self.postings.len()
+    pub fn postings(&self) -> &Vec<PostingList> {
+        &self.postings
     }
-
-    fn posting_list_len(&self, id: &DimId) -> Option<usize> {
-        self.get(id).map(|posting_list| posting_list.elements.len())
-    }
-
-    fn files(_path: &Path, _config: InvertedIndexConfig) -> Vec<PathBuf> {
-        Vec::new()
-    }
-
-    // TODO: 针对 CK 的功能不需要，只要在数据库的层面进行 remove 即可
-    fn remove(&mut self, id: ElementOffsetType, old_vector: SparseVector) {
-        for dim_id in old_vector.indices {
-            self.postings[dim_id as usize].delete(id);
-        }
-
-        self.vector_count = self.vector_count.saturating_sub(1);
-    }
-
-    fn upsert(
-        &mut self,
-        id: ElementOffsetType,
-        vector: SparseVector,
-        old_vector: Option<SparseVector>,
-    ) {
-        self.upsert(id, vector, old_vector);
-    }
-
-    fn from_ram_index<P: AsRef<Path>>(
-        ram_index: Cow<InvertedIndexRam>,
-        _path: P,
-        _config: Option<InvertedIndexConfig>
-    ) -> std::io::Result<Self> {
-        Ok(ram_index.into_owned())
-    }
-
-    fn vector_count(&self) -> usize {
-        self.vector_count
-    }
-
-    fn max_index(&self) -> Option<DimId> {
-        match self.postings.len() {
-            0 => None,
-            len => Some(len as DimId - 1),
-        }
-    }
-
 }
 
 impl InvertedIndexRam {
     /// New empty inverted core
-    pub fn empty() -> InvertedIndexRam {
+    pub fn new() -> InvertedIndexRam {
         InvertedIndexRam {
             postings: Vec::new(),
             vector_count: 0,
             min_row_id: RowId::MAX,
             max_row_id: RowId::MIN,
+            min_dim_id: 0,
+            max_dim_id: DimId::MIN,
         }
     }
 
-    fn min_row_id(&self) -> RowId {
-        self.min_row_id
+    /// Get posting list for dim-id
+    pub fn get(&self, dim_id: &DimId) -> Option<&PostingList> {
+        self.postings.get((*dim_id) as usize)
     }
 
-    fn max_row_id(&self) -> RowId {
-        self.max_row_id
-    }
-
-    /// Get posting list for dimension id
-    pub fn get(&self, id: &DimId) -> Option<&PostingList> {
-        self.postings.get((*id) as usize)
-    }
-
-    /// Upsert a vector into the inverted core.
-    pub fn upsert(
-        &mut self,
-        id: ElementOffsetType,
-        vector: SparseVector,
-        old_vector: Option<SparseVector>,
-    ) {
-        // Find elements of the old vector that are not in the new vector
-        // TODO: 在 CK 集成并不需要考虑 old vector
-        if let Some(old_vector) = &old_vector {
-            let elements_to_delete = old_vector
-                .indices
-                .iter()
-                .filter(|&dim_id| !vector.indices.contains(dim_id))
-                .map(|&dim_id| dim_id as usize);
-            for dim_id in elements_to_delete {
-                if let Some(posting) = self.postings.get_mut(dim_id) {
-                    posting.delete(id);
-                }
-            }
+    /// remove one row from index.
+    pub fn remove(&mut self, row_id: RowId) {
+        for posting in self.postings.iter_mut() {
+            posting.delete(row_id);
         }
+        self.vector_count = self.vector_count.saturating_sub(1);
+    }
 
-        for (dim_id, weight) in vector.indices.into_iter().zip(vector.values.into_iter()) {
+    pub fn insert(&mut self, row_id: RowId, sparse_vector: SparseVector) {
+        for (dim_id, weight) in sparse_vector
+            .indices
+            .into_iter()
+            .zip(sparse_vector.values.into_iter())
+        {
             let dim_id = dim_id as usize;
             match self.postings.get_mut(dim_id) {
                 Some(posting) => {
                     // update existing posting list
-                    let posting_element = PostingElementEx::new(id, weight);
+                    let posting_element = PostingElementEx::new(row_id, weight);
                     posting.upsert(posting_element);
                 }
                 None => {
                     // resize postings vector (fill gaps with empty posting lists)
                     self.postings.resize_with(dim_id + 1, PostingList::default);
                     // initialize new posting for dimension
-                    self.postings[dim_id] = PostingList::new_one(id, weight);
+                    self.postings[dim_id] = PostingList::new_one(row_id, weight);
                 }
             }
         }
-        if old_vector.is_none() {
-            self.vector_count += 1;
+
+        self.vector_count = self.vector_count.saturating_add(1);
+    }
+
+    /// Upsert a vector into the inverted core.
+    pub fn update(&mut self, row_id: RowId, new_vector: SparseVector, old_vector: SparseVector) {
+        // Find elements of the old vector that are not in the new vector
+        let elements_to_delete = old_vector
+            .indices
+            .iter()
+            .filter(|&dim_id| !new_vector.indices.contains(dim_id))
+            .map(|&dim_id| dim_id as usize);
+        for dim_id in elements_to_delete {
+            if let Some(posting) = self.postings.get_mut(dim_id) {
+                posting.delete(row_id);
+            }
         }
+
+        self.insert(row_id, new_vector);
+    }
+
+    /// call propagate for all postings.
+    pub fn commit(&mut self) {
+        for posting in self.postings.iter_mut() {
+            if posting.len() > 1 {
+                posting.refine();
+            }
+        }
+    }
+}
+
+impl InvertedIndex for InvertedIndexRam {
+    type Iter<'a> = PostingListIterator<'a>;
+
+    fn open(_path: &Path, _segment_id: Option<&str>) -> std::io::Result<Self> {
+        let error_msg: &str = "InvertedIndexRam doesn't support call open.";
+        error!("{}", error_msg);
+        Err(Error::new(std::io::ErrorKind::Other, error_msg))
+    }
+
+    fn save(&self, _path: &Path, _segment_id: Option<&str>) -> std::io::Result<()> {
+        let error_msg: &str = "InvertedIndexRam doesn't support call save.";
+        error!("{}", error_msg);
+        Err(Error::new(std::io::ErrorKind::Other, error_msg))
+    }
+
+    fn iter(&self, id: &DimId) -> Option<PostingListIterator> {
+        self.get(id).map(|posting_list| posting_list.iter())
+    }
+
+    fn size(&self) -> usize {
+        self.postings.len()
+    }
+
+    fn vector_count(&self) -> usize {
+        self.vector_count
+    }
+
+    fn min_dim_id(&self) -> DimId {
+        self.min_dim_id()
+    }
+
+    fn max_dim_id(&self) -> DimId {
+        self.max_dim_id()
+    }
+
+    fn posting_size(&self, id: &DimId) -> Option<usize> {
+        self.get(id).map(|posting_list| posting_list.len())
+    }
+
+    fn files(&self, _segment_id: Option<&str>) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
+    fn remove(&mut self, row_id: ElementOffsetType) {
+        self.remove(row_id);
+    }
+
+    fn from_ram_index<P: AsRef<Path>>(
+        ram_index: Cow<InvertedIndexRam>,
+        _path: P,
+        _segment_id: Option<&str>,
+    ) -> std::io::Result<Self> {
+        Ok(ram_index.into_owned())
+    }
+
+    fn insert(&mut self, row_id: RowId, sparse_vector: SparseVector) {
+        self.insert(row_id, sparse_vector);
+    }
+
+    fn update(&mut self, row_id: RowId, new_vector: SparseVector, old_vector: SparseVector) {
+        self.update(row_id, new_vector, old_vector);
     }
 }

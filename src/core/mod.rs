@@ -1,10 +1,10 @@
 mod common;
+pub mod index_searcer;
 mod inverted_index;
 mod posting_list;
 mod scores;
 mod search_context;
 mod sparse_vector;
-pub mod index_searcer;
 
 mod loader;
 

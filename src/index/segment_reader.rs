@@ -1,12 +1,10 @@
+use super::{Segment, SegmentId};
 use crate::core::index_searcer::IndexSearcher;
-use crate::core::{
-    DimId, DimWeight, InvertedIndex, InvertedIndexConfig, InvertedIndexMmap, PostingListIter, SparseVector, TopK
-};
+use crate::core::{InvertedIndex, InvertedIndexMmap, SparseVector, TopK};
 use crate::directory::Directory;
 use crate::sparse_index::SparseIndexType;
 use crate::RowId;
 use std::fmt;
-use super::{Segment, SegmentId};
 
 /// 访问 Segment 的入口
 // TODO 将 PostingList 相关的东西都放进去
@@ -37,7 +35,6 @@ impl SegmentReader {
     pub fn get_inverted_index(&self) -> &InvertedIndexMmap {
         self.index_searcher.get_inverted_index()
     }
-
 }
 
 impl SegmentReader {
@@ -45,51 +42,32 @@ impl SegmentReader {
     ///
     /// - `segment`: 为传入的 segment 创建 SegmentReader
     pub fn open(segment: &Segment) -> crate::Result<SegmentReader> {
-
         let rows_count: RowId = segment.meta().rows_count();
-
-        let mut config: InvertedIndexConfig = InvertedIndexConfig::default();
-        config.with_data_prefix(segment.id().uuid_string().as_str());
-        config.with_meta_prefix(segment.id().uuid_string().as_str());
-
         let index_path = segment.index().directory().get_path();
 
-        // TODO 目前仅允许 mmap 类型的 reader
+        // TODO 目前仅允许 mmap 类型的 reader，后续扩充 内存类型等等，最底层进行向上的抽象封装
         assert_eq!(
             segment.index().index_settings.config.index_type,
             SparseIndexType::Mmap
         );
 
         let inverted_index: InvertedIndexMmap =
-            InvertedIndexMmap::open_with_config(&index_path, config).expect("can't open mmap index");
+            InvertedIndexMmap::open(&index_path, Some(&segment.id().uuid_string()))?;
 
         Ok(SegmentReader {
             index_searcher: IndexSearcher::new(inverted_index),
             segment_id: segment.id(),
             rows_count,
         })
-
-
-        // TODO 打开 segment 内部存储的 inverted index data 文件
-        // Self::open_with_custom_alive_set(segment, None)
     }
 
-
     // 在 Segments 上执行 search
-    pub fn search(
-        &self,
-        query: SparseVector,
-        limits: u32,
-    ) -> crate::Result<TopK> {
+    pub fn search(&self, query: SparseVector, limits: u32) -> crate::Result<TopK> {
         Ok(self.index_searcher.search(query, limits))
     }
 
     // Segments 上执行 brute force search
-    pub fn brute_force_search(
-        &self,
-        query: SparseVector,
-        limits: u32,
-    ) -> crate::Result<TopK> {
+    pub fn brute_force_search(&self, query: SparseVector, limits: u32) -> crate::Result<TopK> {
         Ok(self.index_searcher.plain_search(query, limits))
     }
 }

@@ -30,11 +30,11 @@ impl Filter for LoggerFilter {
 }
 
 pub struct LoggerConfig {
-    log_directory: String,            // log file stored path.
-    log_level: LevelFilter,           // log level.
-    log_in_file: bool,                // store log content to file.
-    console_display: bool,            // display log content in console.
-    only_record_sparse_index: bool,   // only record `sparse_index` log content.
+    log_directory: String,          // log file stored path.
+    log_level: LevelFilter,         // log level.
+    log_in_file: bool,              // store log content to file.
+    console_display: bool,          // display log content in console.
+    only_record_sparse_index: bool, // only record `sparse_index` log content.
 }
 
 impl LoggerConfig {

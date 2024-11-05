@@ -11,7 +11,6 @@ pub enum SparseIndexType {
 
     // #[serde(rename = "immutable_ram")]
     // ImmutableRam,
-
     #[default]
     #[serde(rename = "mmap")]
     Mmap,

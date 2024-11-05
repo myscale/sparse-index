@@ -11,7 +11,9 @@ pub use stable_deref_trait::StableDeref;
 /// The backing object is required to be `StableDeref`.
 #[derive(Clone)]
 pub struct OwnedBytes {
+    // 指向字节数据的切片
     data: &'static [u8],
+    // 通过 Arc 实现了线程安全的引用计数, 用于持有数据的所有权, 确保数据不会因为生命周期问题无效
     box_stable_deref: Arc<dyn Deref<Target = [u8]> + Sync + Send>,
 }
 

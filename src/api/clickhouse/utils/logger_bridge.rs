@@ -93,7 +93,7 @@ mod tests {
         config::{Appender, Config, Root},
         encode::pattern::PatternEncoder,
     };
-    
+
     use once_cell::sync::OnceCell;
     // use crate::common::TEST_MUTEX;
 
@@ -105,8 +105,7 @@ mod tests {
     fn test_update_log_callback() {
         let callback_cell: OnceCell<LogCallback> = OnceCell::new();
         assert!(callback_cell.get().is_none());
-        let result =
-            SparseIndexLogger::update_log_callback(&callback_cell, log_callback_for_test);
+        let result = SparseIndexLogger::update_log_callback(&callback_cell, log_callback_for_test);
         assert!(callback_cell.get().is_some());
         assert!(result.is_ok());
     }

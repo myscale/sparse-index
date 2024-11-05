@@ -1,9 +1,10 @@
-use crate::common::converter::{
-    Converter, CxxElementStrategy, CxxVectorStrategy, CxxVectorStringStrategy,
-};
 use cxx::private::VectorElement;
 use cxx::{CxxString, CxxVector};
 use once_cell::sync::Lazy;
+
+use super::cxx_converter_strategy::{
+    Converter, CxxElementStrategy, CxxVectorStrategy, CxxVectorStringStrategy,
+};
 
 /// Convert 'CxxString' to 'String'
 pub static CXX_STRING_CONVERTER: Lazy<Converter<CxxString, String, CxxElementStrategy>> =

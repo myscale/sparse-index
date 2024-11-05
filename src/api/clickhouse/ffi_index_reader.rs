@@ -1,10 +1,15 @@
 use std::sync::Arc;
 
-use cxx::CxxString;
-use crate::{api::clickhouse::{cache::FFI_INDEX_SEARCHER_CACHE, utils::{ApiUtils, IndexManager}}, common::constants::CXX_STRING_CONVERTER, ffi::{FFIBoolResult, FFIError, FFIScoreResult, TupleElement}};
 use crate::api::clickhouse::cache::IndexReaderBridge;
-
-
+use crate::{
+    api::clickhouse::{
+        cache::FFI_INDEX_SEARCHER_CACHE,
+        converter::CXX_STRING_CONVERTER,
+        utils::{ApiUtils, IndexManager},
+    },
+    ffi::{FFIBoolResult, FFIError, FFIScoreResult, TupleElement},
+};
+use cxx::CxxString;
 
 pub fn ffi_load_index_reader(index_path: &CxxString) -> FFIBoolResult {
     static FUNC_NAME: &str = "ffi_load_index_reader";
@@ -51,9 +56,7 @@ pub fn ffi_free_index_reader(index_path: &CxxString) -> FFIBoolResult {
             },
         }
     }
-
 }
-
 
 pub fn ffi_sparse_search(
     index_path: &CxxString,
@@ -70,18 +73,20 @@ pub fn ffi_sparse_search(
         }
     };
 
-    let reader_bridge: Arc<IndexReaderBridge> = match FFI_INDEX_SEARCHER_CACHE
-        .get_index_reader_bridge(index_path.to_string()) {
+    let reader_bridge: Arc<IndexReaderBridge> =
+        match FFI_INDEX_SEARCHER_CACHE.get_index_reader_bridge(index_path.to_string()) {
             Ok(res) => res,
             Err(error) => {
                 return ApiUtils::handle_error(FUNC_NAME, "failed get index reader bridge", error);
-            },
+            }
         };
-    
+
     let searcher = reader_bridge.reader.searcher();
     let res = match searcher.search(sparse_vector.clone().try_into().unwrap(), top_k) {
         Ok(res) => res,
-        Err(error) => {return ApiUtils::handle_error(FUNC_NAME, "failed execute search", error.to_string());},
+        Err(error) => {
+            return ApiUtils::handle_error(FUNC_NAME, "failed execute search", error.to_string());
+        }
     };
 
     FFIScoreResult {

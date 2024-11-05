@@ -15,16 +15,15 @@ const DEFAULT_MIN_NUM_SEGMENTS_IN_MERGE: usize = 8;
 // 默认的合并前最大文档数
 const DEFAULT_MAX_DOCS_BEFORE_MERGE: usize = 10_000_000;
 
-
 /// `LogMergePolicy` tries to merge segments that have a similar number of
 /// documents.
 /// `LogMergePolicy` 尝试合并具有相似文档数量的段。
 #[derive(Debug, Clone)]
 pub struct LogMergePolicy {
-    min_num_segments: usize,          // 最小段数
-    max_docs_before_merge: usize,     // 合并前最大文档数
-    min_layer_size: u32,              // 最小层大小
-    level_log_size: f64,              // 级别日志大小
+    min_num_segments: usize,      // 最小段数
+    max_docs_before_merge: usize, // 合并前最大文档数
+    min_layer_size: u32,          // 最小层大小
+    level_log_size: f64,          // 级别日志大小
 }
 
 impl LogMergePolicy {
@@ -62,7 +61,6 @@ impl LogMergePolicy {
     }
 }
 
-
 impl MergePolicy for LogMergePolicy {
     // 计算合并候选项
     fn compute_merge_candidates(&self, segments: &[SegmentMeta]) -> Vec<MergeCandidate> {
@@ -95,13 +93,15 @@ impl MergePolicy for LogMergePolicy {
         // 过滤并生成合并候选项
         let candidates: Vec<MergeCandidate> = levels
             .iter()
-            .filter(|level| {
-                level.len() >= self.min_num_segments
-            })
+            .filter(|level| level.len() >= self.min_num_segments)
             .map(|segments| MergeCandidate(segments.iter().map(|&seg| seg.id()).collect()))
             .collect();
 
-        debug!("[compute_merge_candidates] input segments size:{}, generate candidates size:{}", segments.len(), candidates.clone().len());
+        debug!(
+            "[compute_merge_candidates] input segments size:{}, generate candidates size:{}",
+            segments.len(),
+            candidates.clone().len()
+        );
         return candidates;
     }
 }

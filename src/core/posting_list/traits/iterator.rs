@@ -31,11 +31,7 @@ pub trait PostingListIter {
         f: impl FnMut(&mut Ctx, ElementOffsetType, DimWeight),
     );
 
-    fn for_each_till_row_id(
-        &mut self,
-        row_id: RowId,
-        f: impl FnMut(&PostingElementEx),
-    );
+    fn for_each_till_row_id(&mut self, row_id: RowId, f: impl FnMut(&PostingElementEx));
 
     /// 返回 max_next_weight 是否可靠 </br>
     /// 据此用来判断是否需要重新写入一遍 max_next_weight

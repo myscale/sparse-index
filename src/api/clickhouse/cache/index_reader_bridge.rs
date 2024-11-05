@@ -1,8 +1,12 @@
-use std::sync::Arc;
+use crate::{
+    common::{errors::SparseError, executor::Executor},
+    debug_ck, info_ck,
+    reader::IndexReader,
+    warn_ck,
+};
 use flurry::HashMap;
 use once_cell::sync::OnceCell;
-use crate::{common::{errors::SparseError, executor::Executor}, debug_ck, info_ck, reader::IndexReader, warn_ck};
-
+use std::sync::Arc;
 
 pub struct IndexReaderBridge {
     pub path: String,
@@ -28,7 +32,6 @@ impl IndexReaderBridge {
     }
 }
 
-
 pub struct IndexReaderBridgeCache {
     cache: HashMap<String, Arc<IndexReaderBridge>>,
     shared_thread_pool: OnceCell<Arc<Executor>>,
@@ -51,7 +54,10 @@ impl IndexReaderBridgeCache {
         let pinned = self.cache.pin();
         if pinned.contains_key(&trimmed_key) {
             pinned.insert(trimmed_key.clone(), value.clone());
-            let message = format!("IndexReaderBridge already exists with given key: [{}], it has been overwritten.", trimmed_key);
+            let message = format!(
+                "IndexReaderBridge already exists with given key: [{}], it has been overwritten.",
+                trimmed_key
+            );
             warn_ck!("{}", message)
         } else {
             pinned.insert(trimmed_key, value.clone());
@@ -64,7 +70,10 @@ impl IndexReaderBridgeCache {
         let trimmed_key: String = key.trim_end_matches('/').to_string();
         match pinned.get(&trimmed_key) {
             Some(result) => Ok(result.clone()),
-            None => Err(format!("IndexReaderBridge doesn't exist with given key: [{}]", trimmed_key)),
+            None => Err(format!(
+                "IndexReaderBridge doesn't exist with given key: [{}]",
+                trimmed_key
+            )),
         }
     }
 
@@ -74,7 +83,10 @@ impl IndexReaderBridgeCache {
         if pinned.contains_key(&trimmed_key) {
             pinned.remove(&trimmed_key);
         } else {
-            let message: String = format!("IndexReaderBridge doesn't exist, can't remove it with given key [{}]", trimmed_key);
+            let message: String = format!(
+                "IndexReaderBridge doesn't exist, can't remove it with given key [{}]",
+                trimmed_key
+            );
             debug_ck!("{}", message);
             SparseError::Error(message);
         }

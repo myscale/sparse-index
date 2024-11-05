@@ -23,8 +23,8 @@ impl InvertedIndex for InvertedIndexImmutableRam {
 
     type Version = <InvertedIndexMmap as InvertedIndex>::Version;
 
-    fn open_with_config(path: &Path, config: InvertedIndexConfig) -> std::io::Result<Self> {
-        let mmap_inverted_index = InvertedIndexMmap::load_with_config(path, config)?;
+    fn open(path: &Path, config: Option<InvertedIndexConfig>) -> std::io::Result<Self> {
+        let mmap_inverted_index = InvertedIndexMmap::load_with_config(path, config.unwrap_or_default())?;
         let mut inverted_index = InvertedIndexRam {
             postings: Default::default(),
             vector_count: mmap_inverted_index.file_header.vector_count,
@@ -49,17 +49,9 @@ impl InvertedIndex for InvertedIndexImmutableRam {
         })
     }
 
-    fn open(path: &Path) -> std::io::Result<Self> {
-        Self::open_with_config(path, InvertedIndexConfig::default())
-    }
-
-    fn save_with_config(&self, path: &Path, config: InvertedIndexConfig) -> std::io::Result<()> {
-        InvertedIndexMmap::convert_and_save(&self.inner, path, config)?;
+    fn save(&self, path: &Path, config: Option<InvertedIndexConfig>) -> std::io::Result<()> {
+        InvertedIndexMmap::convert_and_save(&self.inner, path, config.unwrap_or_default())?;
         Ok(())
-    }
-
-    fn save(&self, path: &Path) -> std::io::Result<()> {
-        Self::save_with_config(&self, path, InvertedIndexConfig::default())
     }
 
     fn iter(&self, id: &DimOffset) -> Option<PostingListIterator> {
@@ -70,8 +62,8 @@ impl InvertedIndex for InvertedIndexImmutableRam {
         self.inner.len()
     }
 
-    fn posting_list_len(&self, id: &DimOffset) -> Option<usize> {
-        self.inner.posting_list_len(id)
+    fn posting_size(&self, id: &DimOffset) -> Option<usize> {
+        self.inner.posting_size(id)
     }
 
     fn files(path: &Path, config: InvertedIndexConfig) -> Vec<std::path::PathBuf> {
