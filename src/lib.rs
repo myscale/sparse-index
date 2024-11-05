@@ -123,7 +123,7 @@ pub mod ffi {
         pub fn ffi_sparse_search(
             index_path: &CxxString,
             sparse_vector: &Vec<TupleElement>,
-            filter: &Vec<u8>,
+            filter: &CxxVector<u8>,
             top_k: u32,
         ) -> FFIScoreResult;
     }

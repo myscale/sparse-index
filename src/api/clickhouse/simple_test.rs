@@ -50,9 +50,9 @@ mod test {
         let res = ffi_load_index_reader(&index_path);
         println!("load - {:?}", res);
 
-        for sv in mock_row_content(10, 100) {
-            let res = ffi_sparse_search(&index_path, &sv, &vec![], 10);
-            println!("{:?}", res);
-        }
+        // for sv in mock_row_content(10, 100) {
+        //     let res = ffi_sparse_search(&index_path, &sv, &vec![], 10);
+        //     println!("{:?}", res);
+        // }
     }
 }

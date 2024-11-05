@@ -9,7 +9,7 @@ use crate::{
     },
     ffi::{FFIBoolResult, FFIError, FFIScoreResult, TupleElement},
 };
-use cxx::CxxString;
+use cxx::{CxxString, CxxVector};
 
 pub fn ffi_load_index_reader(index_path: &CxxString) -> FFIBoolResult {
     static FUNC_NAME: &str = "ffi_load_index_reader";
@@ -61,7 +61,7 @@ pub fn ffi_free_index_reader(index_path: &CxxString) -> FFIBoolResult {
 pub fn ffi_sparse_search(
     index_path: &CxxString,
     sparse_vector: &Vec<TupleElement>,
-    filter: &Vec<u8>,
+    filter: &CxxVector<u8>,
     top_k: u32,
 ) -> FFIScoreResult {
     static FUNC_NAME: &str = "ffi_sparse_search";
