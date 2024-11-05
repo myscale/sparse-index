@@ -1,6 +1,6 @@
 use std::cmp::{max, min};
 
-use log::{debug, error};
+use log::error;
 
 use crate::{ffi::ScoredPointOffset, RowId};
 
