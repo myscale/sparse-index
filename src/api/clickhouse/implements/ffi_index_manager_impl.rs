@@ -14,10 +14,10 @@ pub fn ffi_create_index_with_parameter_impl(
 ) -> crate::Result<bool> {
     let _ = IndexManager::prepare_directory(&index_path)?;
 
-    // TODO 放到 Sparse Index 内部完成
+    // TODO: Put into SparseIndex's inner logic. 
     let _ = IndexManager::persist_index_params(&index_path, &index_json_parameter)?;
 
-    // TODO 将 json_parameter 里面的参数传递给 IndexSettings
+    // TODO: parse json_parameter and generate IndexSettings.
     let index = Index::create_in_dir(Path::new(index_path), IndexSettings::default())?;
 
     let bridge = IndexManager::create_writer(&index, &index_path)?;

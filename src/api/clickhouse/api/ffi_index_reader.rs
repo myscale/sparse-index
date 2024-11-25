@@ -1,6 +1,3 @@
-use std::sync::Arc;
-
-use crate::api::clickhouse::cache::IndexReaderBridge;
 use crate::api::clickhouse::converter::cxx_vector_converter;
 use crate::api::clickhouse::{
     ffi_free_index_reader_impl, ffi_load_index_reader_impl, ffi_sparse_search_impl,
@@ -8,9 +5,8 @@ use crate::api::clickhouse::{
 use crate::core::SparseVector;
 use crate::{
     api::clickhouse::{
-        cache::FFI_INDEX_SEARCHER_CACHE,
         converter::CXX_STRING_CONVERTER,
-        utils::{ApiUtils, IndexManager},
+        utils::ApiUtils,
     },
     ffi::{FFIBoolResult, FFIError, FFIScoreResult, TupleElement},
 };

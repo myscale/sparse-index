@@ -1,19 +1,12 @@
-use crate::api::clickhouse::cache::{
-    IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE,
-};
 use crate::api::clickhouse::converter::CXX_STRING_CONVERTER;
 use crate::api::clickhouse::utils::{ApiUtils, IndexManager};
 use crate::api::clickhouse::{
     ffi_commit_index_impl, ffi_create_index_with_parameter_impl, ffi_free_index_writer_impl,
     ffi_insert_sparse_vector_impl,
 };
-use crate::core::{SparseRowContent, SparseVector};
-use crate::index::{Index, IndexSettings};
+use crate::core::SparseVector;
 use crate::{ffi::*, RowId};
 use cxx::{let_cxx_string, CxxString};
-use rand::seq::index;
-use std::path::Path;
-use std::sync::Arc;
 
 pub fn ffi_create_index(index_path: &CxxString) -> FFIBoolResult {
     let_cxx_string!(parameter = "{}");

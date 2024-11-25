@@ -23,9 +23,7 @@ mod test {
 
     #[test]
     pub fn test_index_rows() {
-        // 创建一个新的日志构建器
         let mut builder = env_logger::Builder::from_default_env();
-        // 设置日志级别为 Debug
         builder.filter(None, log::LevelFilter::Info).init();
 
         let temp_dir = TempDir::new().unwrap().path().to_str().unwrap().to_string();

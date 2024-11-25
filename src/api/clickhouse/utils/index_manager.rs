@@ -14,7 +14,6 @@ use crate::sparse_index::SparseIndexConfig;
 const MEMORY_64MB: usize = 1024 * 1024 * 64;
 const BUILD_THREADS: usize = 4;
 
-/// 是 FFI 相关接口的工具函数
 pub struct IndexManager;
 
 impl IndexManager {
@@ -43,14 +42,13 @@ impl IndexManager {
         FFI_INDEX_SEARCHER_CACHE.remove_index_reader_bridge(index_path.to_string())
     }
 
-    /// 初始化路径（释放掉当前路径下的 reader 和 writer）
+    /// drop `reader` and `writer` in current directory.
     pub(crate) fn prepare_directory(index_path: &str) -> crate::Result<()> {
         let _ = Self::free_index_reader(index_path);
         Self::free_index_writer(index_path)?;
         Ok(())
     }
 
-    /// 持久化存储 index 参数配置
     pub(crate) fn persist_index_params(
         index_path: &str,
         index_json_parameter: &str,
@@ -79,14 +77,12 @@ impl IndexManager {
         })
     }
 
-    /// 获得 index writer bridge
     pub(crate) fn get_index_writer_bridge(
         index_path: &str,
     ) -> crate::Result<Arc<IndexWriterBridge>> {
         Ok(FFI_INDEX_WRITER_CACHE.get_index_writer_bridge(index_path.to_string())?)
     }
 
-    /// 重新加载 index reader
     pub(crate) fn reload_index_reader(index_path: &str) -> crate::Result<bool> {
         let reload_status =
             match FFI_INDEX_SEARCHER_CACHE.get_index_reader_bridge(index_path.to_string()) {
@@ -101,7 +97,6 @@ impl IndexManager {
         return Ok(reload_status);
     }
 
-    /// 加载 index reader bridge
     pub fn load_index_reader_bridge(index_path: &str) -> crate::Result<bool> {
         // Boundary.
         let index_files_directory = Path::new(index_path);
