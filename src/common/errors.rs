@@ -156,6 +156,7 @@ impl fmt::Debug for DataCorruption {
 //         Self::IoError(Arc::new(io_error))
 //     }
 // }
+// use futures::Error as FuturesIoError;
 
 /// The library's error enum
 #[derive(Debug, Error)]
@@ -163,6 +164,8 @@ pub enum SparseError {
     /// IO Error.
     #[error("An IO error occurred: '{0}'")]
     IoError(Arc<io::Error>),
+    // #[error("A futures-io error occurred: '{0}'")]
+    // FuturesIoError(#[from] FuturesIoError),
     /// Failed to open the directory.
     #[error("Failed to open the directory: '{0:?}'")]
     OpenDirectoryError(#[from] OpenDirectoryError),

@@ -1,13 +1,10 @@
 // mod compressed;
-mod posting_list_merge;
+mod compress;
+mod encoder;
 mod simple;
 mod traits;
 
-pub use posting_list_merge::PostingListMerge;
-pub use simple::{PostingList, PostingListBuilder, PostingListIterator};
+pub use compress::*;
+pub use encoder::{BlockDecoder, BlockEncoder, COMPRESSION_BLOCK_SIZE};
+pub use simple::{PostingList, PostingListBuilder, PostingListIterator, PostingListMerger};
 pub use traits::*;
-// pub use compressed::{
-//     CompressedPostingBuilder, CompressedPostingChunk, CompressedPostingList,
-//     CompressedPostingListIterator, CompressedPostingListStdIterator,
-//     CompressedPostingListStoreSize, CompressedPostingListView,
-// };

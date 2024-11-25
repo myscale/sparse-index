@@ -91,13 +91,7 @@ impl Index {
 
 /// create, write.
 impl Index {
-    /// 创建 IndexBuilder
-    // TODO 删除 builder() 函数
-    pub fn builder() -> IndexBuilder {
-        IndexBuilder::new()
-    }
-
-    /// 提供 自定义的 Directory 和 settings
+    /// Create [`Index`] with custom [`Directory`] and [`IndexSettings`]
     pub fn create<T: Into<Box<dyn Directory>>>(
         dir: T,
         settings: IndexSettings,
@@ -107,7 +101,8 @@ impl Index {
         builder.with_settings(settings).create(dir)
     }
 
-    /// 在给定路径下以 mmap 模式创建索引
+    /// Create [`Index`] with given **path** and [`IndexSettings`], **path** may be like `/home/user/test/`.
+    /// [`Index`] will be created with mmap mode.
     pub fn create_in_dir<P: AsRef<Path>>(
         directory_path: P,
         settings: IndexSettings,
@@ -349,7 +344,7 @@ mod tests {
     use crate::{
         core::{SparseRowContent, SparseVector},
         index::{IndexBuilder, IndexSettings},
-        indexer::{index_writer, LogMergePolicy, MergePolicy, NoMergePolicy},
+        indexer::{index_writer, LogMergePolicy, MergePolicy, NoMergePolicy}, sparse_index::{IndexWeightType, SparseIndexConfig, StorageType},
     };
 
     use super::Index;
@@ -396,8 +391,15 @@ mod tests {
     pub fn test_create_index() {
         get_logger().init();
         // let dir = TempDir::new().expect("error create temp dir");
-        let dir2 = Path::new("/home/mochix/test/sparse_index_files/temp");
-        let index = Index::create_in_dir(dir2, IndexSettings::default())
+        let index_directory = Path::new("/home/mochix/test/sparse_index_files/temp");
+        let index_settings = IndexSettings {
+            config: SparseIndexConfig {
+                storage_type: StorageType::CompressedMmap,
+                weight_type: IndexWeightType::UInt8,
+                quantized: false,
+            },
+        };
+        let index = Index::create_in_dir(index_directory, index_settings)
             .expect("error create index in dir");
         let mut index_writer = index
             .writer(1024 * 1024 * 128)
@@ -410,7 +412,7 @@ mod tests {
 
         let time_begin = Instant::now();
         for base in 0..1 {
-            for row in mock_row_content(base, 100000) {
+            for row in mock_row_content(base, 1000000) {
                 let res = index_writer.add_document(row);
             }
             let commit_res = index_writer.commit();

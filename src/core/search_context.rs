@@ -1,6 +1,6 @@
 use crate::core::common::types::{DimId, DimWeight, ElementOffsetType};
 use crate::core::inverted_index::InvertedIndex;
-use crate::core::posting_list::{PostingListIter, PostingListIterator};
+use crate::core::posting_list::PostingListIterator;
 use crate::core::scores::PooledScoresHandle;
 use crate::core::sparse_vector::SparseVector;
 use crate::ffi::ScoredPointOffset;
@@ -9,9 +9,10 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 
 use super::scores::TopK;
+use super::PostingListIteratorTrait;
 
 /// Iterator over posting lists with a reference to the corresponding query index and weight
-struct IndexedPostingListIterator<T: PostingListIter> {
+struct IndexedPostingListIterator<T: PostingListIteratorTrait<W>> {
     posting_list_iterator: T,
     query_index: DimId,
     query_weight: DimWeight,
@@ -220,15 +221,15 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
     /// 将当前剩余最长的 posting iterator 放置到 iterators 最前面
     fn promote_longest_posting_lists_to_the_front(&mut self) {
         // find index of longest posting list
-        // 这里找到的最长 posting list 是 len_to_end（posting list 的剩余长度）长度
+        // 这里找到的最长 posting list 是 remains（posting list 的剩余长度）长度
         let posting_index = self
             .postings_iterators
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| {
                 a.posting_list_iterator
-                    .len_to_end()
-                    .cmp(&b.posting_list_iterator.len_to_end())
+                    .remains()
+                    .cmp(&b.posting_list_iterator.remains())
             })
             .map(|(index, _)| index);
 
@@ -276,7 +277,7 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
             // remove empty posting lists if necessary
             // 如果倒排列表已经被完全遍历（所有的 row_id 都计算过分数），将它从迭代器中移除
             self.postings_iterators.retain(|posting_iterator| {
-                posting_iterator.posting_list_iterator.len_to_end() != 0
+                posting_iterator.posting_list_iterator.remains() != 0
             });
 
             // update min_record_id
@@ -402,7 +403,7 @@ impl<'a, 'b, T: PostingListIter> SearchContext<'a, 'b, T> {
 
 #[cfg(test)]
 mod test2 {
-    use crate::core::inverted_index::InvertedIndexBuilder;
+    use crate::core::inverted_index::InvertedIndexRamBuilder;
     use crate::core::inverted_index::InvertedIndexRam;
     use crate::core::scores::{PooledScoresHandle, ScoresMemoryPool};
     use crate::core::search_context::SearchContext;
@@ -420,7 +421,7 @@ mod test2 {
 
     #[test]
     fn plain_search_all_test() {
-        let mut builder = InvertedIndexBuilder::new();
+        let mut builder = InvertedIndexRamBuilder::new();
         // id 是 record id
         // builder.add(1, [(1, 10.0), (2, 10.0), (3, 10.0)].into());
         // builder.add(2, [(1, 20.0), (3, 20.0)].into());
@@ -487,16 +488,16 @@ mod test2 {
 //     #[instantiate_tests(<InvertedIndexCompressedImmutableRam<QuantizedU8>>)]
 //     mod iram_q8 {}
 
-//     #[instantiate_tests(<InvertedIndexCompressedMmap<f32>>)]
+//     #[instantiate_tests(<CompressedInvertedIndexMmap<f32>>)]
 //     mod mmap_f32 {}
 
-//     #[instantiate_tests(<InvertedIndexCompressedMmap<half::f16>>)]
+//     #[instantiate_tests(<CompressedInvertedIndexMmap<half::f16>>)]
 //     mod mmap_f16 {}
 
-//     #[instantiate_tests(<InvertedIndexCompressedMmap<u8>>)]
+//     #[instantiate_tests(<CompressedInvertedIndexMmap<u8>>)]
 //     mod mmap_u8 {}
 
-//     #[instantiate_tests(<InvertedIndexCompressedMmap<QuantizedU8>>)]
+//     #[instantiate_tests(<CompressedInvertedIndexMmap<QuantizedU8>>)]
 //     mod mmap_q8 {}
 
 //     // --- End of test instantiations ---
@@ -537,7 +538,7 @@ mod test2 {
 //     fn round_scores<I: 'static>(mut scores: Vec<ScoredPointOffset>) -> Vec<ScoredPointOffset> {
 //         let errors_allowed_for = [
 //             TypeId::of::<InvertedIndexCompressedImmutableRam<QuantizedU8>>(),
-//             TypeId::of::<InvertedIndexCompressedMmap<QuantizedU8>>(),
+//             TypeId::of::<CompressedInvertedIndexMmap<QuantizedU8>>(),
 //         ];
 //         if errors_allowed_for.contains(&TypeId::of::<I>()) {
 //             let precision = 0.25;
@@ -568,7 +569,7 @@ mod test2 {
 //     #[test]
 //     fn search_test<I: InvertedIndex>() {
 //         let index = TestIndex::<I>::from_ram({
-//             let mut builder = InvertedIndexBuilder::new();
+//             let mut builder = InvertedIndexRamBuilder::new();
 //             builder.add(1, [(1, 10.0), (2, 10.0), (3, 10.0)].into());
 //             builder.add(2, [(1, 20.0), (2, 20.0), (3, 20.0)].into());
 //             builder.add(3, [(1, 30.0), (2, 30.0), (3, 30.0)].into());
@@ -614,7 +615,7 @@ mod test2 {
 //         }
 
 //         let mut index = TestIndex::<I>::from_ram({
-//             let mut builder = InvertedIndexBuilder::new();
+//             let mut builder = InvertedIndexRamBuilder::new();
 //             builder.add(1, [(1, 10.0), (2, 10.0), (3, 10.0)].into());
 //             builder.add(2, [(1, 20.0), (2, 20.0), (3, 20.0)].into());
 //             builder.add(3, [(1, 30.0), (2, 30.0), (3, 30.0)].into());
@@ -698,7 +699,7 @@ mod test2 {
 //     #[test]
 //     fn search_with_hot_key_test<I: InvertedIndex>() {
 //         let index = TestIndex::<I>::from_ram({
-//             let mut builder = InvertedIndexBuilder::new();
+//             let mut builder = InvertedIndexRamBuilder::new();
 //             builder.add(1, [(1, 10.0), (2, 10.0), (3, 10.0)].into());
 //             builder.add(2, [(1, 20.0), (2, 20.0), (3, 20.0)].into());
 //             builder.add(3, [(1, 30.0), (2, 30.0), (3, 30.0)].into());
@@ -778,7 +779,7 @@ mod test2 {
 //     #[test]
 //     fn pruning_single_to_end_test<I: InvertedIndex>() {
 //         let index = TestIndex::<I>::from_ram({
-//             let mut builder = InvertedIndexBuilder::new();
+//             let mut builder = InvertedIndexRamBuilder::new();
 //             builder.add(1, [(1, 10.0)].into());
 //             builder.add(2, [(1, 20.0)].into());
 //             builder.add(3, [(1, 30.0)].into());
@@ -803,7 +804,7 @@ mod test2 {
 //         assert_eq!(
 //             search_context.postings_iterators[0]
 //                 .posting_list_iterator
-//                 .len_to_end(),
+//                 .remains(),
 //             0
 //         );
 //     }
@@ -811,7 +812,7 @@ mod test2 {
 //     #[test]
 //     fn pruning_multi_to_end_test<I: InvertedIndex>() {
 //         let index = TestIndex::<I>::from_ram({
-//             let mut builder = InvertedIndexBuilder::new();
+//             let mut builder = InvertedIndexRamBuilder::new();
 //             builder.add(1, [(1, 10.0)].into());
 //             builder.add(2, [(1, 20.0)].into());
 //             builder.add(3, [(1, 30.0)].into());
@@ -839,7 +840,7 @@ mod test2 {
 //         assert_eq!(
 //             search_context.postings_iterators[0]
 //                 .posting_list_iterator
-//                 .len_to_end(),
+//                 .remains(),
 //             0
 //         );
 //     }
@@ -851,7 +852,7 @@ mod test2 {
 //         }
 
 //         let index = TestIndex::<I>::from_ram({
-//             let mut builder = InvertedIndexBuilder::new();
+//             let mut builder = InvertedIndexRamBuilder::new();
 //             builder.add(1, [(1, 10.0)].into());
 //             builder.add(2, [(1, 20.0)].into());
 //             builder.add(3, [(1, 20.0)].into());
@@ -883,7 +884,7 @@ mod test2 {
 //         assert_eq!(
 //             search_context.postings_iterators[0]
 //                 .posting_list_iterator
-//                 .len_to_end(),
+//                 .remains(),
 //             2 // 6, 7
 //         );
 //     }
@@ -908,7 +909,7 @@ mod test2 {
 //     #[test]
 //     fn promote_longest_test<I: InvertedIndex>() {
 //         let index = TestIndex::<I>::from_ram({
-//             let mut builder = InvertedIndexBuilder::new();
+//             let mut builder = InvertedIndexRamBuilder::new();
 //             builder.add(1, [(1, 10.0), (2, 10.0), (3, 10.0)].into());
 //             builder.add(2, [(1, 20.0), (3, 20.0)].into());
 //             builder.add(3, [(2, 30.0), (3, 30.0)].into());
@@ -930,7 +931,7 @@ mod test2 {
 //         assert_eq!(
 //             search_context.postings_iterators[0]
 //                 .posting_list_iterator
-//                 .len_to_end(),
+//                 .remains(),
 //             2
 //         );
 
@@ -939,7 +940,7 @@ mod test2 {
 //         assert_eq!(
 //             search_context.postings_iterators[0]
 //                 .posting_list_iterator
-//                 .len_to_end(),
+//                 .remains(),
 //             3
 //         );
 //     }
@@ -947,7 +948,7 @@ mod test2 {
 //     // #[test]
 //     // fn plain_search_all_test<I: InvertedIndex>() {
 //     //     let index = TestIndex::<I>::from_ram({
-//     //         let mut builder = InvertedIndexBuilder::new();
+//     //         let mut builder = InvertedIndexRamBuilder::new();
 //     //         // id 是 record id
 //     //         // builder.add(1, [(1, 10.0), (2, 10.0), (3, 10.0)].into());
 //     //         // builder.add(2, [(1, 20.0), (3, 20.0)].into());
@@ -993,7 +994,7 @@ mod test2 {
 //     #[test]
 //     fn plain_search_gap_test<I: InvertedIndex>() {
 //         let index = TestIndex::<I>::from_ram({
-//             let mut builder = InvertedIndexBuilder::new();
+//             let mut builder = InvertedIndexRamBuilder::new();
 //             builder.add(1, [(1, 10.0), (2, 10.0), (3, 10.0)].into());
 //             builder.add(2, [(1, 20.0), (3, 20.0)].into());
 //             builder.add(3, [(2, 30.0), (3, 30.0)].into());

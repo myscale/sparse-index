@@ -1,8 +1,8 @@
 use super::{Segment, SegmentId};
 use crate::core::index_searcer::IndexSearcher;
-use crate::core::{InvertedIndex, InvertedIndexMmap, SparseVector, TopK};
+use crate::core::{GenericInvertedIndexMmapType, SparseVector, TopK};
 use crate::directory::Directory;
-use crate::sparse_index::SparseIndexType;
+use crate::sparse_index::StorageType;
 use crate::RowId;
 use std::fmt;
 
@@ -32,7 +32,7 @@ impl SegmentReader {
     }
 
     /// 获得 SegmentReader 对应的底层索引
-    pub fn get_inverted_index(&self) -> &InvertedIndexMmap {
+    pub fn get_inverted_index(&self) -> &GenericInvertedIndexMmapType {
         self.index_searcher.get_inverted_index()
     }
 }
@@ -45,14 +45,16 @@ impl SegmentReader {
         let rows_count: RowId = segment.meta().rows_count();
         let index_path = segment.index().directory().get_path();
 
-        // TODO 目前仅允许 mmap 类型的 reader，后续扩充 内存类型等等，最底层进行向上的抽象封装
-        assert_eq!(
-            segment.index().index_settings.config.index_type,
-            SparseIndexType::Mmap
+        assert_ne!(
+            segment.index().index_settings.config.storage_type,
+            StorageType::Ram
         );
 
-        let inverted_index: InvertedIndexMmap =
-            InvertedIndexMmap::open(&index_path, Some(&segment.id().uuid_string()))?;
+        let inverted_index: GenericInvertedIndexMmapType = GenericInvertedIndexMmapType::open_from(
+            &index_path,
+            Some(&segment.id().uuid_string()),
+            &segment.index().index_settings,
+        )?;
 
         Ok(SegmentReader {
             index_searcher: IndexSearcher::new(inverted_index),

@@ -1,18 +1,16 @@
-use std::borrow::{BorrowMut, Cow};
+use std::borrow::BorrowMut;
 use std::collections::HashSet;
 use std::io::Write;
 use std::ops::Deref;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
-use std::time::Duration;
 
 use log::{debug, error, info, warn};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
 use super::segment_manager::SegmentManager;
-use crate::core::{InvertedIndex, InvertedIndexMmap};
 use crate::directory::{Directory, DirectoryClone, GarbageCollectionResult};
 use crate::future_result::FutureResult;
 use crate::index::{Index, IndexMeta, Segment, SegmentId, SegmentMeta};
@@ -23,7 +21,7 @@ use crate::indexer::stamper::Stamper;
 use crate::indexer::{
     DefaultMergePolicy, MergeCandidate, MergeOperation, MergePolicy, SegmentEntry,
 };
-use crate::{Opstamp, META_FILEPATH};
+use crate::{Opstamp, RowId, META_FILEPATH};
 
 const NUM_MERGE_THREADS: usize = 4;
 
@@ -135,19 +133,15 @@ fn merge(
         segments.len()
     );
 
-    let inv_idx_mmap = merger.unwrap().merge_v2(
+    let (rows_count, index_files) = merger.unwrap().merge(
         merged_segment.index().directory().get_path(),
         Some(&segment_id),
     )?;
 
-    let rows_count = inv_idx_mmap.vector_count() as u32;
-    let merged_segment = merged_segment.clone().with_rows_count(rows_count);
+    let merged_segment = merged_segment.clone().with_rows_count(rows_count as RowId);
 
-    for file_path in inv_idx_mmap.files(Some(&segment_id)) {
-        merged_segment
-            .index()
-            .directory()
-            .register_file_as_managed(&file_path);
+    for file_path in index_files {
+        let _ = merged_segment.index().directory().register_file_as_managed(&file_path)?;
     }
 
     info!(
@@ -166,7 +160,7 @@ fn merge(
             .collect::<Vec<_>>()
     );
 
-    let meta: SegmentMeta = index.new_segment_meta(merged_segment.id(), rows_count);
+    let meta: SegmentMeta = index.new_segment_meta(merged_segment.id(), rows_count as RowId);
     meta.untrack_temp_svstore();
 
     let segment_entry = SegmentEntry::new(meta, None);

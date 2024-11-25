@@ -12,7 +12,7 @@ pub mod segment_manager;
 pub mod segment_register;
 pub mod segment_updater;
 pub mod segment_writer;
-pub mod single_segment_index_writer;
+// pub mod single_segment_index_writer;
 pub mod stamper;
 
 use crossbeam_channel as channel;

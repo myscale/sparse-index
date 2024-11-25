@@ -16,3 +16,5 @@ pub use index_meta::*;
 pub use index_settings::IndexSettings;
 pub use segment::Segment;
 pub use segment_reader::SegmentReader;
+
+use crate::core::{index_searcer::IndexSearcher, CompressedInvertedIndexMmap, InvertedIndexMmap};

@@ -15,11 +15,12 @@ use crate::core::SparseRowContent;
 use crate::directory::{DirectoryLock, GarbageCollectionResult};
 
 use crate::future_result::FutureResult;
-use crate::index::{Index, Segment, SegmentId, SegmentMeta};
+use crate::index::{Index, IndexSettings, Segment, SegmentId, SegmentMeta};
 use crate::indexer::index_writer_status::IndexWriterStatus;
 use crate::indexer::stamper::Stamper;
 use crate::indexer::{MergePolicy, SegmentEntry, SegmentWriter};
 
+use crate::sparse_index::StorageType;
 use crate::Opstamp;
 
 /// 用于设置 memory_arena 的边界大小, 当 memory_area 中剩余内存低于该值时(1MB), 关闭 segment
@@ -79,6 +80,7 @@ pub struct IndexWriter {
 /// - grouped_sv_iterator: 从 Chanel 获取 sv
 /// - segment_updater: 更新写入 segment 的类
 fn index_documents(
+    index_settings: &IndexSettings,
     memory_budget: usize,
     segment: Segment,
     grouped_sv_iterator: &mut dyn Iterator<Item = AddBatch>,
@@ -88,6 +90,9 @@ fn index_documents(
         "{} [index documents] enter",
         thread::current().name().unwrap_or_default()
     );
+    let mmap_type: StorageType = index_settings.config.storage_type;
+    assert_ne!(mmap_type, StorageType::Ram);
+
     // 初始化 segment writer
     let mut segment_writer = SegmentWriter::for_segment(memory_budget, segment.clone())?;
 
@@ -122,7 +127,10 @@ fn index_documents(
     }
 
     let rows_count = segment_writer.rows_count();
-
+    info!(
+        "{} [index documents] rows_count: {}",
+        thread::current().name().unwrap_or_default(), rows_count
+    );
     // this is ensured by the call to peek before starting the worker thread.
     assert!(rows_count > 0);
 
@@ -315,6 +323,7 @@ impl IndexWriter {
                     }
 
                     index_documents(
+                        &index.index_settings(),
                         mem_budget,
                         index.new_segment(),
                         &mut document_iterator,

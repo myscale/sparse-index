@@ -1,6 +1,6 @@
 use super::SegmentComponent;
 use crate::core::{
-    INVERTED_INDEX_META_FILE_SUFFIX, INVERTED_INDEX_OFFSETS_SUFFIX, INVERTED_INDEX_POSTINGS_SUFFIX,
+    COMPRESSED_INVERTED_INDEX_HEADERS_SUFFIX, COMPRESSED_INVERTED_INDEX_POSTING_BLOCKS_SUFFIX, COMPRESSED_INVERTED_INDEX_ROW_IDS_SUFFIX, INVERTED_INDEX_HEADERS_SUFFIX, INVERTED_INDEX_META_FILE_SUFFIX, INVERTED_INDEX_POSTINGS_SUFFIX
 };
 use crate::index::SegmentId;
 use crate::{Opstamp, RowId};
@@ -118,9 +118,12 @@ impl SegmentMeta {
         let mut path = self.id().uuid_string();
         path.push_str(&match component {
             // TODO 怎么处理比较好？
-            SegmentComponent::InvertedIndexPostings => INVERTED_INDEX_POSTINGS_SUFFIX.to_string(),
-            SegmentComponent::InvertedIndexOffsets => INVERTED_INDEX_OFFSETS_SUFFIX.to_string(),
             SegmentComponent::InvertedIndexMeta => INVERTED_INDEX_META_FILE_SUFFIX.to_string(),
+            SegmentComponent::InvertedIndexHeaders => INVERTED_INDEX_HEADERS_SUFFIX.to_string(),
+            SegmentComponent::InvertedIndexPostings => INVERTED_INDEX_POSTINGS_SUFFIX.to_string(),
+            SegmentComponent::CompressedInvertedIndexHeaders => COMPRESSED_INVERTED_INDEX_HEADERS_SUFFIX.to_string(),
+            SegmentComponent::CompressedInvertedIndexRowIds => COMPRESSED_INVERTED_INDEX_ROW_IDS_SUFFIX.to_string(),
+            SegmentComponent::CompressedInvertedIndexBlocks => COMPRESSED_INVERTED_INDEX_POSTING_BLOCKS_SUFFIX.to_string(),
             // SegmentComponent::Delete => ".delete".to_string(),
         });
         PathBuf::from(path)
@@ -157,6 +160,9 @@ impl SegmentMeta {
     }
 }
 
+/// 这里的 include temp sv store 应该被真正使用起来
+/// 在 Segments 对应的 mmap 文件被增量合并的时候, 需要把后缀加上 .tmp, 避免被垃圾回收机制进行回收
+/// 但是问题是，手动在 Directory 里面创建的文件是不受到垃圾回收机制管理的，所以增量更新之前应该不影响吧？
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct InnerSegmentMeta {
     // 当前 segment 所处的路径, 即 index 所在的路径

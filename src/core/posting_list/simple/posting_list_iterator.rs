@@ -1,128 +1,124 @@
-use crate::core::common::types::{DimWeight, ElementOffsetType};
-use crate::core::posting_list::traits::{PostingElement, PostingElementEx, PostingListIter};
+use std::marker::PhantomData;
+
+use crate::core::posting_list::traits::{PostingElementEx, PostingListIteratorTrait};
+use crate::core::{QuantizedParam, QuantizedWeight, WeightType};
 use crate::RowId;
 
+use super::PostingList;
+
+// OW 是 posting 内部存储的 weight 类型
+// TW 是反量化之后的 weight
 #[derive(Debug, Clone)]
-pub struct PostingListIterator<'a> {
-    pub elements: &'a [PostingElementEx],
-    pub current_index: usize,
+pub struct PostingListIterator<'a, OW: QuantizedWeight, TW: QuantizedWeight> {
+    pub posting: &'a [PostingElementEx<OW>],
+    pub quantized_param: Option<QuantizedParam>,
+    pub cursor: usize,
+    _tw: PhantomData<TW>,
 }
 
-impl<'a> PostingListIterator<'a> {
-    pub fn new(elements: &'a [PostingElementEx]) -> PostingListIterator<'a> {
+impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterator<'a, OW, TW> {
+    pub fn new(
+        posting: &'a [PostingElementEx<OW>],
+        quantized_param: Option<QuantizedParam>,
+    ) -> PostingListIterator<'a, OW, TW> {
         PostingListIterator {
-            elements,
-            current_index: 0,
+            posting,
+            quantized_param,
+            cursor: 0,
+            _tw: PhantomData,
         }
     }
 
-    pub fn advance(&mut self) {
-        if self.current_index < self.elements.len() {
-            self.current_index += 1;
+    fn convert_type(&self, raw_element: &PostingElementEx<OW>) -> PostingElementEx<TW> {
+        if self.quantized_param.is_none() {
+            assert_eq!(OW::weight_type(), TW::weight_type());
+
+            let weight_convert = TW::from_f32(OW::to_f32(raw_element.weight));
+            let max_next_weight_convert = TW::from_f32(OW::to_f32(raw_element.max_next_weight));
+            let converted_element: PostingElementEx<TW> = PostingElementEx {
+                row_id: raw_element.row_id,
+                weight: weight_convert,
+                max_next_weight: max_next_weight_convert,
+            };
+
+            return converted_element;
+        } else {
+            assert_eq!(OW::weight_type(), WeightType::WeightU8);
+            let param: QuantizedParam = self.quantized_param.unwrap();
+            let converted: PostingElementEx<TW> = PostingElementEx::<TW> {
+                row_id: raw_element.row_id,
+                weight: TW::unquantize_with_param(OW::to_u8(raw_element.weight), param),
+                max_next_weight: TW::unquantize_with_param(
+                    OW::to_u8(raw_element.max_next_weight),
+                    param,
+                ),
+            };
+            return converted;
+        }
+    }
+}
+
+impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIteratorTrait<OW, TW>
+    for PostingListIterator<'a, OW, TW>
+{
+    fn peek(&mut self) -> Option<PostingElementEx<TW>> {
+        let element_opt: Option<&PostingElementEx<OW>> = self.posting.get(self.cursor);
+        if element_opt.is_none() {
+            return None;
+        } else {
+            let element: PostingElementEx<OW> = element_opt.unwrap().clone();
+            return Some(self.convert_type(&element));
         }
     }
 
-    pub fn advance_by(&mut self, count: usize) {
-        self.current_index = (self.current_index + count).min(self.elements.len())
+    fn last_id(&self) -> Option<RowId> {
+        self.posting.last().map(|e| e.row_id)
     }
 
-    pub fn peek(&self) -> Option<&PostingElementEx> {
-        self.elements.get(self.current_index)
-    }
-
-    pub fn len_to_end(&self) -> usize {
-        self.elements.len() - self.current_index
-    }
-
-    pub fn skip_to(&mut self, row_id: RowId) -> Option<PostingElementEx> {
-        if self.current_index >= self.elements.len() {
+    fn skip_to(&mut self, row_id: RowId) -> Option<PostingElementEx<TW>> {
+        if self.cursor >= self.posting.len() {
             return None;
         }
 
-        let next_element =
-            self.elements[self.current_index..].binary_search_by(|e| e.row_id.cmp(&row_id));
+        // 查找第一个 row_id ≥ 目标 row_id 的元素位置
+        let next_element: Result<usize, usize> =
+            self.posting[self.cursor..].binary_search_by(|e| e.row_id.cmp(&row_id));
 
         match next_element {
             Ok(found_offset) => {
-                self.current_index += found_offset;
-                Some(self.elements[self.current_index].clone())
+                self.cursor += found_offset;
+                let raw_element: PostingElementEx<OW> = self.posting[self.cursor].clone();
+                return Some(self.convert_type(&raw_element));
             }
             Err(insert_index) => {
-                self.current_index += insert_index;
+                self.cursor += insert_index;
                 None
             }
         }
     }
 
-    pub fn skip_to_end(&mut self) -> Option<&PostingElementEx> {
-        self.current_index = self.elements.len();
-        None
-    }
-}
-
-impl<'a> PostingListIter for PostingListIterator<'a> {
-    fn peek(&mut self) -> Option<PostingElementEx> {
-        self.elements.get(self.current_index).cloned()
-    }
-
-    fn last_id(&self) -> Option<ElementOffsetType> {
-        self.elements
-            .last()
-            // TODO 什么时候才需要对这个 e 进行解引用呢
-            .map(|e| e.row_id)
-    }
-
-    fn skip_to(&mut self, row_id: ElementOffsetType) -> Option<PostingElementEx> {
-        self.skip_to(row_id)
-    }
-
     fn skip_to_end(&mut self) {
-        self.skip_to_end();
+        self.cursor = self.posting.len();
     }
 
-    fn len_to_end(&self) -> usize {
-        self.len_to_end()
+    fn remains(&self) -> usize {
+        self.posting.len() - self.cursor
     }
 
-    fn current_index(&self) -> usize {
-        self.current_index
+    fn cursor(&self) -> usize {
+        self.cursor
     }
 
-    fn for_each_till_id<Ctx: ?Sized>(
-        &mut self,
-        id: RowId,
-        ctx: &mut Ctx,
-        // f 必须声明为 mut, 否则在调用 f 时会报错
-        mut f: impl FnMut(&mut Ctx, ElementOffsetType, DimWeight),
-    ) {
-        let mut current_index = self.current_index;
-        for element in &self.elements[current_index..] {
-            if element.row_id > id {
-                break;
-            }
-            f(ctx, element.row_id, element.weight);
-            current_index += 1;
-        }
-        self.current_index = current_index;
-    }
-
-    fn for_each_till_row_id(&mut self, row_id: RowId, mut f: impl FnMut(&PostingElementEx)) {
-        let mut current_index = self.current_index;
-        for element in &self.elements[current_index..] {
+    fn for_each_till_row_id(&mut self, row_id: RowId, mut f: impl FnMut(&PostingElementEx<TW>)) {
+        let mut cursor = self.cursor;
+        for element in &self.posting[cursor..] {
             if element.row_id > row_id {
                 break;
             }
-            f(element);
-            current_index += 1;
+            let converted: PostingElementEx<TW> = self.convert_type(element);
+            f(&converted);
+            cursor += 1;
         }
-        self.current_index = current_index;
-    }
-
-    fn reliable_max_next_weight() -> bool {
-        true
-    }
-
-    fn into_std_iter(self) -> impl Iterator<Item = PostingElement> {
-        self.elements.iter().cloned().map(PostingElement::from)
+        self.cursor = cursor;
     }
 }

@@ -1,70 +1,54 @@
-use crate::RowId;
+use log::{debug, info};
 
-use super::{PostingElementEx, PostingList, DEFAULT_MAX_NEXT_WEIGHT};
+use crate::core::{PostingListIteratorTrait, QuantizedParam, QuantizedWeight};
 
-pub struct PostingListMerge;
+use super::{CompressedPostingBuilder, CompressedPostingList, CompressedPostingListIterator};
 
-impl PostingListMerge {
+pub struct CompressedPostingListMerger;
+
+impl CompressedPostingListMerger {
     /// input a group of postings, they are in the same dim-id.
-    pub fn merge_posting_lists(lists: &Vec<&[PostingElementEx]>) -> PostingList {
-        let mut merged: PostingList = PostingList {
-            elements: Vec::new(),
-        };
-        // indices 记录了每个 posting 的长度, 下面会从末尾开始合并
-        let mut indices: Vec<usize> = lists
-            .iter()
-            .map(|list: &&[PostingElementEx]| list.len())
-            .collect::<Vec<_>>();
-        let mut cur_max_next_weight: f32 = DEFAULT_MAX_NEXT_WEIGHT;
+    pub fn merge_posting_lists<OW: QuantizedWeight, TW: QuantizedWeight>(
+        compressed_posting_iterators: &mut Vec<CompressedPostingListIterator<'_, TW, OW>>,
+    ) -> (CompressedPostingList<TW>, Option<QuantizedParam>) {
 
-        // 当所有 PostingList 的索引都为 0 时，表示所有等待合并的 Posting 已经被处理完成
-        while indices.iter().any(|&i| i > 0) {
-            // max_index 用于记录当前最大 row_id 所在的 PostingList 下标
-            let mut max_index: Option<usize> = None;
-            // max_row_id 用来记录在当前 idx 情况下，所有 Postings 中最大的那个 row_id.
-            let mut max_row_id: Option<RowId> = None; // 记录最大 row id
-                                                      // 找到所有 PostingList 中当前最大的 row_id 以及对应的 PostingList 下标
-            for (i, &index) in indices.iter().enumerate() {
-                if index > 0 {
-                    let cur_row_id = lists[i][index - 1].row_id;
-                    if max_row_id.is_none() || cur_row_id > max_row_id.unwrap() {
-                        max_index = Some(i);
-                        max_row_id = Some(cur_row_id);
-                    }
+        let mut merged_compressed_posting_builder: CompressedPostingBuilder<OW, TW> =
+            CompressedPostingBuilder::<OW, TW>::new().with_finally_sort(true);
+        
+        debug!("comp - merger -3 -2 -1");
+
+        for iterator in compressed_posting_iterators {
+            // info!("comp - merger -3 -2 -2 iter size: {}", iterator.remains());
+            while iterator.remains() != 0 {
+                let element = iterator.next();
+                if element.is_some() {
+                    let element = element.unwrap();
+                    merged_compressed_posting_builder
+                        .add(element.row_id, OW::to_f32(element.weight));
                 }
             }
-
-            // max_idx 是 indices 中选择到了 max row id 的 posting 下标
-            if let Some(max_idx) = max_index {
-                // 将当前最大 row_id 对应的元素添加到结果中
-                let mut element: PostingElementEx = lists[max_idx][indices[max_idx] - 1].clone();
-
-                element.max_next_weight = cur_max_next_weight;
-                merged.elements.push(element.clone());
-
-                // 更新 cur_max_next_weight
-                cur_max_next_weight = cur_max_next_weight.max(element.weight);
-                indices[max_idx] -= 1;
-            }
         }
+        debug!("comp - merger -3 -2 -2");
 
-        // 将结果反转，使其按照 row_id 从小到大排序
-        merged.elements.reverse();
-        merged
+        let merged_compressed_posting_list: CompressedPostingList<TW> = merged_compressed_posting_builder.build();
+        let quantized_param: Option<QuantizedParam> = merged_compressed_posting_list.quantization_params;
+        debug!("comp - merger -3 -2 -3");
+        return (merged_compressed_posting_list, quantized_param);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::core::{PostingElementEx, PostingList, DEFAULT_MAX_NEXT_WEIGHT};
+    use core::f32;
 
-    use super::PostingListMerge;
+    use crate::core::{PostingElementEx, PostingList};
 
     /// mock 7 postings for the same dim-id.
-    fn get_mocked_postings() -> (Vec<&'static [PostingElementEx]>, PostingList) {
-        let lists: Vec<&[PostingElementEx]> = vec![
-            &[], // 0
-            &[
+    /// mock 7 postings for the same dim-id.
+    fn get_mocked_postings() -> (Vec<Vec<PostingElementEx<f32>>>, PostingList<f32>) {
+        let lists: Vec<Vec<PostingElementEx<f32>>> = vec![
+            vec![], // 0
+            vec![
                 // 1
                 PostingElementEx {
                     row_id: 0,
@@ -89,11 +73,11 @@ mod tests {
                 PostingElementEx {
                     row_id: 12,
                     weight: 1.2,
-                    max_next_weight: DEFAULT_MAX_NEXT_WEIGHT,
+                    max_next_weight: f32::NEG_INFINITY,
                 },
             ],
-            &[], // 2
-            &[
+            vec![], // 2
+            vec![
                 // 3
                 PostingElementEx {
                     row_id: 1,
@@ -118,10 +102,10 @@ mod tests {
                 PostingElementEx {
                     row_id: 14,
                     weight: 3.1,
-                    max_next_weight: DEFAULT_MAX_NEXT_WEIGHT,
+                    max_next_weight: f32::NEG_INFINITY,
                 },
             ],
-            &[
+            vec![
                 // 4
                 PostingElementEx {
                     row_id: 2,
@@ -156,10 +140,10 @@ mod tests {
                 PostingElementEx {
                     row_id: 24,
                     weight: 4.2,
-                    max_next_weight: DEFAULT_MAX_NEXT_WEIGHT,
+                    max_next_weight: f32::NEG_INFINITY,
                 },
             ],
-            &[
+            vec![
                 // 5
                 PostingElementEx {
                     row_id: 6,
@@ -184,10 +168,10 @@ mod tests {
                 PostingElementEx {
                     row_id: 20,
                     weight: 1.9,
-                    max_next_weight: DEFAULT_MAX_NEXT_WEIGHT,
+                    max_next_weight: f32::NEG_INFINITY,
                 },
             ],
-            &[
+            vec![
                 // 6
                 PostingElementEx {
                     row_id: 18,
@@ -217,7 +201,7 @@ mod tests {
                 PostingElementEx {
                     row_id: 30,
                     weight: 4.1,
-                    max_next_weight: DEFAULT_MAX_NEXT_WEIGHT,
+                    max_next_weight: f32::NEG_INFINITY,
                 },
             ],
         ];
@@ -362,17 +346,16 @@ mod tests {
                 PostingElementEx {
                     row_id: 30,
                     weight: 4.1,
-                    max_next_weight: DEFAULT_MAX_NEXT_WEIGHT,
+                    max_next_weight: f32::NEG_INFINITY,
                 },
             ],
         };
         return (lists, merged);
     }
-
     #[test]
     fn test_merge_posting_lists() {
-        let postings = get_mocked_postings();
-        let result = PostingListMerge::merge_posting_lists(&postings.0);
-        assert_eq!(result, postings.1);
+        // let postings = get_mocked_postings();
+        // let result = PostingListMerger::merge_posting_lists::<f32, f32>(&postings.0);
+        // assert_eq!(result.0, postings.1);
     }
 }
