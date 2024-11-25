@@ -93,19 +93,15 @@ impl WatchCallbackList {
             let _ = sender.send(Ok(()));
             return result;
         }
-        let spawn_res = std::thread::Builder::new()
-            .name("watch-callbacks".to_string())
-            .spawn(move || {
+        let spawn_res =
+            std::thread::Builder::new().name("watch-callbacks".to_string()).spawn(move || {
                 for callback in callbacks {
                     callback.call();
                 }
                 let _ = sender.send(Ok(()));
             });
         if let Err(err) = spawn_res {
-            error!(
-                "Failed to spawn thread to call watch callbacks. Cause: {:?}",
-                err
-            );
+            error!("Failed to spawn thread to call watch callbacks. Cause: {:?}", err);
         }
         result
     }

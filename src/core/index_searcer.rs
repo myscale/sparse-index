@@ -120,10 +120,7 @@ impl IndexSearcher {
                 // rely on underlying binary search as the posting lists are sorted by record id
                 match posting_iterator {
                     GenericPostingsIterator::F32NoQuantized(indexed_posting_list_iterator) => {
-                        match indexed_posting_list_iterator
-                            .posting_list_iterator
-                            .skip_to(row_id)
-                        {
+                        match indexed_posting_list_iterator.posting_list_iterator.skip_to(row_id) {
                             Some(element) => {
                                 // match for posting list
                                 indices.push(indexed_posting_list_iterator.query_index);
@@ -133,10 +130,7 @@ impl IndexSearcher {
                         }
                     }
                     GenericPostingsIterator::F32Quantized(indexed_posting_list_iterator) => {
-                        match indexed_posting_list_iterator
-                            .posting_list_iterator
-                            .skip_to(row_id)
-                        {
+                        match indexed_posting_list_iterator.posting_list_iterator.skip_to(row_id) {
                             Some(element) => {
                                 // match for posting list
                                 indices.push(indexed_posting_list_iterator.query_index);
@@ -146,10 +140,7 @@ impl IndexSearcher {
                         }
                     }
                     GenericPostingsIterator::F16NoQuantized(indexed_posting_list_iterator) => {
-                        match indexed_posting_list_iterator
-                            .posting_list_iterator
-                            .skip_to(row_id)
-                        {
+                        match indexed_posting_list_iterator.posting_list_iterator.skip_to(row_id) {
                             Some(element) => {
                                 // match for posting list
                                 indices.push(indexed_posting_list_iterator.query_index);
@@ -159,10 +150,7 @@ impl IndexSearcher {
                         }
                     }
                     GenericPostingsIterator::F16Quantized(indexed_posting_list_iterator) => {
-                        match indexed_posting_list_iterator
-                            .posting_list_iterator
-                            .skip_to(row_id)
-                        {
+                        match indexed_posting_list_iterator.posting_list_iterator.skip_to(row_id) {
                             Some(element) => {
                                 // match for posting list
                                 indices.push(indexed_posting_list_iterator.query_index);
@@ -172,10 +160,7 @@ impl IndexSearcher {
                         }
                     }
                     GenericPostingsIterator::U8NoQuantized(indexed_posting_list_iterator) => {
-                        match indexed_posting_list_iterator
-                            .posting_list_iterator
-                            .skip_to(row_id)
-                        {
+                        match indexed_posting_list_iterator.posting_list_iterator.skip_to(row_id) {
                             Some(element) => {
                                 // match for posting list
                                 indices.push(indexed_posting_list_iterator.query_index);
@@ -187,10 +172,7 @@ impl IndexSearcher {
                     GenericPostingsIterator::CompressedF32NoQuantized(
                         indexed_posting_list_iterator,
                     ) => {
-                        match indexed_posting_list_iterator
-                            .posting_list_iterator
-                            .skip_to(row_id)
-                        {
+                        match indexed_posting_list_iterator.posting_list_iterator.skip_to(row_id) {
                             Some(element) => {
                                 // match for posting list
                                 indices.push(indexed_posting_list_iterator.query_index);
@@ -202,10 +184,7 @@ impl IndexSearcher {
                     GenericPostingsIterator::CompressedF32Quantized(
                         indexed_posting_list_iterator,
                     ) => {
-                        match indexed_posting_list_iterator
-                            .posting_list_iterator
-                            .skip_to(row_id)
-                        {
+                        match indexed_posting_list_iterator.posting_list_iterator.skip_to(row_id) {
                             Some(element) => {
                                 // match for posting list
                                 indices.push(indexed_posting_list_iterator.query_index);
@@ -217,10 +196,7 @@ impl IndexSearcher {
                     GenericPostingsIterator::CompressedF16NoQuantized(
                         indexed_posting_list_iterator,
                     ) => {
-                        match indexed_posting_list_iterator
-                            .posting_list_iterator
-                            .skip_to(row_id)
-                        {
+                        match indexed_posting_list_iterator.posting_list_iterator.skip_to(row_id) {
                             Some(element) => {
                                 // match for posting list
                                 indices.push(indexed_posting_list_iterator.query_index);
@@ -232,10 +208,7 @@ impl IndexSearcher {
                     GenericPostingsIterator::CompressedF16Quantized(
                         indexed_posting_list_iterator,
                     ) => {
-                        match indexed_posting_list_iterator
-                            .posting_list_iterator
-                            .skip_to(row_id)
-                        {
+                        match indexed_posting_list_iterator.posting_list_iterator.skip_to(row_id) {
                             Some(element) => {
                                 // match for posting list
                                 indices.push(indexed_posting_list_iterator.query_index);
@@ -247,10 +220,7 @@ impl IndexSearcher {
                     GenericPostingsIterator::CompressedU8NoQuantized(
                         indexed_posting_list_iterator,
                     ) => {
-                        match indexed_posting_list_iterator
-                            .posting_list_iterator
-                            .skip_to(row_id)
-                        {
+                        match indexed_posting_list_iterator.posting_list_iterator.skip_to(row_id) {
                             Some(element) => {
                                 // match for posting list
                                 indices.push(indexed_posting_list_iterator.query_index);
@@ -287,9 +257,9 @@ impl IndexSearcher {
         for posting in search_env.postings_iterators.iter_mut() {
             match posting {
                 GenericPostingsIterator::F32NoQuantized(indexed_posting_list_iterator) => {
-                    indexed_posting_list_iterator
-                        .posting_list_iterator
-                        .for_each_till_row_id(batch_end_id, |element| {
+                    indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                        batch_end_id,
+                        |element| {
                             if element.row_id < batch_start_id || element.row_id > batch_end_id {
                                 error!("row id range error when iter posting element till row id.");
                                 return;
@@ -299,12 +269,13 @@ impl IndexSearcher {
                             let local_id = (element.row_id - batch_start_id) as usize;
                             // debug!("[advance_batch] local_id:{}, element_row_id:{}", local_id, element.row_id);
                             batch_scores[local_id] += score;
-                        });
+                        },
+                    );
                 }
                 GenericPostingsIterator::F32Quantized(indexed_posting_list_iterator) => {
-                    indexed_posting_list_iterator
-                        .posting_list_iterator
-                        .for_each_till_row_id(batch_end_id, |element| {
+                    indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                        batch_end_id,
+                        |element| {
                             if element.row_id < batch_start_id || element.row_id > batch_end_id {
                                 error!("row id range error when iter posting element till row id.");
                                 return;
@@ -314,12 +285,13 @@ impl IndexSearcher {
                             let local_id = (element.row_id - batch_start_id) as usize;
                             // debug!("[advance_batch] local_id:{}, element_row_id:{}", local_id, element.row_id);
                             batch_scores[local_id] += score;
-                        });
+                        },
+                    );
                 }
                 GenericPostingsIterator::F16NoQuantized(indexed_posting_list_iterator) => {
-                    indexed_posting_list_iterator
-                        .posting_list_iterator
-                        .for_each_till_row_id(batch_end_id, |element| {
+                    indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                        batch_end_id,
+                        |element| {
                             if element.row_id < batch_start_id || element.row_id > batch_end_id {
                                 error!("row id range error when iter posting element till row id.");
                                 return;
@@ -330,12 +302,13 @@ impl IndexSearcher {
                             let local_id = (element.row_id - batch_start_id) as usize;
                             // debug!("[advance_batch] local_id:{}, element_row_id:{}", local_id, element.row_id);
                             batch_scores[local_id] += score;
-                        });
+                        },
+                    );
                 }
                 GenericPostingsIterator::F16Quantized(indexed_posting_list_iterator) => {
-                    indexed_posting_list_iterator
-                        .posting_list_iterator
-                        .for_each_till_row_id(batch_end_id, |element| {
+                    indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                        batch_end_id,
+                        |element| {
                             if element.row_id < batch_start_id || element.row_id > batch_end_id {
                                 error!("row id range error when iter posting element till row id.");
                                 return;
@@ -346,12 +319,13 @@ impl IndexSearcher {
                             let local_id = (element.row_id - batch_start_id) as usize;
                             // debug!("[advance_batch] local_id:{}, element_row_id:{}", local_id, element.row_id);
                             batch_scores[local_id] += score;
-                        });
+                        },
+                    );
                 }
                 GenericPostingsIterator::U8NoQuantized(indexed_posting_list_iterator) => {
-                    indexed_posting_list_iterator
-                        .posting_list_iterator
-                        .for_each_till_row_id(batch_end_id, |element| {
+                    indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                        batch_end_id,
+                        |element| {
                             if element.row_id < batch_start_id || element.row_id > batch_end_id {
                                 error!("row id range error when iter posting element till row id.");
                                 return;
@@ -362,14 +336,15 @@ impl IndexSearcher {
                             let local_id = (element.row_id - batch_start_id) as usize;
                             // debug!("[advance_batch] local_id:{}, element_row_id:{}", local_id, element.row_id);
                             batch_scores[local_id] += score;
-                        });
+                        },
+                    );
                 }
                 GenericPostingsIterator::CompressedF32NoQuantized(
                     indexed_posting_list_iterator,
                 ) => {
-                    indexed_posting_list_iterator
-                        .posting_list_iterator
-                        .for_each_till_row_id(batch_end_id, |element| {
+                    indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                        batch_end_id,
+                        |element| {
                             if element.row_id < batch_start_id || element.row_id > batch_end_id {
                                 error!("row id range error when iter posting element till row id.");
                                 return;
@@ -379,12 +354,13 @@ impl IndexSearcher {
                             let local_id = (element.row_id - batch_start_id) as usize;
                             // debug!("[advance_batch] local_id:{}, element_row_id:{}", local_id, element.row_id);
                             batch_scores[local_id] += score;
-                        });
+                        },
+                    );
                 }
                 GenericPostingsIterator::CompressedF32Quantized(indexed_posting_list_iterator) => {
-                    indexed_posting_list_iterator
-                        .posting_list_iterator
-                        .for_each_till_row_id(batch_end_id, |element| {
+                    indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                        batch_end_id,
+                        |element| {
                             if element.row_id < batch_start_id || element.row_id > batch_end_id {
                                 error!("row id range error when iter posting element till row id.");
                                 return;
@@ -394,14 +370,15 @@ impl IndexSearcher {
                             let local_id = (element.row_id - batch_start_id) as usize;
                             // debug!("[advance_batch] local_id:{}, element_row_id:{}", local_id, element.row_id);
                             batch_scores[local_id] += score;
-                        });
+                        },
+                    );
                 }
                 GenericPostingsIterator::CompressedF16NoQuantized(
                     indexed_posting_list_iterator,
                 ) => {
-                    indexed_posting_list_iterator
-                        .posting_list_iterator
-                        .for_each_till_row_id(batch_end_id, |element| {
+                    indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                        batch_end_id,
+                        |element| {
                             if element.row_id < batch_start_id || element.row_id > batch_end_id {
                                 error!("row id range error when iter posting element till row id.");
                                 return;
@@ -412,12 +389,13 @@ impl IndexSearcher {
                             let local_id = (element.row_id - batch_start_id) as usize;
                             // debug!("[advance_batch] local_id:{}, element_row_id:{}", local_id, element.row_id);
                             batch_scores[local_id] += score;
-                        });
+                        },
+                    );
                 }
                 GenericPostingsIterator::CompressedF16Quantized(indexed_posting_list_iterator) => {
-                    indexed_posting_list_iterator
-                        .posting_list_iterator
-                        .for_each_till_row_id(batch_end_id, |element| {
+                    indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                        batch_end_id,
+                        |element| {
                             if element.row_id < batch_start_id || element.row_id > batch_end_id {
                                 error!("row id range error when iter posting element till row id.");
                                 return;
@@ -428,12 +406,13 @@ impl IndexSearcher {
                             let local_id = (element.row_id - batch_start_id) as usize;
                             // debug!("[advance_batch] local_id:{}, element_row_id:{}", local_id, element.row_id);
                             batch_scores[local_id] += score;
-                        });
+                        },
+                    );
                 }
                 GenericPostingsIterator::CompressedU8NoQuantized(indexed_posting_list_iterator) => {
-                    indexed_posting_list_iterator
-                        .posting_list_iterator
-                        .for_each_till_row_id(batch_end_id, |element| {
+                    indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                        batch_end_id,
+                        |element| {
                             if element.row_id < batch_start_id || element.row_id > batch_end_id {
                                 error!("row id range error when iter posting element till row id.");
                                 return;
@@ -444,7 +423,8 @@ impl IndexSearcher {
                             let local_id = (element.row_id - batch_start_id) as usize;
                             // debug!("[advance_batch] local_id:{}, element_row_id:{}", local_id, element.row_id);
                             batch_scores[local_id] += score;
-                        });
+                        },
+                    );
                 }
             }
         }
@@ -454,10 +434,7 @@ impl IndexSearcher {
                 // TOOD 判断 element.row_id 是否合法（未被过滤）
 
                 let real_id = local_id + batch_start_id as usize;
-                search_env.top_k.push(ScoredPointOffset {
-                    row_id: real_id as RowId,
-                    score,
-                });
+                search_env.top_k.push(ScoredPointOffset { row_id: real_id as RowId, score });
             }
         }
     }
@@ -469,130 +446,110 @@ impl IndexSearcher {
 
         match posting {
             GenericPostingsIterator::F32NoQuantized(indexed_posting_list_iterator) => {
-                indexed_posting_list_iterator
-                    .posting_list_iterator
-                    .for_each_till_row_id(search_env.max_row_id.unwrap_or(RowId::MAX), |element| {
+                indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                    search_env.max_row_id.unwrap_or(RowId::MAX),
+                    |element| {
                         // TODO 过滤掉不合法的 rowid
                         let score = element.weight * indexed_posting_list_iterator.query_weight;
-                        search_env.top_k.push(ScoredPointOffset {
-                            score,
-                            row_id: element.row_id,
-                        });
-                    });
+                        search_env.top_k.push(ScoredPointOffset { score, row_id: element.row_id });
+                    },
+                );
             }
             GenericPostingsIterator::F32Quantized(indexed_posting_list_iterator) => {
-                indexed_posting_list_iterator
-                    .posting_list_iterator
-                    .for_each_till_row_id(search_env.max_row_id.unwrap_or(RowId::MAX), |element| {
+                indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                    search_env.max_row_id.unwrap_or(RowId::MAX),
+                    |element| {
                         // TODO 过滤掉不合法的 rowid
                         let score = element.weight * indexed_posting_list_iterator.query_weight;
-                        search_env.top_k.push(ScoredPointOffset {
-                            score,
-                            row_id: element.row_id,
-                        });
-                    });
+                        search_env.top_k.push(ScoredPointOffset { score, row_id: element.row_id });
+                    },
+                );
             }
             GenericPostingsIterator::F16NoQuantized(indexed_posting_list_iterator) => {
-                indexed_posting_list_iterator
-                    .posting_list_iterator
-                    .for_each_till_row_id(search_env.max_row_id.unwrap_or(RowId::MAX), |element| {
+                indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                    search_env.max_row_id.unwrap_or(RowId::MAX),
+                    |element| {
                         // TODO 过滤掉不合法的 rowid
                         let score = half::f16::to_f32(element.weight)
                             * indexed_posting_list_iterator.query_weight;
-                        search_env.top_k.push(ScoredPointOffset {
-                            score,
-                            row_id: element.row_id,
-                        });
-                    });
+                        search_env.top_k.push(ScoredPointOffset { score, row_id: element.row_id });
+                    },
+                );
             }
             GenericPostingsIterator::F16Quantized(indexed_posting_list_iterator) => {
-                indexed_posting_list_iterator
-                    .posting_list_iterator
-                    .for_each_till_row_id(search_env.max_row_id.unwrap_or(RowId::MAX), |element| {
+                indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                    search_env.max_row_id.unwrap_or(RowId::MAX),
+                    |element| {
                         // TODO 过滤掉不合法的 rowid
                         let score = half::f16::to_f32(element.weight)
                             * indexed_posting_list_iterator.query_weight;
-                        search_env.top_k.push(ScoredPointOffset {
-                            score,
-                            row_id: element.row_id,
-                        });
-                    });
+                        search_env.top_k.push(ScoredPointOffset { score, row_id: element.row_id });
+                    },
+                );
             }
             GenericPostingsIterator::U8NoQuantized(indexed_posting_list_iterator) => {
-                indexed_posting_list_iterator
-                    .posting_list_iterator
-                    .for_each_till_row_id(search_env.max_row_id.unwrap_or(RowId::MAX), |element| {
+                indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                    search_env.max_row_id.unwrap_or(RowId::MAX),
+                    |element| {
                         // TODO 过滤掉不合法的 rowid
                         let score =
                             u8::to_f32(element.weight) * indexed_posting_list_iterator.query_weight;
-                        search_env.top_k.push(ScoredPointOffset {
-                            score,
-                            row_id: element.row_id,
-                        });
-                    });
+                        search_env.top_k.push(ScoredPointOffset { score, row_id: element.row_id });
+                    },
+                );
             }
             GenericPostingsIterator::CompressedF32NoQuantized(indexed_posting_list_iterator) => {
-                indexed_posting_list_iterator
-                    .posting_list_iterator
-                    .for_each_till_row_id(search_env.max_row_id.unwrap_or(RowId::MAX), |element| {
+                indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                    search_env.max_row_id.unwrap_or(RowId::MAX),
+                    |element| {
                         // TODO 过滤掉不合法的 rowid
                         let score = element.weight * indexed_posting_list_iterator.query_weight;
-                        search_env.top_k.push(ScoredPointOffset {
-                            score,
-                            row_id: element.row_id,
-                        });
-                    });
+                        search_env.top_k.push(ScoredPointOffset { score, row_id: element.row_id });
+                    },
+                );
             }
             GenericPostingsIterator::CompressedF32Quantized(indexed_posting_list_iterator) => {
-                indexed_posting_list_iterator
-                    .posting_list_iterator
-                    .for_each_till_row_id(search_env.max_row_id.unwrap_or(RowId::MAX), |element| {
+                indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                    search_env.max_row_id.unwrap_or(RowId::MAX),
+                    |element| {
                         // TODO 过滤掉不合法的 rowid
                         let score = element.weight * indexed_posting_list_iterator.query_weight;
-                        search_env.top_k.push(ScoredPointOffset {
-                            score,
-                            row_id: element.row_id,
-                        });
-                    });
+                        search_env.top_k.push(ScoredPointOffset { score, row_id: element.row_id });
+                    },
+                );
             }
             GenericPostingsIterator::CompressedF16NoQuantized(indexed_posting_list_iterator) => {
-                indexed_posting_list_iterator
-                    .posting_list_iterator
-                    .for_each_till_row_id(search_env.max_row_id.unwrap_or(RowId::MAX), |element| {
+                indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                    search_env.max_row_id.unwrap_or(RowId::MAX),
+                    |element| {
                         // TODO 过滤掉不合法的 rowid
                         let score = half::f16::to_f32(element.weight)
                             * indexed_posting_list_iterator.query_weight;
-                        search_env.top_k.push(ScoredPointOffset {
-                            score,
-                            row_id: element.row_id,
-                        });
-                    });
+                        search_env.top_k.push(ScoredPointOffset { score, row_id: element.row_id });
+                    },
+                );
             }
             GenericPostingsIterator::CompressedF16Quantized(indexed_posting_list_iterator) => {
-                indexed_posting_list_iterator
-                    .posting_list_iterator
-                    .for_each_till_row_id(search_env.max_row_id.unwrap_or(RowId::MAX), |element| {
+                indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                    search_env.max_row_id.unwrap_or(RowId::MAX),
+                    |element| {
                         // TODO 过滤掉不合法的 rowid
                         let score = half::f16::to_f32(element.weight)
                             * indexed_posting_list_iterator.query_weight;
-                        search_env.top_k.push(ScoredPointOffset {
-                            score,
-                            row_id: element.row_id,
-                        });
-                    });
+                        search_env.top_k.push(ScoredPointOffset { score, row_id: element.row_id });
+                    },
+                );
             }
             GenericPostingsIterator::CompressedU8NoQuantized(indexed_posting_list_iterator) => {
-                indexed_posting_list_iterator
-                    .posting_list_iterator
-                    .for_each_till_row_id(search_env.max_row_id.unwrap_or(RowId::MAX), |element| {
+                indexed_posting_list_iterator.posting_list_iterator.for_each_till_row_id(
+                    search_env.max_row_id.unwrap_or(RowId::MAX),
+                    |element| {
                         // TODO 过滤掉不合法的 rowid
                         let score =
                             u8::to_f32(element.weight) * indexed_posting_list_iterator.query_weight;
-                        search_env.top_k.push(ScoredPointOffset {
-                            score,
-                            row_id: element.row_id,
-                        });
-                    });
+                        search_env.top_k.push(ScoredPointOffset { score, row_id: element.row_id });
+                    },
+                );
             }
         }
     }
@@ -701,11 +658,7 @@ impl IndexSearcher {
                 search_env.min_row_id.unwrap() + ADVANCE_BATCH_SIZE as RowId,
                 search_env.max_row_id.unwrap_or(RowId::MAX),
             );
-            self.advance_batch(
-                search_env.min_row_id.unwrap(),
-                last_batch_id,
-                &mut search_env,
-            );
+            self.advance_batch(search_env.min_row_id.unwrap(), last_batch_id, &mut search_env);
 
             // 剔除已经遍历完成的 posting
             search_env.postings_iterators.retain(|posting_iterator| {

@@ -120,13 +120,7 @@ mod tests {
         }
 
         let value: &MyStruct = transmute_from_u8::<MyStruct>(&aligned_bytes);
-        assert_eq!(
-            *value,
-            MyStruct {
-                field1: 0x1234,
-                field2: 0x78
-            }
-        )
+        assert_eq!(*value, MyStruct { field1: 0x1234, field2: 0x78 })
     }
 
     #[test]
@@ -146,10 +140,7 @@ mod tests {
         let bytes: &[u8] = transmute_to_u8(&value);
         assert_eq!(bytes, &[0x00, 0x00, 0x80, 0x3f]);
 
-        let value = MyStruct {
-            field1: 0x1234,
-            field2: 0x56,
-        };
+        let value = MyStruct { field1: 0x1234, field2: 0x56 };
         let bytes: &[u8] = transmute_to_u8(&value);
         assert_eq!(bytes, &[0x34, 0x12, 0x56, 0x00]); // 内存对齐
     }
@@ -160,9 +151,8 @@ mod tests {
         let slice: &[u16] = transmute_from_u8_to_slice(&bytes);
         assert_eq!(slice, &[0x3412, 0x7856, 0xCDAB, 0x01EF]);
 
-        let bytes: [u8; 12] = [
-            0x00, 0x00, 0x80, 0x3f, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x40, 0x40,
-        ];
+        let bytes: [u8; 12] =
+            [0x00, 0x00, 0x80, 0x3f, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x40, 0x40];
         let slice: &[f32] = transmute_from_u8_to_slice(&bytes);
         assert_eq!(slice, &[1.0, 2.0, 3.0]);
     }

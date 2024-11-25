@@ -36,10 +36,7 @@ pub fn ffi_insert_sparse_vector_impl(
 ) -> crate::Result<bool> {
     let bridge = IndexManager::get_index_writer_bridge(&index_path)?;
 
-    let _ = bridge.add_row(SparseRowContent {
-        row_id,
-        sparse_vector: sparse_vector.clone(),
-    })?;
+    let _ = bridge.add_row(SparseRowContent { row_id, sparse_vector: sparse_vector.clone() })?;
 
     Ok(true)
 }

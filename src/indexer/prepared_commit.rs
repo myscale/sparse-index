@@ -13,11 +13,7 @@ pub struct PreparedCommit<'a> {
 
 impl<'a> PreparedCommit<'a> {
     pub(crate) fn new(index_writer: &'a mut IndexWriter, opstamp: Opstamp) -> Self {
-        Self {
-            index_writer,
-            payload: None,
-            opstamp,
-        }
+        Self { index_writer, payload: None, opstamp }
     }
 
     /// Returns the opstamp associated with the prepared commit.
@@ -48,8 +44,6 @@ impl<'a> PreparedCommit<'a> {
     /// At this point deletes have not been flushed yet.
     pub fn commit_future(self) -> FutureResult<Opstamp> {
         info!("committing {}", self.opstamp);
-        self.index_writer
-            .segment_updater()
-            .schedule_commit(self.opstamp, self.payload)
+        self.index_writer.segment_updater().schedule_commit(self.opstamp, self.payload)
     }
 }

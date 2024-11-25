@@ -14,14 +14,14 @@ use crate::core::{
 };
 
 use super::{
-    compressed_posting_list_header::COMPRESSED_POSTING_HEADER_SIZE,
+    COMPRESSED_POSTING_HEADER_SIZE,
     CompressedInvertedIndexMmapConfig, CompressedPostingListHeader,
 };
 
 pub struct CompressedMmapManager;
 
 impl CompressedMmapManager {
-    // TODO 为什么不能直接把 where 放到 f 里面
+    // TODO: Figure out why not move `where` block into args list.
     pub(super) fn get_file_path<F>(directory: &PathBuf, segment_id: Option<&str>, f: F) -> PathBuf
     where
         F: Fn(Option<&str>) -> String,
@@ -48,11 +48,7 @@ impl CompressedMmapManager {
             segment_id,
             CompressedInvertedIndexMmapConfig::blocks_file_name,
         );
-        (
-            headers_mmap_file_path,
-            row_ids_mmap_file_path,
-            blocks_mmap_file_path,
-        )
+        (headers_mmap_file_path, row_ids_mmap_file_path, blocks_mmap_file_path)
     }
 
     pub(super) fn get_temp_row_ids_and_blocks_mmap_files(

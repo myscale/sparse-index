@@ -36,11 +36,7 @@ impl FileWatcher {
     /// 启动文件监视器的监视线程
     pub fn spawn(&self) {
         // 使用原子交换操作检查 state 是否是 0 (新建)，如果是就把状态更新为 1 (可运行) 并 spawn 一个新的线程来执行监视逻辑
-        if self
-            .state
-            .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst)
-            .is_err()
-        {
+        if self.state.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst).is_err() {
             return;
         }
 

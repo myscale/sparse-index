@@ -30,20 +30,14 @@ impl OwnedBytes {
         let box_stable_deref = Arc::new(data_holder);
         let bytes: &[u8] = box_stable_deref.deref();
         let data = unsafe { &*(bytes as *const [u8]) };
-        OwnedBytes {
-            data,
-            box_stable_deref,
-        }
+        OwnedBytes { data, box_stable_deref }
     }
 
     /// creates a fileslice that is just a view over a slice of the data.
     #[must_use]
     #[inline]
     pub fn slice(&self, range: Range<usize>) -> Self {
-        OwnedBytes {
-            data: &self.data[range],
-            box_stable_deref: self.box_stable_deref.clone(),
-        }
+        OwnedBytes { data: &self.data[range], box_stable_deref: self.box_stable_deref.clone() }
     }
 
     /// Returns the underlying slice of data.
@@ -78,14 +72,8 @@ impl OwnedBytes {
     pub fn split(self, split_len: usize) -> (OwnedBytes, OwnedBytes) {
         let (left_data, right_data) = self.data.split_at(split_len);
         let right_box_stable_deref = self.box_stable_deref.clone();
-        let left = OwnedBytes {
-            data: left_data,
-            box_stable_deref: self.box_stable_deref,
-        };
-        let right = OwnedBytes {
-            data: right_data,
-            box_stable_deref: right_box_stable_deref,
-        };
+        let left = OwnedBytes { data: left_data, box_stable_deref: self.box_stable_deref };
+        let right = OwnedBytes { data: right_data, box_stable_deref: right_box_stable_deref };
         (left, right)
     }
 
@@ -110,10 +98,7 @@ impl OwnedBytes {
     pub fn split_off(&mut self, split_len: usize) -> OwnedBytes {
         let (left, right) = self.data.split_at(split_len);
         let right_box_stable_deref = self.box_stable_deref.clone();
-        let right_piece = OwnedBytes {
-            data: right,
-            box_stable_deref: right_box_stable_deref,
-        };
+        let right_piece = OwnedBytes { data: right, box_stable_deref: right_box_stable_deref };
         self.data = left;
         right_piece
     }
@@ -154,11 +139,8 @@ impl fmt::Debug for OwnedBytes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // We truncate the bytes in order to make sure the debug string
         // is not too long.
-        let bytes_truncated: &[u8] = if self.len() > 8 {
-            &self.as_slice()[..10]
-        } else {
-            self.as_slice()
-        };
+        let bytes_truncated: &[u8] =
+            if self.len() > 8 { &self.as_slice()[..10] } else { self.as_slice() };
         write!(f, "OwnedBytes({bytes_truncated:?}, len={})", self.len())
     }
 }
@@ -252,10 +234,7 @@ mod tests {
     #[test]
     fn test_owned_bytes_debug() {
         let short_bytes = OwnedBytes::new(b"abcd".as_ref());
-        assert_eq!(
-            format!("{short_bytes:?}"),
-            "OwnedBytes([97, 98, 99, 100], len=4)"
-        );
+        assert_eq!(format!("{short_bytes:?}"), "OwnedBytes([97, 98, 99, 100], len=4)");
         let long_bytes = OwnedBytes::new(b"abcdefghijklmnopq".as_ref());
         assert_eq!(
             format!("{long_bytes:?}"),

@@ -48,41 +48,29 @@ pub struct DateTime {
 
 impl DateTime {
     /// Minimum possible `DateTime` value.
-    pub const MIN: DateTime = DateTime {
-        timestamp_nanos: i64::MIN,
-    };
+    pub const MIN: DateTime = DateTime { timestamp_nanos: i64::MIN };
 
     /// Maximum possible `DateTime` value.
-    pub const MAX: DateTime = DateTime {
-        timestamp_nanos: i64::MAX,
-    };
+    pub const MAX: DateTime = DateTime { timestamp_nanos: i64::MAX };
 
     /// Create new from UNIX timestamp in seconds
     pub const fn from_timestamp_secs(seconds: i64) -> Self {
-        Self {
-            timestamp_nanos: seconds * 1_000_000_000,
-        }
+        Self { timestamp_nanos: seconds * 1_000_000_000 }
     }
 
     /// Create new from UNIX timestamp in milliseconds
     pub const fn from_timestamp_millis(milliseconds: i64) -> Self {
-        Self {
-            timestamp_nanos: milliseconds * 1_000_000,
-        }
+        Self { timestamp_nanos: milliseconds * 1_000_000 }
     }
 
     /// Create new from UNIX timestamp in microseconds.
     pub const fn from_timestamp_micros(microseconds: i64) -> Self {
-        Self {
-            timestamp_nanos: microseconds * 1_000,
-        }
+        Self { timestamp_nanos: microseconds * 1_000 }
     }
 
     /// Create new from UNIX timestamp in nanoseconds.
     pub const fn from_timestamp_nanos(nanoseconds: i64) -> Self {
-        Self {
-            timestamp_nanos: nanoseconds,
-        }
+        Self { timestamp_nanos: nanoseconds }
     }
 
     /// Create new from `OffsetDateTime`
@@ -155,9 +143,7 @@ impl DateTime {
             DateTimePrecision::Microseconds => (self.timestamp_nanos / 1_000) * 1_000,
             DateTimePrecision::Nanoseconds => self.timestamp_nanos,
         };
-        Self {
-            timestamp_nanos: truncated_timestamp_micros,
-        }
+        Self { timestamp_nanos: truncated_timestamp_micros }
     }
 }
 

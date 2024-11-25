@@ -3,8 +3,8 @@ use crate::core::scores::PooledScores;
 
 #[derive(Debug)]
 pub struct PooledScoresHandle<'a> {
-    pool: &'a ScoresMemoryPool, // 引用的一个分数池实例
-    pub scores: PooledScores,   // 实际持有的分数数据
+    pool: &'a ScoresMemoryPool,
+    pub scores: PooledScores,
 }
 
 impl<'a> PooledScoresHandle<'a> {
@@ -15,7 +15,6 @@ impl<'a> PooledScoresHandle<'a> {
 
 impl<'a> Drop for PooledScoresHandle<'a> {
     fn drop(&mut self) {
-        // 将持有的分数向量归还给分数池, 实现资源自动管理
         self.pool.return_back(std::mem::take(&mut self.scores));
     }
 }

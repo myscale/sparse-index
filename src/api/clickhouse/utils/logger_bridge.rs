@@ -47,18 +47,14 @@ impl SparseIndexLogger {
                 let handle = log4rs::init_config(log_config)
                     .map_err(|e| format!("Failed to initialize log4rs: {}", e))?;
                 // INFO!("Successfully initialize log4rs handler.");
-                cell.set(handle)
-                    .map_err(|_| "Failed to save log4rs handler to cell".to_string())
+                cell.set(handle).map_err(|_| "Failed to save log4rs handler to cell".to_string())
             }
         }
     }
 
     fn get_thread_id() -> String {
         let thread_id: String = format!("{:?}", thread::current().id());
-        thread_id
-            .chars()
-            .filter(|c| c.is_digit(10))
-            .collect::<String>()
+        thread_id.chars().filter(|c| c.is_digit(10)).collect::<String>()
     }
 
     pub fn trigger_logger_callback(level: i8, message: String, callback: LogCallback) {

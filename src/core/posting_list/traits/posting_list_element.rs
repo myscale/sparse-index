@@ -27,20 +27,13 @@ pub struct PostingElementEx<W: QuantizedWeight> {
 
 impl<W: QuantizedWeight> Default for PostingElementEx<W> {
     fn default() -> Self {
-        Self {
-            row_id: 0,
-            weight: W::MINIMUM(),
-            max_next_weight: W::MINIMUM(),
-        }
+        Self { row_id: 0, weight: W::MINIMUM(), max_next_weight: W::MINIMUM() }
     }
 }
 
 impl<W: QuantizedWeight> From<PostingElementEx<W>> for PostingListElement<W> {
     fn from(value: PostingElementEx<W>) -> Self {
-        Self {
-            row_id: value.row_id,
-            weight: W::from_f32(value.weight.to_f32()),
-        }
+        Self { row_id: value.row_id, weight: W::from_f32(value.weight.to_f32()) }
     }
 }
 

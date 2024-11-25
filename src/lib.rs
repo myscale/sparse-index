@@ -157,32 +157,17 @@ mod tests {
 
     #[test]
     fn test_equality() {
-        let a = ScoredPointOffset {
-            row_id: 1,
-            score: 1.0,
-        };
-        let b = ScoredPointOffset {
-            row_id: 2,
-            score: 1.0,
-        };
-        let c = ScoredPointOffset {
-            row_id: 3,
-            score: 2.0,
-        };
+        let a = ScoredPointOffset { row_id: 1, score: 1.0 };
+        let b = ScoredPointOffset { row_id: 2, score: 1.0 };
+        let c = ScoredPointOffset { row_id: 3, score: 2.0 };
         assert_eq!(a, b);
         assert_ne!(a, c);
     }
 
     #[test]
     fn test_ordering() {
-        let a = ScoredPointOffset {
-            row_id: 1,
-            score: 1.0,
-        };
-        let b = ScoredPointOffset {
-            row_id: 2,
-            score: 2.0,
-        };
+        let a = ScoredPointOffset { row_id: 1, score: 1.0 };
+        let b = ScoredPointOffset { row_id: 2, score: 2.0 };
         assert!(a < b);
         assert_eq!(a.cmp(&b), Ordering::Less);
         assert_eq!(b.cmp(&a), Ordering::Greater);
@@ -190,18 +175,9 @@ mod tests {
 
     #[test]
     fn test_partial_cmp() {
-        let a = ScoredPointOffset {
-            row_id: 1,
-            score: 1.0,
-        };
-        let b = ScoredPointOffset {
-            row_id: 2,
-            score: 1.0,
-        };
-        let c = ScoredPointOffset {
-            row_id: 3,
-            score: 2.0,
-        };
+        let a = ScoredPointOffset { row_id: 1, score: 1.0 };
+        let b = ScoredPointOffset { row_id: 2, score: 1.0 };
+        let c = ScoredPointOffset { row_id: 3, score: 2.0 };
         assert_eq!(a.partial_cmp(&b), Some(Ordering::Equal));
         assert_eq!(a.partial_cmp(&c), Some(Ordering::Less));
         assert_eq!(c.partial_cmp(&a), Some(Ordering::Greater));

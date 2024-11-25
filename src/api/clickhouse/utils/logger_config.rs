@@ -112,9 +112,8 @@ impl LoggerConfig {
         }
 
         // Build and apply log config.
-        let config = config_builder
-            .build(root_builder.build(self.log_level))
-            .map_err(|e| e.to_string())?;
+        let config =
+            config_builder.build(root_builder.build(self.log_level)).map_err(|e| e.to_string())?;
         Ok(config)
     }
 }
@@ -127,13 +126,8 @@ mod tests {
 
     #[test]
     fn test_build_logger_config() {
-        let logger_config = LoggerConfig::new(
-            String::from("/tmp//"),
-            String::from("debug"),
-            true,
-            true,
-            false,
-        );
+        let logger_config =
+            LoggerConfig::new(String::from("/tmp//"), String::from("debug"), true, true, false);
         let config_result = logger_config.build_logger_config();
 
         assert!(config_result.is_ok());

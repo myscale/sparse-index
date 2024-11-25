@@ -63,13 +63,11 @@ impl IndexManager {
         index: &Index,
         index_path: &str,
     ) -> crate::Result<IndexWriterBridge> {
-        let writer = index
-            .writer_with_num_threads(BUILD_THREADS, MEMORY_64MB)
-            .map_err(|e| {
-                let error_info = format!("Failed to create sparse index writer: {}", e);
-                error_ck!("{}", error_info);
-                SparseError::Error(error_info)
-            })?;
+        let writer = index.writer_with_num_threads(BUILD_THREADS, MEMORY_64MB).map_err(|e| {
+            let error_info = format!("Failed to create sparse index writer: {}", e);
+            error_ck!("{}", error_info);
+            SparseError::Error(error_info)
+        })?;
 
         let mut merge_policy = LogMergePolicy::default();
         // merge_policy.set_min_num_segments(5);
@@ -134,16 +132,12 @@ impl IndexManager {
 
         // Create a reader for the index with an appropriate reload policy.
         // OnCommit: reload when commiting; Manual: developer need call IndexReader::reload() to reload.
-        let reader: IndexReader = index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::OnCommitWithDelay)
-            .try_into()?;
+        let reader: IndexReader =
+            index.reader_builder().reload_policy(ReloadPolicy::OnCommitWithDelay).try_into()?;
 
         // Save IndexReaderBridge to cache.
-        let index_reader_bridge = IndexReaderBridge {
-            reader,
-            path: index_path.trim_end_matches('/').to_string(),
-        };
+        let index_reader_bridge =
+            IndexReaderBridge { reader, path: index_path.trim_end_matches('/').to_string() };
 
         FFI_INDEX_SEARCHER_CACHE
             .set_index_reader_bridge(index_path.to_string(), Arc::new(index_reader_bridge))?;

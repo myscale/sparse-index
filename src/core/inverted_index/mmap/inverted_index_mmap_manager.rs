@@ -69,7 +69,7 @@ impl MmapManager {
         return Ok(mmap);
     }
 
-    // TODO 优化路径传递
+    // TODO: Refine path parameter.
     pub fn write_mmap_files<P: AsRef<Path>, TW: QuantizedWeight>(
         directory: P,
         segment_id: Option<&str>,
@@ -78,18 +78,18 @@ impl MmapManager {
         // compute posting_offsets and elements size.
         let total_headers_storage_size: usize = inv_idx_ram.size() * POSTING_HEADER_SIZE;
 
-        // 如果说以后修改了 PostingList 的内部属性对象，那么这些计算 PostingList 占据的 size 也需要修改
+        // TODO: Refactor element structor in PostingList, when enable quantized, max_next_weight is not needed anymore
+        // TODO: and you should consider about changing std::size_of PostingList.
         let total_postings_elements_size: usize = inv_idx_ram
             .postings()
             .iter()
             .map(|posting| posting.len() * size_of::<PostingElementEx<TW>>())
             .sum();
 
-        // 初始化 2 个文件路径.
+        // Init two mmap file paths.
         let (headers_mmap_file_path, postings_mmap_file_path) =
             Self::get_all_mmap_files_path(&directory.as_ref().to_path_buf(), segment_id);
 
-        // 创建 2 个 mmap 文件.
         let mut headers_mmap = Self::create_mmap_file(
             headers_mmap_file_path.as_ref(),
             total_headers_storage_size as u64,
@@ -125,11 +125,8 @@ impl MmapManager {
     ) {
         let mut cur_postings_storage_size = 0;
 
-        for (dim_id, (posting, param)) in inv_idx_ram
-            .postings()
-            .iter()
-            .zip(inv_idx_ram.quantized_params().iter())
-            .enumerate()
+        for (dim_id, (posting, param)) in
+            inv_idx_ram.postings().iter().zip(inv_idx_ram.quantized_params().iter()).enumerate()
         {
             // Step 1.1: Generate header
             let header_obj = PostingListHeader {
@@ -138,11 +135,7 @@ impl MmapManager {
                     + (posting.len() * size_of::<PostingElementEx<TW>>()),
                 quantized_params: param.clone(),
                 row_ids_count: posting.len() as RowId,
-                max_row_id: posting
-                    .elements
-                    .last()
-                    .map(|e| e.row_id)
-                    .unwrap_or_default(),
+                max_row_id: posting.elements.last().map(|e| e.row_id).unwrap_or_default(),
             };
 
             // Step 1.2 Save the header obj to mmap.

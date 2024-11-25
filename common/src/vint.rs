@@ -76,15 +76,9 @@ pub fn serialize_vint_u32(val: u32, buf: &mut [u8; 8]) -> &[u8] {
     let (res, num_bytes) = if val < START_2 {
         (val | STOP_BIT, 1)
     } else if val < START_3 {
-        (
-            (val & MASK_1) | ((val & MASK_2) << 1) | (STOP_BIT << (8)),
-            2,
-        )
+        ((val & MASK_1) | ((val & MASK_2) << 1) | (STOP_BIT << (8)), 2)
     } else if val < START_4 {
-        (
-            (val & MASK_1) | ((val & MASK_2) << 1) | ((val & MASK_3) << 2) | (STOP_BIT << (8 * 2)),
-            3,
-        )
+        ((val & MASK_1) | ((val & MASK_2) << 1) | ((val & MASK_3) << 2) | (STOP_BIT << (8 * 2)), 3)
     } else if val < START_5 {
         (
             (val & MASK_1)

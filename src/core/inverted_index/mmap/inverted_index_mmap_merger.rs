@@ -6,8 +6,6 @@ use std::{
     sync::Arc,
 };
 
-use log::info;
-
 use crate::{
     core::{
         atomic_save_json, madvise, transmute_to_u8, transmute_to_u8_slice, DimId,
@@ -64,9 +62,7 @@ fn unquantized_posting<OW: QuantizedWeight, TW: QuantizedWeight>(
 
 impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, OW, TW> {
     pub fn new(inverted_index_mmaps: &'a Vec<&'a InvertedIndexMmap<OW, TW>>) -> Self {
-        Self {
-            inverted_index_mmaps,
-        }
+        Self { inverted_index_mmaps }
     }
 
     fn get_unquantized_postings_with_dim(&self, dim_id: DimId) -> Vec<Vec<PostingElementEx<OW>>> {
@@ -74,10 +70,10 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
         let empty_posting: &[PostingElementEx<TW>] = &[];
 
         for mmap_index in self.inverted_index_mmaps {
-            let (posting, quantized_param) = mmap_index
-                .posting_with_param(&dim_id)
-                .unwrap_or((empty_posting, None));
-            // posting TW 表示实际存储的 u8，需要还原为 OW 原始类型
+            let (posting, quantized_param) =
+                mmap_index.posting_with_param(&dim_id).unwrap_or((empty_posting, None));
+
+            // TW means actually storage type, it needs reduction to OW.
             let unquantized_posting = unquantized_posting::<OW, TW>(posting, quantized_param);
             unquantized_postings.push(unquantized_posting);
         }
@@ -90,15 +86,12 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
         directory: &PathBuf,
         segment_id: Option<&str>,
     ) -> crate::Result<InvertedIndexMmap<OW, TW>> {
-        // 记录所有 segments 下 inverted index 的 min_dim 和 max_dim
+        // Record all the metrics of the inverted index that are pending to be merged.
         let mut min_dim_id = 0;
         let mut max_dim_id = 0;
-        // 记录 min_row_id 与 max_row_id
         let mut min_row_id = RowId::MAX;
         let mut max_row_id = RowId::MIN;
-        // 记录所有 segments 对应的 vector counts
         let mut total_vector_counts = 0;
-        // 记录所有 segments 对应的 postings 占据的字节总数
         let mut total_postings_storage_size: u64 = 0;
 
         for inverted_index in self.inverted_index_mmaps.iter() {
@@ -108,18 +101,15 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
             min_row_id = min(min_row_id, metrics.min_row_id);
             max_row_id = max(max_row_id, metrics.max_row_id);
 
-            // TODO 这里是计算最终生成的 mmap 文件的大小
             total_postings_storage_size += inverted_index.meta.postings_storage_size;
             total_vector_counts += metrics.vector_count;
         }
         let total_headers_storage_size =
             (max_dim_id - min_dim_id + 1) as u64 * POSTING_HEADER_SIZE as u64;
 
-        // 初始化 2 个文件路径.
+        // Init mmap files.
         let (headers_mmap_file_path, postings_mmap_file_path) =
             MmapManager::get_all_mmap_files_path(&directory.clone().to_path_buf(), segment_id);
-
-        // 创建 2 个 mmap 文件.
         let mut headers_mmap = MmapManager::create_mmap_file(
             headers_mmap_file_path.as_ref(),
             total_headers_storage_size as u64,
@@ -131,16 +121,17 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
             madvise::Advice::Normal,
         )?;
 
-        // TODO 是否是要使用 max_dim_id + 1？
+        // TODO: Make sure we should use `max_dim_id + 1`
         let mut current_element_offset = 0;
         for dim_id in min_dim_id..(max_dim_id + 1) {
-            // 合并当前 dim 维度下所有 segments 的 postings
-
-            let postings: Vec<Vec<PostingElementEx<OW>>> = self.get_unquantized_postings_with_dim(dim_id);
+            // Merging all postings in current dim-id
+            let postings: Vec<Vec<PostingElementEx<OW>>> =
+                self.get_unquantized_postings_with_dim(dim_id);
 
             let (merged_posting, quantized_param) =
                 PostingListMerger::merge_posting_lists::<OW, TW>(&postings);
-            // 构造 offset obj 并序列化存储
+
+            // Step 1: Generate header
             let header_obj = PostingListHeader {
                 start: current_element_offset,
                 end: current_element_offset
@@ -154,24 +145,24 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
             let header_obj_end = (dim_id + 1) as usize * POSTING_HEADER_SIZE;
             headers_mmap[header_obj_start..header_obj_end].copy_from_slice(header_bytes);
 
-            // 存储 postings 内部 elements
+            // Step 2: Generate posting
             let merged_posting_elements_bytes = transmute_to_u8_slice(&merged_posting.elements);
-            // info!("try copy from slice for merged_posting");
             postings_mmap[current_element_offset
                 ..(current_element_offset + merged_posting_elements_bytes.len())]
                 .copy_from_slice(merged_posting_elements_bytes);
 
+            // increase offsets.
             current_element_offset += merged_posting_elements_bytes.len();
         }
 
-        // 写入 mmap
+        // flushing mmap
         if total_headers_storage_size > 0 {
             headers_mmap.flush()?;
         }
         if total_postings_storage_size > 0 {
             postings_mmap.flush()?;
         }
-        // save header properties 实际上就是 meta data
+
         let meta = MmapInvertedIndexMeta {
             inverted_index_meta: InvertedIndexMeta {
                 posting_count: (max_dim_id - min_dim_id + 1) as usize,

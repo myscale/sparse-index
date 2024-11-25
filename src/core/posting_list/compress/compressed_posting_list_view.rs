@@ -44,7 +44,7 @@ impl<'a, TW: QuantizedWeight> CompressedPostingListView<'a, TW> {
         self.max_row_id
     }
 
-    // TODO: 这些。内部元素（id_data, chunks）在 to_vec 之后所有权怎么变化？当前 self 自己的所有权如何变化？
+    // TODO: Figure out the ownership transfer after calling `to_vec()`, also think about `self` ownership
     pub fn to_owned(&self) -> CompressedPostingList<TW> {
         CompressedPostingList {
             row_ids_compressed: self.row_ids_compressed.to_vec(),
@@ -106,7 +106,7 @@ impl<'a, TW: QuantizedWeight> CompressedPostingListView<'a, TW> {
         }
     }
 
-    // TODO 将 storage_size 写到 PostingListTrait 里面, 要求所有的 Posting 类型都应该实现这个接口，单位 B
+    // TODO: refine code, add this func into trait.
     pub fn total_storage_size(&self) -> usize {
         let total = self.row_ids_compressed.len() * size_of::<u8>() +  // row_id_compressed 
             self.blocks.len() * size_of::<CompressedPostingBlock<TW>>() +    // total posting blocks
@@ -115,7 +115,6 @@ impl<'a, TW: QuantizedWeight> CompressedPostingListView<'a, TW> {
         return total;
     }
 
-    // storage_size 可以通过自定义闭包获取相关属性的字节数
     fn storage_size<F>(&self, calculator: F) -> usize
     where
         F: FnOnce(&Self) -> usize,

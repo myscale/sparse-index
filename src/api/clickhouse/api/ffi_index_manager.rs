@@ -49,13 +49,9 @@ pub fn ffi_create_index_with_parameter(
     }
 
     match ffi_create_index_with_parameter_impl(&index_path, &index_json_parameter) {
-        Ok(result) => FFIBoolResult {
-            result,
-            error: FFIError {
-                is_error: false,
-                message: String::new(),
-            },
-        },
+        Ok(result) => {
+            FFIBoolResult { result, error: FFIError { is_error: false, message: String::new() } }
+        }
         Err(e) => ApiUtils::handle_error(
             FUNC_NAME,
             "failed to create index with parameter",
@@ -81,13 +77,9 @@ pub fn ffi_insert_sparse_vector(
     let sparse_vector: SparseVector = sparse_vector.clone().try_into().unwrap();
 
     match ffi_insert_sparse_vector_impl(&index_path, row_id, &sparse_vector) {
-        Ok(result) => FFIBoolResult {
-            result,
-            error: FFIError {
-                is_error: false,
-                message: String::new(),
-            },
-        },
+        Ok(result) => {
+            FFIBoolResult { result, error: FFIError { is_error: false, message: String::new() } }
+        }
         Err(e) => ApiUtils::handle_error(
             FUNC_NAME,
             "failed add sparse row content to index",
@@ -108,13 +100,9 @@ pub fn ffi_commit_index(index_path: &CxxString) -> FFIBoolResult {
     };
 
     match ffi_commit_index_impl(&index_path) {
-        Ok(result) => FFIBoolResult {
-            result,
-            error: FFIError {
-                is_error: false,
-                message: String::new(),
-            },
-        },
+        Ok(result) => {
+            FFIBoolResult { result, error: FFIError { is_error: false, message: String::new() } }
+        }
         Err(e) => ApiUtils::handle_error(FUNC_NAME, "failed commit index", e.to_string()),
     }
 }
@@ -130,13 +118,9 @@ pub fn ffi_free_index_writer(index_path: &CxxString) -> FFIBoolResult {
     };
 
     match ffi_free_index_writer_impl(&index_path) {
-        Ok(result) => FFIBoolResult {
-            result,
-            error: FFIError {
-                is_error: false,
-                message: String::new(),
-            },
-        },
+        Ok(result) => {
+            FFIBoolResult { result, error: FFIError { is_error: false, message: String::new() } }
+        }
         Err(e) => {
             return ApiUtils::handle_error(FUNC_NAME, "Error freeing index writer", e.to_string());
         }

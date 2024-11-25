@@ -33,19 +33,14 @@ impl<OW: QuantizedWeight> PostingList<OW> {
     }
 
     pub fn new_one(row_id: RowId, dim_weight: DimWeight) -> PostingList<OW> {
-        PostingList {
-            elements: vec![PostingElementEx::new(row_id, dim_weight)],
-        }
+        PostingList { elements: vec![PostingElementEx::new(row_id, dim_weight)] }
     }
 }
 
 impl<OW: QuantizedWeight> PostingList<OW> {
     pub fn get_ref(&self, mut idx: usize) -> &PostingElementEx<OW> {
         if idx >= self.len() {
-            warn!(
-                "idx:{} overflow when `get_ref` of PostingElementEx. will reset it to end.",
-                idx
-            );
+            warn!("idx:{} overflow when `get_ref` of PostingElementEx. will reset it to end.", idx);
             idx = self.len() - 1;
         }
         return &self.elements[idx];
@@ -140,9 +135,7 @@ impl<OW: QuantizedWeight> PostingList<OW> {
 
         // binary search to insert or update. (performance is worser than sequential upsert)
         debug!("Inserting an element with a smaller row_id than the last element. This may impact performance.");
-        let search_result = self
-            .elements
-            .binary_search_by_key(&element.row_id, |e| e.row_id);
+        let search_result = self.elements.binary_search_by_key(&element.row_id, |e| e.row_id);
         match search_result {
             Ok(found_idx) => {
                 let found_element: &mut PostingElementEx<OW> = &mut self.elements[found_idx];
@@ -247,34 +240,13 @@ mod tests {
     #[test]
     fn test_upsert_with_propagate() {
         let mut list = PostingList::<f32>::from(vec![]);
-        assert_eq!(
-            list.upsert_with_propagate(PostingElementEx::new(0, 10.0)),
-            true
-        );
-        assert_eq!(
-            list.upsert_with_propagate(PostingElementEx::new(1, 20.0)),
-            true
-        );
-        assert_eq!(
-            list.upsert_with_propagate(PostingElementEx::new(2, 50.0)),
-            true
-        );
-        assert_eq!(
-            list.upsert_with_propagate(PostingElementEx::new(3, 30.0)),
-            true
-        );
-        assert_eq!(
-            list.upsert_with_propagate(PostingElementEx::new(4, 40.0)),
-            true
-        );
-        assert_eq!(
-            list.upsert_with_propagate(PostingElementEx::new(4, 42.0)),
-            false
-        );
-        assert_eq!(
-            list.upsert_with_propagate(PostingElementEx::new(1, 22.0)),
-            false
-        );
+        assert_eq!(list.upsert_with_propagate(PostingElementEx::new(0, 10.0)), true);
+        assert_eq!(list.upsert_with_propagate(PostingElementEx::new(1, 20.0)), true);
+        assert_eq!(list.upsert_with_propagate(PostingElementEx::new(2, 50.0)), true);
+        assert_eq!(list.upsert_with_propagate(PostingElementEx::new(3, 30.0)), true);
+        assert_eq!(list.upsert_with_propagate(PostingElementEx::new(4, 40.0)), true);
+        assert_eq!(list.upsert_with_propagate(PostingElementEx::new(4, 42.0)), false);
+        assert_eq!(list.upsert_with_propagate(PostingElementEx::new(1, 22.0)), false);
 
         // Check max_next_weight propagation
         assert_eq!(list.get_ref(0).max_next_weight, 50.0);

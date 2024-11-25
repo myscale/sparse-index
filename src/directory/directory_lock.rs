@@ -45,10 +45,8 @@ pub struct Lock {
 ///
 /// 保证任何时间只能够有一个进程创建写入 SparseIndex </br>
 /// 如果说写入索引的进程因为某些原因崩溃了, 这个文件仍然存在 index 文件夹中, 就可以手动删除该文件
-pub static INDEX_WRITER_LOCK: Lazy<Lock> = Lazy::new(|| Lock {
-    filepath: PathBuf::from(".sparse-index-writer.lock"),
-    is_blocking: false,
-});
+pub static INDEX_WRITER_LOCK: Lazy<Lock> =
+    Lazy::new(|| Lock { filepath: PathBuf::from(".sparse-index-writer.lock"), is_blocking: false });
 
 /// The meta lock file is here to protect the segment files being opened by
 /// `IndexReader::reload()` from being garbage collected.
@@ -64,7 +62,5 @@ pub static INDEX_WRITER_LOCK: Lazy<Lock> = Lazy::new(|| Lock {
 ///
 /// 为了避免该问题, 引入 META_LOCK, 当 IndexReader 重新加载 reload() 时, 会尝试获取 META_LOCK </br>
 /// 同样的, 在 GC 开始执行时也需要获取 META_LOCK
-pub static META_LOCK: Lazy<Lock> = Lazy::new(|| Lock {
-    filepath: PathBuf::from(".sparse-index-meta.lock"),
-    is_blocking: true,
-});
+pub static META_LOCK: Lazy<Lock> =
+    Lazy::new(|| Lock { filepath: PathBuf::from(".sparse-index-meta.lock"), is_blocking: true });

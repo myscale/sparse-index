@@ -6,13 +6,7 @@ pub trait FFIResult<T> {
 
 impl FFIResult<bool> for FFIBoolResult {
     fn from_error(error_message: String) -> Self {
-        FFIBoolResult {
-            result: false,
-            error: FFIError {
-                is_error: true,
-                message: error_message,
-            },
-        }
+        FFIBoolResult { result: false, error: FFIError { is_error: true, message: error_message } }
     }
 }
 
@@ -20,23 +14,14 @@ impl FFIResult<Vec<u8>> for FFIVecU8Result {
     fn from_error(error_message: String) -> Self {
         FFIVecU8Result {
             result: Vec::new(),
-            error: FFIError {
-                is_error: true,
-                message: error_message,
-            },
+            error: FFIError { is_error: true, message: error_message },
         }
     }
 }
 
 impl FFIResult<Vec<u8>> for FFIU64Result {
     fn from_error(error_message: String) -> Self {
-        FFIU64Result {
-            result: 0u64,
-            error: FFIError {
-                is_error: true,
-                message: error_message,
-            },
-        }
+        FFIU64Result { result: 0u64, error: FFIError { is_error: true, message: error_message } }
     }
 }
 
@@ -44,10 +29,7 @@ impl FFIResult<Vec<ScoredPointOffset>> for FFIScoreResult {
     fn from_error(error_message: String) -> Self {
         FFIScoreResult {
             result: vec![],
-            error: FFIError {
-                is_error: true,
-                message: error_message,
-            },
+            error: FFIError { is_error: true, message: error_message },
         }
     }
 }

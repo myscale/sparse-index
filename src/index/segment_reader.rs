@@ -45,10 +45,7 @@ impl SegmentReader {
         let rows_count: RowId = segment.meta().rows_count();
         let index_path = segment.index().directory().get_path();
 
-        assert_ne!(
-            segment.index().index_settings.config.storage_type,
-            StorageType::Ram
-        );
+        assert_ne!(segment.index().index_settings.config.storage_type, StorageType::Ram);
 
         let inverted_index: GenericInvertedIndexMmapType = GenericInvertedIndexMmapType::open_from(
             &index_path,

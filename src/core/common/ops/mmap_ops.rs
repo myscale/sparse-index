@@ -37,12 +37,7 @@ pub fn create_and_ensure_length(path: &Path, length: u64) -> Result<File, io::Er
 
         std::fs::rename(&temp_path, path)?;
 
-        OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(false)
-            .truncate(false)
-            .open(path)
+        OpenOptions::new().read(true).write(true).create(false).truncate(false).open(path)
     }
 }
 
@@ -62,11 +57,7 @@ pub fn open_read_mmap(path: &Path) -> Result<Mmap, io::Error> {
 }
 
 pub fn open_write_mmap(path: &Path) -> Result<MmapMut, io::Error> {
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(false)
-        .open(path)?;
+    let file = OpenOptions::new().read(true).write(true).create(false).open(path)?;
 
     let mmap = unsafe { MmapMut::map_mut(&file)? };
     madvise::madvise(&mmap, madvise::get_global())?;

@@ -2,18 +2,14 @@ use crate::core::scores::pooled_scores_handle::PooledScoresHandle;
 use crate::core::scores::{PooledScores, POOL_KEEP_LIMIT};
 use parking_lot::Mutex;
 
-// 用来实现对 PooledScores 的重复使用, 减少内存碎片, 提升性能
 #[derive(Debug)]
 pub struct ScoresMemoryPool {
-    // Mutex 互斥锁
     pool: Mutex<Vec<PooledScores>>,
 }
 
 impl ScoresMemoryPool {
     pub fn new() -> Self {
-        ScoresMemoryPool {
-            pool: Mutex::new(Vec::with_capacity(*POOL_KEEP_LIMIT)),
-        }
+        ScoresMemoryPool { pool: Mutex::new(Vec::with_capacity(*POOL_KEEP_LIMIT)) }
     }
 
     pub fn get(&self) -> PooledScoresHandle {

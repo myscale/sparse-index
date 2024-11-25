@@ -15,10 +15,7 @@ pub struct IndexReaderBridge {
 
 impl Drop for IndexReaderBridge {
     fn drop(&mut self) {
-        info_ck!(
-            "IndexReaderBridge has been dropped. index_path:[{}]",
-            self.path
-        );
+        info_ck!("IndexReaderBridge has been dropped. index_path:[{}]", self.path);
     }
 }
 
@@ -39,10 +36,7 @@ pub struct IndexReaderBridgeCache {
 
 impl IndexReaderBridgeCache {
     pub fn new() -> Self {
-        Self {
-            cache: HashMap::new(),
-            shared_thread_pool: OnceCell::new(),
-        }
+        Self { cache: HashMap::new(), shared_thread_pool: OnceCell::new() }
     }
 
     pub fn set_index_reader_bridge(
@@ -70,10 +64,9 @@ impl IndexReaderBridgeCache {
         let trimmed_key: String = key.trim_end_matches('/').to_string();
         match pinned.get(&trimmed_key) {
             Some(result) => Ok(result.clone()),
-            None => Err(format!(
-                "IndexReaderBridge doesn't exist with given key: [{}]",
-                trimmed_key
-            )),
+            None => {
+                Err(format!("IndexReaderBridge doesn't exist with given key: [{}]", trimmed_key))
+            }
         }
     }
 

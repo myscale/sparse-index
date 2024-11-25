@@ -25,10 +25,7 @@ struct RetryPolicy {
 
 impl RetryPolicy {
     fn no_retry() -> RetryPolicy {
-        RetryPolicy {
-            num_retries: 0,
-            wait_in_ms: 0,
-        }
+        RetryPolicy { num_retries: 0, wait_in_ms: 0 }
     }
 
     fn wait_and_retry(&mut self) -> bool {
@@ -94,10 +91,7 @@ fn try_acquire_lock(
 
 fn retry_policy(is_blocking: bool) -> RetryPolicy {
     if is_blocking {
-        RetryPolicy {
-            num_retries: 100,
-            wait_in_ms: 100,
-        }
+        RetryPolicy { num_retries: 100, wait_in_ms: 100 }
     } else {
         RetryPolicy::no_retry()
     }

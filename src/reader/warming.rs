@@ -48,10 +48,7 @@ impl WarmingState {
     /// A background GC thread for [`Warmer::garbage_collect`] calls is uniquely created if there
     /// are active warmers.
     pub fn warm_new_searcher_generation(&self, searcher: &Searcher) -> crate::Result<()> {
-        self.0
-            .lock()
-            .unwrap()
-            .warm_new_searcher_generation(searcher, &self.0)
+        self.0.lock().unwrap().warm_new_searcher_generation(searcher, &self.0)
     }
 
     #[cfg(test)]
@@ -94,8 +91,7 @@ impl WarmingStateInner {
 
         // 启动 GC
         self.start_gc_thread_maybe(this)?;
-        self.warmed_generation_ids
-            .insert(searcher.generation().generation_id());
+        self.warmed_generation_ids.insert(searcher.generation().generation_id());
         warming_executor(self.num_warming_threads.min(warmers.len()))?
             .map(|warmer| warmer.warm(searcher), warmers.into_iter())?;
         Ok(())
@@ -104,11 +100,8 @@ impl WarmingStateInner {
     /// 升级和清理弱引用的 Warmer, 返回强引用 （Weak -> Arc）
     fn pruned_warmers(&mut self) -> Vec<Arc<dyn Warmer>> {
         // 升级并收集每个强引用（忽略掉升级失败的 None，只收集成功升级的 Some）
-        let strong_warmers = self
-            .warmers
-            .iter()
-            .flat_map(|weak_warmer| weak_warmer.upgrade())
-            .collect::<Vec<_>>();
+        let strong_warmers =
+            self.warmers.iter().flat_map(|weak_warmer| weak_warmer.upgrade()).collect::<Vec<_>>();
 
         // 将成功升级的强引用转换为弱引用
         self.warmers = strong_warmers.iter().map(Arc::downgrade).collect();
@@ -137,10 +130,7 @@ impl WarmingStateInner {
         }
 
         // 获取 live generations 中每个元素的引用，并将这些引用收集到一个向量里面
-        let live_generation_refs = live_generations
-            .iter()
-            .map(Deref::deref)
-            .collect::<Vec<_>>();
+        let live_generation_refs = live_generations.iter().map(Deref::deref).collect::<Vec<_>>();
         for warmer in self.pruned_warmers() {
             warmer.garbage_collect(&live_generation_refs);
         }

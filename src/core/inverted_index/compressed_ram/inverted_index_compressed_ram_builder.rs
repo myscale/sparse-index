@@ -87,8 +87,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexCompressedRamBuilder
     }
 }
 
-// TODO 重构 add 函数
-/// Operation
+// TODO: Refine `add` function for `InvertedIndexCompressedRamBuilder`
 impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexCompressedRamBuilder<OW, TW> {
     /// ## brief
     /// add one row into inverted_index_ram
@@ -128,14 +127,8 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexCompressedRamBuilder
 
     /// Consumes the builder and returns an InvertedIndexRam
     pub fn build(self) -> CompressedInvertedIndexRam<TW> {
-        let posting_list: Vec<CompressedPostingList<TW>> = self
-            .posting_builders
-            .into_iter()
-            .map(|builder| builder.build())
-            .collect();
-        CompressedInvertedIndexRam {
-            postings: posting_list,
-            metrics: self.metrics,
-        }
+        let posting_list: Vec<CompressedPostingList<TW>> =
+            self.posting_builders.into_iter().map(|builder| builder.build()).collect();
+        CompressedInvertedIndexRam { postings: posting_list, metrics: self.metrics }
     }
 }

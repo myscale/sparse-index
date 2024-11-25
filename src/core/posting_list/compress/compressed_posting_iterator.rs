@@ -11,8 +11,8 @@ use std::marker::PhantomData;
 
 use super::CompressedPostingListView;
 
-// OW 表示 CompressedPostingList 里面真正存储的内容，有可能是量化后存储的 U8 类型
-// TW 表示在迭代器遍历的时候, 返回的 element 需要进行类型还原
+/// TW: means origin type before store in disk, if it's been quantized, it should be unquantized.
+/// OW: means the weight type stored in CompressedPostingList, it may has been quantized.
 #[derive(Debug, Clone)]
 pub struct CompressedPostingListIterator<'a, OW: QuantizedWeight, TW: QuantizedWeight> {
     // posting: &'a CompressedPostingList<OW>,
@@ -31,7 +31,8 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingListIterator
         posting: &CompressedPostingListView<'a, OW>,
         quantized_param: Option<QuantizedParam>,
     ) -> Self {
-        let use_quantized = OW::weight_type() != TW::weight_type() && OW::weight_type() == WeightType::WeightU8;
+        let use_quantized =
+            OW::weight_type() != TW::weight_type() && OW::weight_type() == WeightType::WeightU8;
         if use_quantized && quantized_param.is_none() {
             debug!("Not expect!");
             panic!("Not expect!")
@@ -47,7 +48,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingListIterator
             _tw: PhantomData,
         }
     }
-    // 将 OW (内部存储) 转换为 TW (原始类型)
+    // convert OW (inner storage type) into TW (unquantized type)
     fn convert_type(&self, raw_element: &PostingElementEx<OW>) -> PostingElementEx<TW> {
         if self.quantized_param.is_none() {
             assert_eq!(OW::weight_type(), TW::weight_type());
@@ -75,18 +76,19 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingListIterator
             return converted;
         }
     }
-    // TODO 返回值应该是 next 的 element，而不是当前 cursor 所指向的 element；需要验证一下 Simple Posting
+
+    // TODO: make sure element returned should be current element, and then increase cursor, keep same with SimplePosting.
     pub fn next(&mut self) -> Option<PostingElementEx<TW>> {
-        // 边界判断
+        // Boundary
         if self.cursor >= self.posting.row_ids_count as usize {
             return None;
         }
-        // 如果游标达到了新的 block, 那么标记新的 block 未被解压缩
+        // If cursor enter new block range, mark it not been decompressed.
         if self.cursor % COMPRESSION_BLOCK_SIZE == 0 {
             self.is_uncompressed = false;
         }
         let element_opt: Option<PostingElementEx<TW>> = self.peek();
-        // 步进游标
+        // increase cursor
         self.cursor += 1;
         element_opt
     }
@@ -105,7 +107,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIteratorTrait<OW, 
         let block = &self.posting.blocks[block_idx];
 
         if !self.is_uncompressed {
-            // 执行解压缩的逻辑, 在 posting uncompress_block 内部执行动态 block 解压缩
+            // dynamic decompresse block in `CompressedPostingListView`
             self.posting.uncompress_block(
                 block_idx,
                 &mut self.decoder,
@@ -143,7 +145,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIteratorTrait<OW, 
     }
 
     fn skip_to_end(&mut self) {
-        // 跳跃 cursor 的过程中, 经过了至少 1 个 Block, 则需要将当前 Block 置为未解压状态
+        // If skip operation trigger cursor enter a new block range, we should mark it with uncompressed status.
         if (self.posting.row_ids_count - self.cursor as u32) / COMPRESSION_BLOCK_SIZE as u32 >= 1 {
             self.is_uncompressed = false;
         }
@@ -161,12 +163,10 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIteratorTrait<OW, 
     fn for_each_till_row_id(&mut self, row_id: RowId, mut f: impl FnMut(&PostingElementEx<TW>)) {
         let mut element_opt = self.peek();
         while let Some(element) = element_opt {
-            // 判断 element 的 row_id 是否达到边界
             if element.row_id > row_id {
                 break;
             }
             f(&element);
-            // 步进 iterator 游标
             element_opt = self.next();
         }
     }

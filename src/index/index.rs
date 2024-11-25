@@ -107,9 +107,7 @@ impl Index {
         directory_path: P,
         settings: IndexSettings,
     ) -> crate::Result<Index> {
-        IndexBuilder::new()
-            .with_settings(settings)
-            .create_in_dir(directory_path)
+        IndexBuilder::new().with_settings(settings).create_in_dir(directory_path)
     }
 
     /// 创建一个新的 segment_meta（仅限高级用户）。
@@ -117,8 +115,7 @@ impl Index {
     /// 只要 `SegmentMeta` 存在，与 `SegmentMeta` 关联的文件就保证不会被垃圾回收，
     /// 无论该段是否被记录为索引的一部分。
     pub fn new_segment_meta(&self, segment_id: SegmentId, rows_count: RowId) -> SegmentMeta {
-        self.inventory
-            .new_segment_meta(self.directory().get_path(), segment_id, rows_count)
+        self.inventory.new_segment_meta(self.directory().get_path(), segment_id, rows_count)
     }
 
     /// 打开一个新的索引写入器。尝试获取一个锁文件。
@@ -137,27 +134,20 @@ impl Index {
         num_threads: usize,
         overall_memory_budget_in_bytes: usize,
     ) -> crate::Result<IndexWriter> {
-        let directory_lock =
-            self.directory
-                .acquire_lock(&INDEX_WRITER_LOCK)
-                .map_err(|err| {
-                    SparseError::LockFailure(
-                    err,
-                    Some(
-                        "Failed to acquire index lock. If you are using a regular directory, this \
+        let directory_lock = self.directory.acquire_lock(&INDEX_WRITER_LOCK).map_err(|err| {
+            SparseError::LockFailure(
+                err,
+                Some(
+                    "Failed to acquire index lock. If you are using a regular directory, this \
                          means there is already an `IndexWriter` working on this `Directory`, in \
-                         this process or in a different process.".to_string(),
-                    ),
-                )
-                })?;
+                         this process or in a different process."
+                        .to_string(),
+                ),
+            )
+        })?;
         let memory_arena_in_bytes_per_thread = overall_memory_budget_in_bytes / num_threads;
 
-        IndexWriter::new(
-            self,
-            num_threads,
-            memory_arena_in_bytes_per_thread,
-            directory_lock,
-        )
+        IndexWriter::new(self, num_threads, memory_arena_in_bytes_per_thread, directory_lock)
     }
 
     /// 内存预算 15MB, 仅用来测试
@@ -223,11 +213,7 @@ impl Index {
 
     /// 返回可以被搜索的 segment ids
     pub fn searchable_segment_ids(&self) -> crate::Result<Vec<SegmentId>> {
-        Ok(self
-            .searchable_segment_metas()?
-            .iter()
-            .map(SegmentMeta::id)
-            .collect())
+        Ok(self.searchable_segment_metas()?.iter().map(SegmentMeta::id).collect())
     }
 
     /// 列出所有的 segment metas，这些 segment meta 可能是正在 build 或者是正在 merge 中
@@ -291,9 +277,7 @@ impl Index {
         let _data: Vec<u8> = directory.atomic_read(&INDEX_CONFIG_FILEPATH)?;
         let _index_config_str: Cow<'_, str> = String::from_utf8_lossy(&_data);
         let index_config: SparseIndexConfig = serde_json::from_str(&_index_config_str)?;
-        let index_settings = IndexSettings {
-            config: index_config,
-        };
+        let index_settings = IndexSettings { config: index_config };
 
         Ok(Index {
             directory,
@@ -344,7 +328,8 @@ mod tests {
     use crate::{
         core::{SparseRowContent, SparseVector},
         index::{IndexBuilder, IndexSettings},
-        indexer::{index_writer, LogMergePolicy, MergePolicy, NoMergePolicy}, sparse_index::{IndexWeightType, SparseIndexConfig, StorageType},
+        indexer::{index_writer, LogMergePolicy, MergePolicy, NoMergePolicy},
+        sparse_index::{IndexWeightType, SparseIndexConfig, StorageType},
     };
 
     use super::Index;
@@ -370,10 +355,7 @@ mod tests {
             let indices = (0..384).map(|j| (i + j) % 2048).collect();
             let values = (0..384).map(|j| 0.1 + ((i + j) / 16) as f32).collect();
 
-            SparseRowContent {
-                row_id: i,
-                sparse_vector: SparseVector { indices, values },
-            }
+            SparseRowContent { row_id: i, sparse_vector: SparseVector { indices, values } }
         })
     }
 
@@ -401,9 +383,7 @@ mod tests {
         };
         let index = Index::create_in_dir(index_directory, index_settings)
             .expect("error create index in dir");
-        let mut index_writer = index
-            .writer(1024 * 1024 * 128)
-            .expect("error create index writer");
+        let mut index_writer = index.writer(1024 * 1024 * 128).expect("error create index writer");
 
         let mut log_merge_policy = LogMergePolicy::default();
         // log_merge_policy.set_max_docs_before_merge(5);
@@ -416,11 +396,7 @@ mod tests {
                 let res = index_writer.add_document(row);
             }
             let commit_res = index_writer.commit();
-            info!(
-                "[BASE-{}] commit res opstamp is: {:?}",
-                base,
-                commit_res.unwrap()
-            );
+            info!("[BASE-{}] commit res opstamp is: {:?}", base, commit_res.unwrap());
         }
 
         let res = index_writer.wait_merging_threads();

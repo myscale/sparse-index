@@ -139,9 +139,7 @@ impl RamDirectory {
             fs: self.fs.read().unwrap().fs.clone(),
             watch_router: Default::default(),
         };
-        RamDirectory {
-            fs: Arc::new(RwLock::new(inner_clone)),
-        }
+        RamDirectory { fs: Arc::new(RwLock::new(inner_clone)) }
     }
 
     /// Returns the sum of the size of the different files
@@ -216,13 +214,9 @@ impl Directory for RamDirectory {
     }
 
     fn atomic_read(&self, path: &Path) -> Result<Vec<u8>, OpenReadError> {
-        let bytes =
-            self.open_read(path)?
-                .read_bytes()
-                .map_err(|io_error| OpenReadError::IoError {
-                    io_error: Arc::new(io_error),
-                    filepath: path.to_path_buf(),
-                })?;
+        let bytes = self.open_read(path)?.read_bytes().map_err(|io_error| {
+            OpenReadError::IoError { io_error: Arc::new(io_error), filepath: path.to_path_buf() }
+        })?;
         Ok(bytes.as_slice().to_owned())
     }
 
@@ -276,10 +270,7 @@ mod tests {
         let test2 = Path::new("test2");
         dir.atomic_write(test, b"firstwrite").unwrap();
         let dir_clone = dir.deep_clone();
-        assert_eq!(
-            dir_clone.atomic_read(test).unwrap(),
-            dir.atomic_read(test).unwrap()
-        );
+        assert_eq!(dir_clone.atomic_read(test).unwrap(), dir.atomic_read(test).unwrap());
         dir.atomic_write(test, b"original").unwrap();
         dir_clone.atomic_write(test, b"clone").unwrap();
         dir_clone.atomic_write(test2, b"clone2").unwrap();

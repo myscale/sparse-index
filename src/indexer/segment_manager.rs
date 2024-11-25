@@ -51,11 +51,7 @@ pub struct SegmentManager {
 impl Debug for SegmentManager {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let lock = self.read();
-        write!(
-            f,
-            "{{ uncommitted: {:?}, committed: {:?} }}",
-            lock.uncommitted, lock.committed
-        )
+        write!(f, "{{ uncommitted: {:?}, committed: {:?} }}", lock.uncommitted, lock.committed)
     }
 }
 
@@ -64,15 +60,11 @@ impl SegmentManager {
     /// The lock is acquired and released within this class,
     /// and the operations cannot panic.
     fn read(&self) -> RwLockReadGuard<'_, SegmentRegisters> {
-        self.registers
-            .read()
-            .expect("Failed to acquire read lock on SegmentManager.")
+        self.registers.read().expect("Failed to acquire read lock on SegmentManager.")
     }
 
     fn write(&self) -> RwLockWriteGuard<'_, SegmentRegisters> {
-        self.registers
-            .write()
-            .expect("Failed to acquire write lock on SegmentManager.")
+        self.registers.write().expect("Failed to acquire write lock on SegmentManager.")
     }
 
     /// 初始化 SegmentManager </br>
@@ -96,12 +88,8 @@ impl SegmentManager {
     ) -> (Vec<SegmentMeta>, Vec<SegmentMeta>) {
         let registers_lock = self.read();
         (
-            registers_lock
-                .committed
-                .get_mergeable_segments(in_merge_segment_ids),
-            registers_lock
-                .uncommitted
-                .get_mergeable_segments(in_merge_segment_ids),
+            registers_lock.committed.get_mergeable_segments(in_merge_segment_ids),
+            registers_lock.uncommitted.get_mergeable_segments(in_merge_segment_ids),
         )
     }
     /// 返回记录的所有 seg entries (committed and uncommitted)
@@ -120,11 +108,7 @@ impl SegmentManager {
             .segment_entries()
             .iter()
             .filter(|segment| segment.meta().alive_rows_count() == 0)
-            .for_each(|segment| {
-                registers_lock
-                    .committed
-                    .remove_segment(&segment.segment_id())
-            });
+            .for_each(|segment| registers_lock.committed.remove_segment(&segment.segment_id()));
     }
 
     /// 清空 commit 和 uncommitted 内所有的 seg ids
@@ -189,9 +173,8 @@ impl SegmentManager {
         after_merge_segment_entry: Option<SegmentEntry>,
     ) -> crate::Result<SegmentsStatus> {
         let mut registers_lock = self.write();
-        let segments_status = registers_lock
-            .segments_status(before_merge_segment_ids)
-            .ok_or_else(|| {
+        let segments_status =
+            registers_lock.segments_status(before_merge_segment_ids).ok_or_else(|| {
                 warn!("couldn't find segment in SegmentManager");
                 crate::SparseError::InvalidArgument(
                     "The segments that were merged could not be found in the SegmentManager. This \

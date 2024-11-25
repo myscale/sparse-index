@@ -1,13 +1,10 @@
 use crate::core::common::ops::*;
 use crate::core::common::types::DimId;
 use crate::core::{
-    CompressedInvertedIndexRam, CompressedPostingBlock, CompressedPostingListIterator,
-    CompressedPostingListView, InvertedIndexMeta, InvertedIndexMetrics, InvertedIndexMmapAccess,
-    InvertedIndexRam, InvertedIndexRamAccess, QuantizedParam, QuantizedWeight, Revision, Version,
-    WeightType,
+    CompressedInvertedIndexRam, CompressedPostingBlock, CompressedPostingListIterator, CompressedPostingListView, InvertedIndexMeta, InvertedIndexMetrics, InvertedIndexMmapAccess, InvertedIndexRam, InvertedIndexRamAccess, PostingListIteratorTrait, QuantizedParam, QuantizedWeight, Revision, Version, WeightType
 };
-use crate::RowId;
-use log::{debug, info, warn};
+use crate::{thread_name, RowId};
+use log::{debug, warn};
 use memmap2::Mmap;
 use std::borrow::Cow;
 use std::marker::PhantomData;
@@ -15,17 +12,16 @@ use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use super::compressed_posting_list_header::COMPRESSED_POSTING_HEADER_SIZE;
+use super::COMPRESSED_POSTING_HEADER_SIZE;
 use super::{
     CompressedInvertedIndexMmapConfig, CompressedMmapInvertedIndexMeta, CompressedMmapManager,
     CompressedPostingListHeader,
 };
 
-// InvertedIndexMmap 索引格式下相关的文件
-
-/// Inverted flatten core from dimension id to posting list
-/// OW: 量化之前的存储格式
-/// TW: 量化之后的存储格式，也可能没有量化
+/// CompressedInvertedIndexMmap
+/// 
+/// OW: weight storage size before quantized.
+/// TW: weight storage size after quantized. 
 #[derive(Debug, Clone)]
 pub struct CompressedInvertedIndexMmap<OW: QuantizedWeight, TW: QuantizedWeight> {
     pub path: PathBuf,
@@ -40,8 +36,6 @@ pub struct CompressedInvertedIndexMmap<OW: QuantizedWeight, TW: QuantizedWeight>
 impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
     for CompressedInvertedIndexMmap<OW, TW>
 {
-    // TW 表示 Iterator 内部存储的格式（量化后的）
-    // OW 表示需要转换为的原始格式
     type Iter<'a> = CompressedPostingListIterator<'a, TW, OW>;
 
     fn size(&self) -> usize {
@@ -52,7 +46,6 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
         Self::load_under_segment(path.to_path_buf(), segment_id)
     }
 
-    /// 实际上没有执行任何存储的逻辑，仅检查了文件路径是否存在
     fn check_exists(&self, path: &Path, segment_id: Option<&str>) -> std::io::Result<()> {
         debug_assert_eq!(path, self.path);
         for file in self.files(segment_id) {
@@ -62,20 +55,17 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
     }
 
     fn iter(&self, dim_id: &DimId) -> Option<Self::Iter<'_>> {
-        // map 后面接的是一个 function，将 &[PostingElementEx] 类型转换为了 PostingListIterator
-        debug!("mmap iter enter.");
-        let res_opt: Option<(CompressedPostingListView<'_, TW>, Option<QuantizedParam>)> = self.posting_with_param(dim_id);
+        let res_opt: Option<(CompressedPostingListView<'_, TW>, Option<QuantizedParam>)> =
+            self.posting_with_param(dim_id);
         if res_opt.is_none() {
             return None;
         }
         let (posting_list_view, quantized_param) = res_opt.unwrap();
-        debug!("mmap iter tw:{:?}, ow:{:?}, quantize param: {:?}", TW::weight_type(), OW::weight_type(), quantized_param);
 
-        // OW 表示 posting list 量化之后的存储内容
-        // iterator 的 OW 也表示 posting list 中真正存储的内容格式
-        let iterator: CompressedPostingListIterator<'_, TW, OW> =
-            CompressedPostingListIterator::<TW, OW>::new(&posting_list_view, quantized_param);
-        debug!("mmap iter ok");
+        // When using iterator peek func, you will get a `OW` type of weight.
+        let iterator: CompressedPostingListIterator<'_, TW, OW> = CompressedPostingListIterator::<TW, OW>::new(&posting_list_view, quantized_param);
+
+        debug!("[{}]-[cmp-mmap]-[iter] TW:{:?}, OW:{:?}, quantize param:{:?}, iter size:{}", thread_name!(), TW::weight_type(), OW::weight_type(), quantized_param, iterator.remains());
         return Some(iterator);
     }
 
@@ -91,7 +81,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
     }
 
     fn files(&self, segment_id: Option<&str>) -> Vec<PathBuf> {
-        // 仅仅获得相对路径
+        // relative paths
         let get_all_files = CompressedInvertedIndexMmapConfig::get_all_files(segment_id);
         get_all_files.iter().map(|p| PathBuf::from(p)).collect()
     }
@@ -101,7 +91,6 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
         path: PathBuf,
         segment_id: Option<&str>,
     ) -> crate::Result<Self> {
-        // TODO inverted index ram 首先转换为 compressed inverted index ram 再进行 mmap 存储
         let compressed_inverted_index_ram: CompressedInvertedIndexRam<TW> =
             CompressedInvertedIndexRam::from_ram_index(ram_index, path.clone(), segment_id)?;
         Self::convert_and_save(&compressed_inverted_index_ram, path, segment_id)
@@ -123,12 +112,10 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
 }
 
 impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, TW> {
-    /// 获得索引中最小的 row id
     pub fn min_row_id(&self) -> RowId {
         self.meta.inverted_index_meta.min_row_id
     }
 
-    /// 获得索引中最大的 row_id
     pub fn max_row_id(&self) -> RowId {
         self.meta.inverted_index_meta.max_row_id
     }
@@ -139,9 +126,9 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
         transmute_from_u8_to_slice(&self.blocks_mmap[start..end])
     }
 
-    /// 根据 dim-id 拿到对应的 CompressedPostingList
-    /// 这里暂时不需要考虑反量化
-    /// **需要确保在压缩存储的时候，是使用了量化之后的格式 TW 存储的, 这里的 View 不能使用 OW，OW 是未量化*
+    /// Get `CompressedPostingList` with given dim-id.
+    /// Not need consider about quantized.
+    /// `TW` means weight storage type in disk.
     pub fn posting_with_param(
         &self,
         dim_id: &DimId,
@@ -154,21 +141,20 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
             );
             return None;
         }
-        // 加载 posting 对应的 offset obj
+        // loding header-obj with given offsets.
         let header_start = *dim_id as usize * COMPRESSED_POSTING_HEADER_SIZE;
         let header_obj: CompressedPostingListHeader =
             transmute_from_u8::<CompressedPostingListHeader>(
                 &self.headers_mmap[header_start..(header_start + COMPRESSED_POSTING_HEADER_SIZE)],
             )
-            .clone(); // TODO 将 clone 删除掉会提升性能吗？
+            .clone();
 
-        // 根据 offset 去 postings 文件中查找到对应的 posting 数据
-        // TODO 未来是是否需要使用引用，避免所有权转移
+        // TODO: Figure out about transfer of owner ship.
         let row_ids_compressed = &self.row_ids_mmap
             [header_obj.compressed_row_ids_start..header_obj.compressed_row_ids_end];
         let blocks =
             &self.blocks_mmap[header_obj.compressed_blocks_start..header_obj.compressed_blocks_end];
-        // 转换 Blocks 类型
+        // Convert into Blocks type.
         let blocks_convert: &[CompressedPostingBlock<TW>] = transmute_from_u8_to_slice(blocks);
 
         let compressed_posting_list: CompressedPostingListView<'_, TW> =
@@ -183,7 +169,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
         Some((compressed_posting_list, header_obj.quantized_params))
     }
 
-    /// 将 ram 中的 inverted core 存储至 mmap
+    /// Store inverted-index-ram into mmap files.
     pub fn convert_and_save(
         compressed_inv_index_ram: &CompressedInvertedIndexRam<TW>,
         directory: PathBuf,
@@ -203,7 +189,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
             compressed_inv_index_ram,
         )?;
 
-        // TODO 优化 pathbuf 传递
+        // TODO: Refine pathBuf.
         let meta_file_path = CompressedMmapManager::get_file_path(
             &directory,
             segment_id,
@@ -241,12 +227,12 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
         })
     }
 
-    /// 加载指定目录下的 mmap 索引文件
+    /// load without segment name.
     pub fn load(path: PathBuf) -> std::io::Result<Self> {
         Self::load_under_segment(path, None)
     }
 
-    /// 给定具体配置, 并加载指定目录下的 mmap 索引文件
+    /// load with given segment name.
     pub fn load_under_segment(path: PathBuf, segment_id: Option<&str>) -> std::io::Result<Self> {
         // init directory
         let (headers_mmap_file_path, row_ids_mmap_file_path, blocks_mmap_file_path) =
@@ -264,7 +250,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
         let row_ids_mmap = open_read_mmap(row_ids_mmap_file_path.as_ref())?;
         let blocks_mmap = open_read_mmap(blocks_mmap_file_path.as_ref())?;
 
-        // TODO 使用顺序读取，观察 QPS 有什么变化
+        // TODO: Compare different advice's influence on QPS.
         madvise::madvise(&headers_mmap, madvise::Advice::Normal)?;
         madvise::madvise(&row_ids_mmap, madvise::Advice::Normal)?;
         madvise::madvise(&blocks_mmap, madvise::Advice::Normal)?;

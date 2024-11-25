@@ -21,6 +21,13 @@ macro_rules! row_content(
 );
 
 #[macro_export]
+macro_rules! thread_name {
+    () => {
+        std::thread::current().name().unwrap_or_default()
+    };
+}
+
+#[macro_export]
 macro_rules! error_ck {
     // provide `target`, `function` and `message`
     (target: $target:expr, function: $function:expr, $($arg:tt)+) => {{

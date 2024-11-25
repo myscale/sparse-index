@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use crate::{core::DimId, RowId};
 use std::fmt::Debug;
 
-/// 索引存储类型
 #[derive(Debug, Serialize, Deserialize, PartialEq, PartialOrd, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename = "index_storage_type")]
@@ -16,7 +15,6 @@ pub enum IndexStorageType {
     CompressedMmap,
 }
 
-/// 修订版本 / 迭代版本
 #[derive(Debug, Serialize, Deserialize, PartialEq, PartialOrd, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename = "revision")]
@@ -39,31 +37,19 @@ pub struct Version {
 
 impl Default for Version {
     fn default() -> Self {
-        Self {
-            index_storage_type: IndexStorageType::Memory,
-            revision: Revision::V1,
-        }
+        Self { index_storage_type: IndexStorageType::Memory, revision: Revision::V1 }
     }
 }
 
 impl Version {
     pub fn memory(revision: Revision) -> Self {
-        Self {
-            index_storage_type: IndexStorageType::Memory,
-            revision,
-        }
+        Self { index_storage_type: IndexStorageType::Memory, revision }
     }
     pub fn mmap(revision: Revision) -> Self {
-        Self {
-            index_storage_type: IndexStorageType::Mmap,
-            revision,
-        }
+        Self { index_storage_type: IndexStorageType::Mmap, revision }
     }
     pub fn compressed_mmap(revision: Revision) -> Self {
-        Self {
-            index_storage_type: IndexStorageType::CompressedMmap,
-            revision,
-        }
+        Self { index_storage_type: IndexStorageType::CompressedMmap, revision }
     }
 }
 

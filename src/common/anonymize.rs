@@ -28,17 +28,13 @@ impl<T: Anonymize> Anonymize for Box<T> {
 
 impl<K: Anonymize + Hash + Eq, V: Anonymize> Anonymize for HashMap<K, V> {
     fn anonymize(&self) -> Self {
-        self.iter()
-            .map(|(k, v)| (k.anonymize(), v.anonymize()))
-            .collect()
+        self.iter().map(|(k, v)| (k.anonymize(), v.anonymize())).collect()
     }
 }
 
 impl<K: Anonymize + Eq + Ord, V: Anonymize> Anonymize for BTreeMap<K, V> {
     fn anonymize(&self) -> Self {
-        self.iter()
-            .map(|(k, v)| (k.anonymize(), v.anonymize()))
-            .collect()
+        self.iter().map(|(k, v)| (k.anonymize(), v.anonymize())).collect()
     }
 }
 

@@ -102,13 +102,7 @@ mod test {
         assert_eq!(ByteCount::from(300u64).human_readable(), "300 B");
         assert_eq!(ByteCount::from(1_000_000u64).human_readable(), "1.00 MB");
         assert_eq!(ByteCount::from(1_500_000u64).human_readable(), "1.50 MB");
-        assert_eq!(
-            ByteCount::from(1_500_000_000u64).human_readable(),
-            "1.50 GB"
-        );
-        assert_eq!(
-            ByteCount::from(3_213_000_000_000u64).human_readable(),
-            "3.21 TB"
-        );
+        assert_eq!(ByteCount::from(1_500_000_000u64).human_readable(), "1.50 GB");
+        assert_eq!(ByteCount::from(3_213_000_000_000u64).human_readable(), "3.21 TB");
     }
 }

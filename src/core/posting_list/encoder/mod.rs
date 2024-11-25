@@ -13,9 +13,7 @@ pub fn compressed_block_size(num_bits: u8) -> usize {
 
 pub struct BlockEncoder {
     bitpacker: BitPacker4x,
-    /// 存储一个固定大小是 512 的字节数组, 存储压缩后的输出数据
     pub output: [u8; COMPRESSED_BLOCK_MAX_SIZE],
-    /// 表示压缩后的输出数据的实际长度
     pub output_len: usize,
 }
 
@@ -34,7 +32,6 @@ impl BlockEncoder {
         }
     }
 
-    /// 压缩有序的无符号 32 bit 整数, 返回压缩后需要的 bits 数量以及压缩结果
     pub fn compress_block_sorted(&mut self, block: &[u32], offset: u32) -> (u8, &[u8]) {
         // if offset is zero, convert it to None. This is correct as long as we do the same when
         // decompressing. It's required in case the block starts with an actual zero.
@@ -42,8 +39,7 @@ impl BlockEncoder {
 
         let num_bits = self.bitpacker.num_bits_strictly_sorted(offset, block);
         let written_size =
-            self.bitpacker
-                .compress_strictly_sorted(offset, block, &mut self.output[..], num_bits);
+            self.bitpacker.compress_strictly_sorted(offset, block, &mut self.output[..], num_bits);
         (num_bits, &self.output[..written_size])
     }
 
@@ -71,9 +67,7 @@ impl BlockEncoder {
         };
 
         let num_bits = self.bitpacker.num_bits(block);
-        let written_size = self
-            .bitpacker
-            .compress(block, &mut self.output[..], num_bits);
+        let written_size = self.bitpacker.compress(block, &mut self.output[..], num_bits);
         (num_bits, &self.output[..written_size])
     }
 }
@@ -132,8 +126,7 @@ impl BlockDecoder {
             )
         } else {
             self.output_len = COMPRESSION_BLOCK_SIZE;
-            self.bitpacker
-                .decompress_sorted(offset, compressed_data, &mut self.output, num_bits)
+            self.bitpacker.decompress_sorted(offset, compressed_data, &mut self.output, num_bits)
         }
     }
 
@@ -149,9 +142,7 @@ impl BlockDecoder {
         minus_one_encoded: bool,
     ) -> usize {
         self.output_len = COMPRESSION_BLOCK_SIZE;
-        let res = self
-            .bitpacker
-            .decompress(compressed_data, &mut self.output, num_bits);
+        let res = self.bitpacker.decompress(compressed_data, &mut self.output, num_bits);
         if minus_one_encoded {
             for val in &mut self.output {
                 *val += 1;

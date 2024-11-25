@@ -47,19 +47,13 @@ impl Footer {
         if file.len() < 4 {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
-                format!(
-                    "File corrupted. The file is smaller than 4 bytes (len={}).",
-                    file.len()
-                ),
+                format!("File corrupted. The file is smaller than 4 bytes (len={}).", file.len()),
             ));
         }
 
         let footer_metadata_len = <(u32, u32)>::SIZE_IN_BYTES;
-        let (footer_len, footer_magic_byte): (u32, u32) = file
-            .slice_from_end(footer_metadata_len)
-            .read_bytes()?
-            .as_ref()
-            .deserialize()?;
+        let (footer_len, footer_magic_byte): (u32, u32) =
+            file.slice_from_end(footer_metadata_len).read_bytes()?.as_ref().deserialize()?;
 
         if footer_magic_byte != FOOTER_MAGIC_NUMBER {
             return Err(io::Error::new(
@@ -126,10 +120,7 @@ pub(crate) struct FooterProxy<W: TerminatingWrite> {
 
 impl<W: TerminatingWrite> FooterProxy<W> {
     pub fn new(writer: W) -> Self {
-        FooterProxy {
-            hasher: Some(Hasher::new()),
-            writer: Some(writer),
-        }
+        FooterProxy { hasher: Some(Hasher::new()), writer: Some(writer) }
     }
 }
 

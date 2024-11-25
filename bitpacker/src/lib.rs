@@ -107,18 +107,9 @@ mod tests {
 
     #[test]
     fn test_minmax_nan() {
-        assert_eq!(
-            minmax(vec![f64::NAN, 1f64, 2f64].into_iter()),
-            Some((1f64, 2f64))
-        );
-        assert_eq!(
-            minmax(vec![2f64, f64::NAN, 1f64].into_iter()),
-            Some((1f64, 2f64))
-        );
-        assert_eq!(
-            minmax(vec![2f64, 1f64, f64::NAN].into_iter()),
-            Some((1f64, 2f64))
-        );
+        assert_eq!(minmax(vec![f64::NAN, 1f64, 2f64].into_iter()), Some((1f64, 2f64)));
+        assert_eq!(minmax(vec![2f64, f64::NAN, 1f64].into_iter()), Some((1f64, 2f64)));
+        assert_eq!(minmax(vec![2f64, 1f64, f64::NAN].into_iter()), Some((1f64, 2f64)));
     }
 
     #[test]

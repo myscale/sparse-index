@@ -84,10 +84,7 @@ impl Stamper {
     /// will supply `n` number of u64 stamps.
     pub fn stamps(&self, n: u64) -> Range<Opstamp> {
         let start = self.0.fetch_add(n, Ordering::SeqCst);
-        Range {
-            start,
-            end: start + n,
-        }
+        Range { start, end: start + n }
     }
 
     /// Reverts the stamper to a given `Opstamp` value and returns it

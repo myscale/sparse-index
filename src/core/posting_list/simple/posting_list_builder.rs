@@ -9,7 +9,6 @@ use crate::{
     RowId,
 };
 
-// OW 表示原始数据类型，TW 表示 build 之后得到的 Posting 数据类型
 #[derive(Default)]
 pub struct PostingListBuilder<OW: QuantizedWeight, TW: QuantizedWeight> {
     posting: PostingList<OW>,
@@ -29,7 +28,6 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
             finally_sort: false,
             propagate_while_upserting: false,
             finally_propagate: true,
-
             _phantom_ow: PhantomData,
             _phantom_tw: PhantomData,
         }
@@ -58,22 +56,16 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
     /// bool: `ture` means the `insert` operation, `false` means `update`.
     pub fn add(&mut self, row_id: RowId, weight: DimWeight) -> bool {
         if self.propagate_while_upserting {
-            self.posting
-                .upsert_with_propagate(PostingElementEx::<OW>::new(row_id, weight))
+            self.posting.upsert_with_propagate(PostingElementEx::<OW>::new(row_id, weight))
         } else {
-            self.posting
-                .upsert(PostingElementEx::<OW>::new(row_id, weight))
-                .1
+            self.posting.upsert(PostingElementEx::<OW>::new(row_id, weight)).1
         }
     }
 
-    /// ## brief
-    /// 返回 elements 占据的内存字节大小
     pub fn memory_usage(&self) -> usize {
         self.posting.len() * size_of::<PostingElementEx<OW>>()
     }
 
-    // 根据是否开启 quantized 来判断输出类型
     pub fn build(mut self) -> (PostingList<TW>, Option<QuantizedParam>) {
         let need_quantized =
             TW::weight_type() != OW::weight_type() && TW::weight_type() == WeightType::WeightU8;
@@ -84,25 +76,20 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
             assert_eq!(OW::weight_type(), TW::weight_type());
         }
 
-        // 根据 row_id 进行排序
         if self.finally_sort {
             self.posting.elements.sort_unstable_by_key(|e| e.row_id);
         }
-        // 检查在一个 PostingList 中是否存在重复的 row_id, 以及这个 Posting 是否是正确排序了的
+
         #[cfg(debug_assertions)]
         {
-            if let Some(res) = self
-                .posting
-                .elements
-                .windows(2)
-                .find(|e| e[0].row_id >= e[1].row_id)
+            if let Some(res) = self.posting.elements.windows(2).find(|e| e[0].row_id >= e[1].row_id)
             {
                 let error_msg = format!("Duplicated row_id, or Posting is not sorted by row_id correctly, left: {:?}, right: {:?}.", res[0], res[1]);
                 error!("{}", error_msg);
                 panic!("{}", error_msg);
             }
         }
-        // 从后往前修改每个 element 的 max_next_weight
+
         let mut quantized_param: Option<QuantizedParam> = None;
         if self.finally_propagate {
             let mut max_next_weight: OW = OW::from_f32(DEFAULT_MAX_NEXT_WEIGHT);
@@ -171,7 +158,6 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
 mod tests {
     use crate::core::posting_list::traits::PostingElementEx;
 
-    // TODO 这个测试应该放到 traits 里面，验证 Element 的排序
     #[test]
     fn test_sort_unstable_by() {
         let mut elements = vec![

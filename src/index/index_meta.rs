@@ -1,6 +1,8 @@
 use super::SegmentComponent;
 use crate::core::{
-    COMPRESSED_INVERTED_INDEX_HEADERS_SUFFIX, COMPRESSED_INVERTED_INDEX_POSTING_BLOCKS_SUFFIX, COMPRESSED_INVERTED_INDEX_ROW_IDS_SUFFIX, INVERTED_INDEX_HEADERS_SUFFIX, INVERTED_INDEX_META_FILE_SUFFIX, INVERTED_INDEX_POSTINGS_SUFFIX
+    COMPRESSED_INVERTED_INDEX_HEADERS_SUFFIX, COMPRESSED_INVERTED_INDEX_POSTING_BLOCKS_SUFFIX,
+    COMPRESSED_INVERTED_INDEX_ROW_IDS_SUFFIX, INVERTED_INDEX_HEADERS_SUFFIX,
+    INVERTED_INDEX_META_FILE_SUFFIX, INVERTED_INDEX_POSTINGS_SUFFIX,
 };
 use crate::index::SegmentId;
 use crate::{Opstamp, RowId};
@@ -21,11 +23,7 @@ pub(crate) struct SegmentMetaInventory {
 impl SegmentMetaInventory {
     /// 返回 inventory 仓库中记录的所有 SegmentMeta
     pub fn all(&self) -> Vec<SegmentMeta> {
-        self.inventory
-            .list()
-            .into_iter()
-            .map(SegmentMeta::from)
-            .collect::<Vec<_>>()
+        self.inventory.list().into_iter().map(SegmentMeta::from).collect::<Vec<_>>()
     }
 
     /// 创建新的 SegmentMeta 并记录到 inventory 仓库
@@ -83,9 +81,7 @@ impl SegmentMeta {
     ///
     /// 这可使得 `.tmp` 文件被垃圾回收机制收集清理
     pub fn untrack_temp_svstore(&self) {
-        self.tracked
-            .include_temp_sv_store
-            .store(false, std::sync::atomic::Ordering::Relaxed);
+        self.tracked.include_temp_sv_store.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// 返回 SegmentMeta 中需要的所有 segment 文件路径（文件名）
@@ -121,10 +117,15 @@ impl SegmentMeta {
             SegmentComponent::InvertedIndexMeta => INVERTED_INDEX_META_FILE_SUFFIX.to_string(),
             SegmentComponent::InvertedIndexHeaders => INVERTED_INDEX_HEADERS_SUFFIX.to_string(),
             SegmentComponent::InvertedIndexPostings => INVERTED_INDEX_POSTINGS_SUFFIX.to_string(),
-            SegmentComponent::CompressedInvertedIndexHeaders => COMPRESSED_INVERTED_INDEX_HEADERS_SUFFIX.to_string(),
-            SegmentComponent::CompressedInvertedIndexRowIds => COMPRESSED_INVERTED_INDEX_ROW_IDS_SUFFIX.to_string(),
-            SegmentComponent::CompressedInvertedIndexBlocks => COMPRESSED_INVERTED_INDEX_POSTING_BLOCKS_SUFFIX.to_string(),
-            // SegmentComponent::Delete => ".delete".to_string(),
+            SegmentComponent::CompressedInvertedIndexHeaders => {
+                COMPRESSED_INVERTED_INDEX_HEADERS_SUFFIX.to_string()
+            }
+            SegmentComponent::CompressedInvertedIndexRowIds => {
+                COMPRESSED_INVERTED_INDEX_ROW_IDS_SUFFIX.to_string()
+            }
+            SegmentComponent::CompressedInvertedIndexBlocks => {
+                COMPRESSED_INVERTED_INDEX_POSTING_BLOCKS_SUFFIX.to_string()
+            } // SegmentComponent::Delete => ".delete".to_string(),
         });
         PathBuf::from(path)
     }
@@ -146,16 +147,14 @@ impl SegmentMeta {
     pub(crate) fn with_rows_count(self, rows_count: RowId) -> SegmentMeta {
         assert_eq!(self.tracked.rows_count, 0);
         // assert!(self.tracked.deletes.is_none());
-        let tracked = self
-            .tracked
-            .map(move |inner_meta: &InnerSegmentMeta| InnerSegmentMeta {
-                directory: inner_meta.directory.clone(),
-                segment_id: inner_meta.segment_id,
-                rows_count,
-                // deletes: None,
-                // TODO 理解这里为什么加上了 temp 类型的 store
-                include_temp_sv_store: Arc::new(AtomicBool::new(true)),
-            });
+        let tracked = self.tracked.map(move |inner_meta: &InnerSegmentMeta| InnerSegmentMeta {
+            directory: inner_meta.directory.clone(),
+            segment_id: inner_meta.segment_id,
+            rows_count,
+            // deletes: None,
+            // TODO 理解这里为什么加上了 temp 类型的 store
+            include_temp_sv_store: Arc::new(AtomicBool::new(true)),
+        });
         SegmentMeta { tracked }
     }
 }
@@ -182,9 +181,7 @@ fn default_temp_store() -> Arc<AtomicBool> {
 impl InnerSegmentMeta {
     /// 消耗当前 InnerSegmentMeta 并交给 inventory 管理
     pub fn track(self, inventory: &SegmentMetaInventory) -> SegmentMeta {
-        SegmentMeta {
-            tracked: inventory.inventory.track(self),
-        }
+        SegmentMeta { tracked: inventory.inventory.track(self) }
     }
 }
 
@@ -216,11 +213,7 @@ impl fmt::Debug for IndexMeta {
 impl IndexMeta {
     /// 创建一个全新的 IndexMeta，不包含任何 segment
     pub fn default() -> Self {
-        Self {
-            segments: Vec::new(),
-            opstamp: 0u64,
-            payload: None,
-        }
+        Self { segments: Vec::new(), opstamp: 0u64, payload: None }
     }
 
     /// 将 meta.json 字符串内容转换为 IndexMeta 对象
@@ -268,11 +261,7 @@ mod tests {
 
     #[test]
     fn test_serialize_metas() {
-        let index_metas = IndexMeta {
-            segments: Vec::new(),
-            opstamp: 0u64,
-            payload: None,
-        };
+        let index_metas = IndexMeta { segments: Vec::new(), opstamp: 0u64, payload: None };
         let json = serde_json::ser::to_string(&index_metas).expect("serialization failed");
         assert_eq!(json, r#"{"segments":[],"opstamp":0}"#);
 

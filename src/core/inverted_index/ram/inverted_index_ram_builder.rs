@@ -7,8 +7,8 @@ use crate::core::{
 use crate::RowId;
 
 /// Builder for InvertedIndexRam
-/// OW: RamBuilder 在构建过程中，逐个 add vector 的时候，使用到的 weight 数据类型
-/// TW: RamBuilder 在执行 build 时，需要逐个的量化 Posting，每个 Posting 在量化之后会产生 1 个 u8 Posting，这就是量化后的数据类型，也可能没有用到量化
+/// OW: weight storage size before quantized.
+/// TW: weight storage size after quantized, also it may not need be quantized.
 pub struct InvertedIndexRamBuilder<OW: QuantizedWeight, TW: QuantizedWeight> {
     posting_builders: Vec<PostingListBuilder<OW, TW>>,
     memory: usize,
@@ -58,8 +58,6 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexRamBuilder<OW, TW> {
         self.propagate_while_upserting = propagate;
         self
     }
-
-    /// Returns the total memory usage of the InvertedIndexRamBuilder in bytes.
 
     pub fn metrics(&self) -> &InvertedIndexMetrics {
         &self.metrics
@@ -113,15 +111,8 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexRamBuilderTrait<TW>
     /// Consumes the builder and returns an InvertedIndexRam
     fn build(self) -> InvertedIndexRam<TW> {
         let (postings, quantized_params): (Vec<PostingList<TW>>, Vec<Option<QuantizedParam>>) =
-            self.posting_builders
-                .into_iter()
-                .map(|builder| builder.build())
-                .unzip();
+            self.posting_builders.into_iter().map(|builder| builder.build()).unzip();
 
-        InvertedIndexRam::<TW> {
-            postings,
-            quantized_params,
-            metrics: self.metrics,
-        }
+        InvertedIndexRam::<TW> { postings, quantized_params, metrics: self.metrics }
     }
 }

@@ -44,10 +44,7 @@ impl Segment {
     /// 序列化存储 Segment 之前, 需要更新它的 `SegmentMeta` 内记录的 rows_count </br>
     /// 这个函数只能在序列化存储 Segment 前更新元数据时被调用一次
     pub(crate) fn with_rows_count(self, rows_count: RowId) -> Segment {
-        Segment {
-            index: self.index,
-            meta: self.meta.with_rows_count(rows_count),
-        }
+        Segment { index: self.index, meta: self.meta.with_rows_count(rows_count) }
     }
 
     /// 返回 segment component 的相对路径 </br>

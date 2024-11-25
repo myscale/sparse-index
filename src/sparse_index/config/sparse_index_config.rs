@@ -51,11 +51,7 @@ pub struct SparseIndexConfig {
 
 impl SparseIndexConfig {
     pub fn new(storage_type: StorageType, weight_type: IndexWeightType, quantized: bool) -> Self {
-        SparseIndexConfig {
-            storage_type,
-            weight_type,
-            quantized,
-        }
+        SparseIndexConfig { storage_type, weight_type, quantized }
     }
 
     pub fn load(index_path: &Path) -> Result<Self, FileOperationError> {

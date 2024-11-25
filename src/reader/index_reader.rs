@@ -74,23 +74,15 @@ impl IndexReaderBuilder {
                 let inner_reader_arc_clone = inner_reader_arc.clone();
                 let callback = move || {
                     if let Err(err) = inner_reader_arc_clone.reload() {
-                        error!(
-                            "Error while loading searcher after commit was detected. {:?}",
-                            err
-                        );
+                        error!("Error while loading searcher after commit was detected. {:?}", err);
                     }
                 };
-                let watch_handle = inner_reader_arc
-                    .index
-                    .directory()
-                    .watch(WatchCallback::new(callback))?;
+                let watch_handle =
+                    inner_reader_arc.index.directory().watch(WatchCallback::new(callback))?;
                 Some(watch_handle)
             }
         };
-        Ok(IndexReader {
-            inner: inner_reader_arc,
-            _watch_handle_opt: watch_handle_opt,
-        })
+        Ok(IndexReader { inner: inner_reader_arc, _watch_handle_opt: watch_handle_opt })
     }
 
     /// 更新 reload policy
@@ -166,10 +158,8 @@ impl InnerIndexReader {
         // Prevents segment files from getting deleted while we are in the process of opening them
         let _meta_lock = index.directory().acquire_lock(&META_LOCK)?;
         let searchable_segments = index.searchable_segments()?;
-        let segment_readers = searchable_segments
-            .iter()
-            .map(SegmentReader::open)
-            .collect::<crate::Result<_>>()?;
+        let segment_readers =
+            searchable_segments.iter().map(SegmentReader::open).collect::<crate::Result<_>>()?;
         Ok(segment_readers)
     }
 
@@ -197,11 +187,8 @@ impl InnerIndexReader {
             searcher_generation_inventory,
         );
 
-        let searcher = Arc::new(SearcherInner::new(
-            index.clone(),
-            segment_readers,
-            searcher_generation,
-        )?);
+        let searcher =
+            Arc::new(SearcherInner::new(index.clone(), segment_readers, searcher_generation)?);
 
         warming_state.warm_new_searcher_generation(&searcher.clone().into())?;
         Ok(searcher)

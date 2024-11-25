@@ -27,13 +27,9 @@ pub fn ffi_load_index_reader(index_path: &CxxString) -> FFIBoolResult {
     };
 
     match ffi_load_index_reader_impl(&index_path) {
-        Ok(result) => FFIBoolResult {
-            result,
-            error: FFIError {
-                is_error: false,
-                message: String::new(),
-            },
-        },
+        Ok(result) => {
+            FFIBoolResult { result, error: FFIError { is_error: false, message: String::new() } }
+        }
         Err(e) => ApiUtils::handle_error(FUNC_NAME, "failed load index reader", e.to_string()),
     }
 }
@@ -51,13 +47,7 @@ pub fn ffi_free_index_reader(index_path: &CxxString) -> FFIBoolResult {
     if let Err(error) = ffi_free_index_reader_impl(&index_path) {
         return ApiUtils::handle_error(FUNC_NAME, "failed free index reader", error.to_string());
     } else {
-        FFIBoolResult {
-            result: true,
-            error: FFIError {
-                is_error: false,
-                message: String::new(),
-            },
-        }
+        FFIBoolResult { result: true, error: FFIError { is_error: false, message: String::new() } }
     }
 }
 
@@ -99,11 +89,5 @@ pub fn ffi_sparse_search(
         }
     };
 
-    FFIScoreResult {
-        result: scores,
-        error: FFIError {
-            is_error: false,
-            message: "".to_string(),
-        },
-    }
+    FFIScoreResult { result: scores, error: FFIError { is_error: false, message: "".to_string() } }
 }

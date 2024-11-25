@@ -57,13 +57,8 @@ impl MergeOperation {
         target_opstamp: Opstamp,
         segment_ids: Vec<SegmentId>,
     ) -> MergeOperation {
-        let inner_merge_operation = InnerMergeOperation {
-            target_opstamp,
-            segment_ids,
-        };
-        MergeOperation {
-            inner: inventory.track(inner_merge_operation),
-        }
+        let inner_merge_operation = InnerMergeOperation { target_opstamp, segment_ids };
+        MergeOperation { inner: inventory.track(inner_merge_operation) }
     }
 
     /// Returns the opstamp up to which we want to consume the delete queue and reflect their deletes.

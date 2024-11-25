@@ -26,9 +26,7 @@ impl Default for IndexBuilder {
 impl IndexBuilder {
     /// Creates a new `IndexBuilder` with default index config.
     pub fn new() -> Self {
-        Self {
-            index_settings: IndexSettings::default(),
-        }
+        Self { index_settings: IndexSettings::default() }
     }
 
     pub fn with_settings(mut self, settings: IndexSettings) -> Self {

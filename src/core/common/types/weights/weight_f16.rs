@@ -15,9 +15,7 @@ impl QuantizedWeight for half::f16 {
     }
 
     fn quantize_with_param(value: Self, params: QuantizedParam) -> u8 {
-        ((value.to_f32() - params.min) / params.diff256)
-            .round()
-            .clamp(0.0, 255.0) as u8
+        ((value.to_f32() - params.min) / params.diff256).round().clamp(0.0, 255.0) as u8
     }
 
     fn unquantize_with_param(value: u8, params: QuantizedParam) -> Self {

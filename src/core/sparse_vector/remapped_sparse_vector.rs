@@ -34,7 +34,7 @@ impl RemappedSparseVector {
     ///
     /// Return None if the vectors do not overlap.
     pub fn score(&self, other: &RemappedSparseVector) -> Option<ScoreType> {
-        // TODO 需要避免运行时的 Panic 操作
+        // TODO: Avoid panic during run time
         debug_assert!(self.is_sorted());
         debug_assert!(other.is_sorted());
         score_vectors(&self.indices, &self.values, &other.indices, &other.values)
@@ -85,9 +85,9 @@ impl<const N: usize> From<[TupleElement; N]> for RemappedSparseVector {
 
         for element in value {
             let weight = match element.value_type {
-                0 => element.weight_f32,        // f32 直接使用
-                1 => element.weight_u8 as f32,  // u8 转换为 f32
-                2 => element.weight_u32 as f32, // u32 转换为 f32
+                0 => element.weight_f32,
+                1 => element.weight_u8 as f32,
+                2 => element.weight_u32 as f32,
                 _ => 0.0f32,
             };
             indices.push(element.dim_id);

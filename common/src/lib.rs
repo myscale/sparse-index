@@ -108,11 +108,7 @@ pub fn f64_to_u64(val: f64) -> u64 {
 /// Reverse the mapping given by [`f64_to_u64()`].
 #[inline]
 pub fn u64_to_f64(val: u64) -> f64 {
-    f64::from_bits(if val & HIGHEST_BIT != 0 {
-        val ^ HIGHEST_BIT
-    } else {
-        !val
-    })
+    f64::from_bits(if val & HIGHEST_BIT != 0 { val ^ HIGHEST_BIT } else { !val })
 }
 
 /// Replaces a given byte in the `bytes` slice of bytes.

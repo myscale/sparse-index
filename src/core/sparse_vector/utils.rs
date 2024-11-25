@@ -18,11 +18,8 @@ pub(super) fn double_sort<T: Ord + Copy, V: Copy>(indices: &mut [T], values: &mu
         return;
     }
 
-    let mut indexed_values: Vec<(T, V)> = indices
-        .iter()
-        .zip(values.iter())
-        .map(|(&i, &v)| (i, v))
-        .collect();
+    let mut indexed_values: Vec<(T, V)> =
+        indices.iter().zip(values.iter()).map(|(&i, &v)| (i, v)).collect();
 
     // Sort the vector of tuples by indices
     indexed_values.sort_unstable_by_key(|&(i, _)| i);
@@ -71,10 +68,7 @@ pub(super) fn validate_sparse_vector_impl<T: Clone + Eq + Hash>(
     let mut errors = ValidationErrors::default();
 
     if indices.len() != values.len() {
-        errors.add(
-            "values",
-            ValidationError::new("must be the same length as indices"),
-        );
+        errors.add("values", ValidationError::new("must be the same length as indices"));
     }
     if indices.iter().unique().count() != indices.len() {
         errors.add("indices", ValidationError::new("must be unique"));

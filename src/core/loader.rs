@@ -65,18 +65,10 @@ impl Csr {
         ));
         // 检查 nptr 是否合法
         if !indptr.windows(2).all(|w| w[0] <= w[1]) || indptr.last() != Some(&(nnz as u64)) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Invalid indptr array",
-            ));
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid indptr array"));
         }
 
-        Ok(Self {
-            mmap,
-            nrow,
-            nnz,
-            intptr: indptr,
-        })
+        Ok(Self { mmap, nrow, nnz, intptr: indptr })
     }
 
     // 通过索引获得对应的稀疏向量

@@ -7,9 +7,9 @@ pub struct PostingListHeader {
     pub end: usize,
 
     // Fix sized: header for compressed posting
-    // 这个内容从 InvertedIndexRam 里面加载就好了
     pub quantized_params: Option<QuantizedParam>,
 
+    // TODO: refine these vars.
     pub row_ids_count: u32,
     pub max_row_id: u32,
 }

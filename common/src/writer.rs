@@ -7,10 +7,7 @@ pub struct CountingWriter<W> {
 
 impl<W: Write> CountingWriter<W> {
     pub fn wrap(underlying: W) -> CountingWriter<W> {
-        CountingWriter {
-            underlying,
-            written_bytes: 0,
-        }
+        CountingWriter { underlying, written_bytes: 0 }
     }
 
     #[inline]

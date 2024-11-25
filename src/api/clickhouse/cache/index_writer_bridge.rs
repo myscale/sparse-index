@@ -59,9 +59,7 @@ pub struct IndexWriterBridgeCache {
 
 impl IndexWriterBridgeCache {
     pub fn new() -> Self {
-        Self {
-            cache: HashMap::new(),
-        }
+        Self { cache: HashMap::new() }
     }
 
     pub fn get_index_writer_bridge(&self, key: String) -> Result<Arc<IndexWriterBridge>, String> {
@@ -69,10 +67,7 @@ impl IndexWriterBridgeCache {
         let trimmed_key: String = key.trim_end_matches('/').to_string();
         match pinned.get(&trimmed_key) {
             Some(result) => Ok(result.clone()),
-            None => Err(format!(
-                "Index Writer doesn't exist with given key: [{}]",
-                trimmed_key
-            )),
+            None => Err(format!("Index Writer doesn't exist with given key: [{}]", trimmed_key)),
         }
     }
 

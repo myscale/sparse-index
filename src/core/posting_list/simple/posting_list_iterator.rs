@@ -4,10 +4,8 @@ use crate::core::posting_list::traits::{PostingElementEx, PostingListIteratorTra
 use crate::core::{QuantizedParam, QuantizedWeight, WeightType};
 use crate::RowId;
 
-use super::PostingList;
-
-// OW 是 posting 内部存储的 weight 类型
-// TW 是反量化之后的 weight
+// OW: weight storage type in disk, it may has been quantized.
+// TW: we need unquantize OW into TW.
 #[derive(Debug, Clone)]
 pub struct PostingListIterator<'a, OW: QuantizedWeight, TW: QuantizedWeight> {
     pub posting: &'a [PostingElementEx<OW>],
@@ -21,12 +19,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterator<'a, OW, T
         posting: &'a [PostingElementEx<OW>],
         quantized_param: Option<QuantizedParam>,
     ) -> PostingListIterator<'a, OW, TW> {
-        PostingListIterator {
-            posting,
-            quantized_param,
-            cursor: 0,
-            _tw: PhantomData,
-        }
+        PostingListIterator { posting, quantized_param, cursor: 0, _tw: PhantomData }
     }
 
     fn convert_type(&self, raw_element: &PostingElementEx<OW>) -> PostingElementEx<TW> {
@@ -80,7 +73,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIteratorTrait<OW, 
             return None;
         }
 
-        // 查找第一个 row_id ≥ 目标 row_id 的元素位置
+        // find the first position: row_id ≥ target_row_id
         let next_element: Result<usize, usize> =
             self.posting[self.cursor..].binary_search_by(|e| e.row_id.cmp(&row_id));
 

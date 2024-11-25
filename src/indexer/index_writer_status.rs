@@ -18,20 +18,14 @@ impl IndexWriterStatus {
     /// Returns a copy of the operation receiver.
     /// If the index writer was killed, returns `None`.
     pub fn operation_receiver(&self) -> Option<AddBatchReceiver> {
-        let rlock = self
-            .inner
-            .receive_channel
-            .read()
-            .expect("This lock should never be poisoned");
+        let rlock = self.inner.receive_channel.read().expect("This lock should never be poisoned");
         rlock.as_ref().cloned()
     }
 
     /// Create an index writer bomb.
     /// If dropped, the index writer status will be killed.
     pub(crate) fn create_bomb(&self) -> IndexWriterBomb {
-        IndexWriterBomb {
-            inner: Some(self.inner.clone()),
-        }
+        IndexWriterBomb { inner: Some(self.inner.clone()) }
     }
 }
 
@@ -47,10 +41,7 @@ impl Inner {
 
     fn kill(&self) {
         self.is_alive.store(false, Ordering::Relaxed);
-        self.receive_channel
-            .write()
-            .expect("This lock should never be poisoned")
-            .take();
+        self.receive_channel.write().expect("This lock should never be poisoned").take();
     }
 }
 

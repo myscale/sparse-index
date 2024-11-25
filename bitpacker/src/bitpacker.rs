@@ -16,10 +16,7 @@ impl Default for BitPacker {
 }
 impl BitPacker {
     pub fn new() -> BitPacker {
-        BitPacker {
-            mini_buffer: 0u64,
-            mini_buffer_written: 0,
-        }
+        BitPacker { mini_buffer: 0u64, mini_buffer_written: 0 }
     }
 
     #[inline]
@@ -78,15 +75,8 @@ impl BitUnpacker {
     /// [57..63] are forbidden.
     pub fn new(num_bits: u8) -> BitUnpacker {
         assert!(num_bits <= 7 * 8 || num_bits == 64);
-        let mask: u64 = if num_bits == 64 {
-            !0u64
-        } else {
-            (1u64 << num_bits) - 1u64
-        };
-        BitUnpacker {
-            num_bits: u32::from(num_bits),
-            mask,
-        }
+        let mask: u64 = if num_bits == 64 { !0u64 } else { (1u64 << num_bits) - 1u64 };
+        BitUnpacker { num_bits: u32::from(num_bits), mask }
     }
 
     pub fn bit_width(&self) -> u8 {
@@ -130,19 +120,13 @@ impl BitUnpacker {
     //
     // This methods panics if `num_bits` is > 32.
     fn get_batch_u32s(&self, start_idx: u32, data: &[u8], output: &mut [u32]) {
-        assert!(
-            self.bit_width() <= 32,
-            "Bitwidth must be <= 32 to use this method."
-        );
+        assert!(self.bit_width() <= 32, "Bitwidth must be <= 32 to use this method.");
 
         let end_idx = start_idx + output.len() as u32;
 
         let end_bit_read = end_idx * self.num_bits;
         let end_byte_read = (end_bit_read + 7) / 8;
-        assert!(
-            end_byte_read as usize <= data.len(),
-            "Requested index is out of bounds."
-        );
+        assert!(end_byte_read as usize <= data.len(), "Requested index is out of bounds.");
 
         // Simple slow implementation of get_batch_u32s, to deal with our ramps.
         let get_batch_ramp = |start_idx: u32, output: &mut [u32]| {
@@ -251,9 +235,8 @@ mod test {
         let mut data = Vec::new();
         let mut bitpacker = BitPacker::new();
         let max_val: u64 = (1u64 << num_bits as u64) - 1u64;
-        let vals: Vec<u64> = (0u64..len as u64)
-            .map(|i| if max_val == 0 { 0 } else { i % max_val })
-            .collect();
+        let vals: Vec<u64> =
+            (0u64..len as u64).map(|i| if max_val == 0 { 0 } else { i % max_val }).collect();
         for &val in &vals {
             bitpacker.write(val, num_bits, &mut data).unwrap();
         }
@@ -287,11 +270,7 @@ mod test {
 
     fn vals_strategy() -> impl Strategy<Value = (u8, Vec<u64>)> {
         (num_bits_strategy(), 0usize..100usize).prop_flat_map(|(num_bits, len)| {
-            let max_val = if num_bits == 64 {
-                u64::MAX
-            } else {
-                (1u64 << num_bits as u32) - 1
-            };
+            let max_val = if num_bits == 64 { u64::MAX } else { (1u64 << num_bits as u32) - 1 };
             let vals = proptest::collection::vec(0..=max_val, len);
             vals.prop_map(move |vals| (num_bits, vals))
         })
@@ -306,11 +285,7 @@ mod test {
         bitpacker.flush(&mut buffer).unwrap();
         assert_eq!(buffer.len(), (vals.len() * num_bits as usize + 7) / 8);
         let bitunpacker = BitUnpacker::new(num_bits);
-        let max_val = if num_bits == 64 {
-            u64::MAX
-        } else {
-            (1u64 << num_bits) - 1
-        };
+        let max_val = if num_bits == 64 { u64::MAX } else { (1u64 << num_bits) - 1 };
         for (i, val) in vals.iter().copied().enumerate() {
             assert!(val <= max_val);
             assert_eq!(bitunpacker.get(i as u32, &buffer), val);

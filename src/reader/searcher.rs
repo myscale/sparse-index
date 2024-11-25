@@ -46,10 +46,7 @@ impl SearcherGeneration {
         for segment_reader in segment_readers {
             segment_id_to_del_opstamp.insert(segment_reader.segment_id(), None);
         }
-        Self {
-            segments: segment_id_to_del_opstamp,
-            generation_id,
-        }
+        Self { segments: segment_id_to_del_opstamp, generation_id }
     }
 
     /// 返回 SearcherGeneration 的 generation_id
@@ -205,21 +202,14 @@ impl SearcherInner {
             "Set of segments referenced by this Searcher and its SearcherGeneration must match"
         );
 
-        Ok(SearcherInner {
-            index,
-            segment_readers,
-            generation,
-        })
+        Ok(SearcherInner { index, segment_readers, generation })
     }
 }
 
 impl fmt::Debug for Searcher {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let segment_ids = self
-            .segment_readers()
-            .iter()
-            .map(SegmentReader::segment_id)
-            .collect::<Vec<_>>();
+        let segment_ids =
+            self.segment_readers().iter().map(SegmentReader::segment_id).collect::<Vec<_>>();
         write!(f, "Searcher({segment_ids:?})")
     }
 }

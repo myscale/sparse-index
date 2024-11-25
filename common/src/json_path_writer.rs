@@ -15,11 +15,7 @@ pub struct JsonPathWriter {
 
 impl JsonPathWriter {
     pub fn new() -> Self {
-        JsonPathWriter {
-            path: String::new(),
-            indices: Vec::new(),
-            expand_dots: false,
-        }
+        JsonPathWriter { path: String::new(), indices: Vec::new(), expand_dots: false }
     }
 
     /// When expand_dots is enabled, json object like

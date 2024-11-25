@@ -15,7 +15,7 @@ pub enum SegmentComponent {
     CompressedInvertedIndexRowIds,
     CompressedInvertedIndexBlocks,
     // TODO 追加一些 merge 过程中产生的临时文件
-    
+
     // 临时索引文件存储
     // TempInvertedIndex,
 

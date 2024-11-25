@@ -56,10 +56,7 @@ pub enum OpenDirectoryError {
 impl OpenDirectoryError {
     /// Wraps an io error.
     pub fn wrap_io_error(io_error: io::Error, directory_path: PathBuf) -> Self {
-        Self::IoError {
-            io_error: Arc::new(io_error),
-            directory_path,
-        }
+        Self::IoError { io_error: Arc::new(io_error), directory_path }
     }
 }
 
@@ -84,10 +81,7 @@ pub enum OpenWriteError {
 impl OpenWriteError {
     /// Wraps an io error.
     pub fn wrap_io_error(io_error: io::Error, filepath: PathBuf) -> Self {
-        Self::IoError {
-            io_error: Arc::new(io_error),
-            filepath,
-        }
+        Self::IoError { io_error: Arc::new(io_error), filepath }
     }
 }
 /// Type of index incompatibility between the library and the index found on disk
@@ -127,10 +121,7 @@ impl fmt::Debug for Incompatibility {
                 );
                 write!(f, "{err}. {advice}")?;
             }
-            Incompatibility::IndexMismatch {
-                library_version,
-                index_version,
-            } => {
+            Incompatibility::IndexMismatch { library_version, index_version } => {
                 let err = format!(
                     "Library version: {}, index version: {}",
                     library_version.index_format_version, index_version.index_format_version
@@ -174,10 +165,7 @@ pub enum OpenReadError {
 impl OpenReadError {
     /// Wraps an io error.
     pub fn wrap_io_error(io_error: io::Error, filepath: PathBuf) -> Self {
-        Self::IoError {
-            io_error: Arc::new(io_error),
-            filepath,
-        }
+        Self::IoError { io_error: Arc::new(io_error), filepath }
     }
 }
 /// Error that may occur when trying to delete a file

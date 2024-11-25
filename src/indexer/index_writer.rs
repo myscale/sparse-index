@@ -86,10 +86,7 @@ fn index_documents(
     grouped_sv_iterator: &mut dyn Iterator<Item = AddBatch>,
     segment_updater: &SegmentUpdater,
 ) -> crate::Result<()> {
-    info!(
-        "{} [index documents] enter",
-        thread::current().name().unwrap_or_default()
-    );
+    info!("{} [index documents] enter", thread::current().name().unwrap_or_default());
     let mmap_type: StorageType = index_settings.config.storage_type;
     assert_ne!(mmap_type, StorageType::Ram);
 
@@ -100,7 +97,12 @@ fn index_documents(
     for sv_group in grouped_sv_iterator {
         // 逐行写入 sparse row content 到 segment 内部
         for sv in sv_group {
-            trace!("{} [index_documents] index row content into segment, Add Operation row_id: {}, opstamp: {}", thread::current().name().unwrap_or_default(), sv.row_content.row_id, sv.opstamp);
+            trace!(
+                "{} [index_documents] index row content into segment, Add Operation row_id: {}, opstamp: {}",
+                thread::current().name().unwrap_or_default(),
+                sv.row_content.row_id,
+                sv.opstamp
+            );
             segment_writer.index_row_content(sv)?;
         }
         let mem_usage = segment_writer.mem_usage();
@@ -129,7 +131,8 @@ fn index_documents(
     let rows_count = segment_writer.rows_count();
     info!(
         "{} [index documents] rows_count: {}",
-        thread::current().name().unwrap_or_default(), rows_count
+        thread::current().name().unwrap_or_default(),
+        rows_count
     );
     // this is ensured by the call to peek before starting the worker thread.
     assert!(rows_count > 0);
@@ -138,10 +141,7 @@ fn index_documents(
     // TODO 目前这个 doc_opstamps 不会直接使用到, 是和 delete 相关的，可以先直接删除了
     let file_relative_paths: Vec<PathBuf> = segment_writer.finalize()?;
     for path in file_relative_paths {
-        segment
-            .index()
-            .directory()
-            .register_file_as_managed(&path)?;
+        segment.index().directory().register_file_as_managed(&path)?;
     }
 
     let segment_with_rows_count = segment.clone().with_rows_count(rows_count);
@@ -254,9 +254,7 @@ impl IndexWriter {
         // let delete_cursor = self.delete_queue.cursor();
         let segment_entry = SegmentEntry::new(segment_meta, None);
         // segment updater 添加的是 segment entry
-        self.segment_updater
-            .schedule_add_segment(segment_entry)
-            .wait()
+        self.segment_updater.schedule_add_segment(segment_entry).wait()
     }
 
     /// Creates a new segment.
@@ -272,15 +270,13 @@ impl IndexWriter {
     }
 
     fn operation_receiver(&self) -> crate::Result<AddBatchReceiver> {
-        self.index_writer_status
-            .operation_receiver()
-            .ok_or_else(|| {
-                crate::SparseError::ErrorInThread(
-                    "The index writer was killed. It can happen if an indexing worker encountered \
+        self.index_writer_status.operation_receiver().ok_or_else(|| {
+            crate::SparseError::ErrorInThread(
+                "The index writer was killed. It can happen if an indexing worker encountered \
                      an Io error for instance."
-                        .to_string(),
-                )
-            })
+                    .to_string(),
+            )
+        })
     }
 
     /// Spawns a new worker thread for indexing.
@@ -484,9 +480,8 @@ impl IndexWriter {
 
         // 阻塞等待旧的 index 线程结束掉
         for worker_handle in former_workers_join_handle {
-            let indexing_worker_result = worker_handle
-                .join()
-                .map_err(|e| SparseError::ErrorInThread(format!("{e:?}")))?;
+            let indexing_worker_result =
+                worker_handle.join().map_err(|e| SparseError::ErrorInThread(format!("{e:?}")))?;
             indexing_worker_result?;
             // 结束一个 index 线程就重新创建一个新的
             self.add_indexing_worker()?;
@@ -544,10 +539,7 @@ impl IndexWriter {
     /// document queue.
     pub fn add_document(&self, row_content: SparseRowContent) -> crate::Result<Opstamp> {
         let opstamp = self.stamper.stamp();
-        self.send_add_documents_batch(smallvec![AddOperation {
-            opstamp,
-            row_content
-        }])?;
+        self.send_add_documents_batch(smallvec![AddOperation { opstamp, row_content }])?;
         Ok(opstamp)
     }
 
@@ -595,10 +587,7 @@ impl IndexWriter {
         for (user_op, opstamp) in user_operations_it.zip(stamps) {
             match user_op {
                 UserOperation::Add(row_content) => {
-                    let add_operation = AddOperation {
-                        opstamp,
-                        row_content,
-                    };
+                    let add_operation = AddOperation { opstamp, row_content };
                     adds.push(add_operation);
                 }
             }

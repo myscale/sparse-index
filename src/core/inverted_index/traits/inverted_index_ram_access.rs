@@ -43,42 +43,8 @@ impl InvertedIndexMetrics {
 
 pub trait InvertedIndexRamAccess: Sized + Debug {
     fn metrics(&self) -> InvertedIndexMetrics;
-    // fn posting_len(&self, dim_id: &DimId) -> Option<usize>;
-
-    // TODO 这里返回值使用到的 PostingList 后面可以换成一个 Trait, 否则的话 Compressed 还得重新写
-    // fn posting_with_param(&self, dim_id: &DimId) -> Option<(&PostingList<OW>, Option<QuantizedParam>)>;
     fn size(&self) -> usize;
     fn empty(&self) -> bool {
         self.size() == 0
     }
-
-    // type Iter<'a>: PostingListIteratorTrait<W> + Clone
-    // where
-    //     Self: 'a;
-
-    // 直接遍历原始数据
-    // fn iter(&self, dim_id: &DimId) -> Option<Self::Iter<'_>>;
-
-    // Get number of posting lists
-
-    // Check if the core is empty
-
-    // Get number of posting lists for dimension id
-
-    // TODO 后续使用 1个 统一的 meta 处理
-    // fn vector_count(&self) -> usize;
-
-    // fn min_dim_id(&self) -> DimId;
-
-    // fn max_dim_id(&self) -> DimId;
-
-    // fn min_row_id(&self) -> RowId;
-
-    // fn max_row_id(&self) -> RowId;
-
-    // fn remove(&mut self, row_id: RowId);
-
-    // fn insert(&mut self, row_id: RowId, sparse_vector: SparseVector);
-
-    // fn update(&mut self, row_id: RowId, new_vector: SparseVector, old_vector: SparseVector);
 }

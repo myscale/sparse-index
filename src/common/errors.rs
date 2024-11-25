@@ -46,18 +46,12 @@ pub struct DataCorruption {
 impl DataCorruption {
     /// Creates a `DataCorruption` Error.
     pub fn new(filepath: PathBuf, comment: String) -> DataCorruption {
-        DataCorruption {
-            filepath: Some(filepath),
-            comment,
-        }
+        DataCorruption { filepath: Some(filepath), comment }
     }
 
     /// Creates a `DataCorruption` Error, when the filepath is irrelevant.
     pub fn comment_only<TStr: ToString>(comment: TStr) -> DataCorruption {
-        DataCorruption {
-            filepath: None,
-            comment: comment.to_string(),
-        }
+        DataCorruption { filepath: None, comment: comment.to_string() }
     }
 }
 

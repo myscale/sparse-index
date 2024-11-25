@@ -26,10 +26,7 @@ pub trait FileHandle: 'static + Send + Sync + HasLen + fmt::Debug {
 
     #[doc(hidden)]
     async fn read_bytes_async(&self, _byte_range: Range<usize>) -> io::Result<OwnedBytes> {
-        Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "Async read is not supported.",
-        ))
+        Err(io::Error::new(io::ErrorKind::Unsupported, "Async read is not supported."))
     }
 }
 
@@ -188,10 +185,7 @@ impl FileSlice {
     #[doc(hidden)]
     #[must_use]
     pub fn new_with_num_bytes(file_handle: Arc<dyn FileHandle>, num_bytes: usize) -> Self {
-        FileSlice {
-            data: file_handle,
-            range: 0..num_bytes,
-        }
+        FileSlice { data: file_handle, range: 0..num_bytes }
     }
 
     /// Creates a fileslice that is just a view over a slice of the data.
@@ -202,10 +196,7 @@ impl FileSlice {
     #[must_use]
     #[inline]
     pub fn slice<R: RangeBounds<usize>>(&self, byte_range: R) -> FileSlice {
-        FileSlice {
-            data: self.data.clone(),
-            range: combine_ranges(self.range.clone(), byte_range),
-        }
+        FileSlice { data: self.data.clone(), range: combine_ranges(self.range.clone(), byte_range) }
     }
 
     /// Creates an empty FileSlice
@@ -239,8 +230,7 @@ impl FileSlice {
             range.end,
             self.len()
         );
-        self.data
-            .read_bytes(self.range.start + range.start..self.range.start + range.end)
+        self.data.read_bytes(self.range.start + range.start..self.range.start + range.end)
     }
 
     #[doc(hidden)]
@@ -349,14 +339,7 @@ mod tests {
         assert_eq!(file_slice.len(), 6);
         assert_eq!(file_slice.slice_from(2).read_bytes()?.as_slice(), b"cdef");
         assert_eq!(file_slice.slice_to(2).read_bytes()?.as_slice(), b"ab");
-        assert_eq!(
-            file_slice
-                .slice_from(1)
-                .slice_to(2)
-                .read_bytes()?
-                .as_slice(),
-            b"bc"
-        );
+        assert_eq!(file_slice.slice_from(1).slice_to(2).read_bytes()?.as_slice(), b"bc");
         {
             let (left, right) = file_slice.clone().split(0);
             assert_eq!(left.read_bytes()?.as_slice(), b"");
@@ -407,10 +390,7 @@ mod tests {
     #[should_panic(expected = "end of requested range exceeds the fileslice length (10 > 6)")]
     fn test_slice_read_slice_invalid_range_exceeds() {
         let slice_deref = FileSlice::new(Arc::new(&b"abcdef"[..]));
-        assert_eq!(
-            slice_deref.read_bytes_slice(0..10).unwrap().as_ref(),
-            b"bcd"
-        );
+        assert_eq!(slice_deref.read_bytes_slice(0..10).unwrap().as_ref(), b"bcd");
     }
 
     #[test]
@@ -420,10 +400,7 @@ mod tests {
         assert_eq!(combine_ranges(1..4, ..2), 1..3);
         assert_eq!(combine_ranges(3..10, 2..5), 5..8);
         assert_eq!(combine_ranges(2..11, 5..=7), 7..10);
-        assert_eq!(
-            combine_ranges(2..11, (Bound::Excluded(5), Bound::Unbounded)),
-            8..11
-        );
+        assert_eq!(combine_ranges(2..11, (Bound::Excluded(5), Bound::Unbounded)), 8..11);
     }
 
     #[test]

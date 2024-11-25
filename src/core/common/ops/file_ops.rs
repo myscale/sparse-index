@@ -96,10 +96,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("test.json");
 
-        let data = TestData {
-            name: "John".to_string(),
-            age: 30,
-        };
+        let data = TestData { name: "John".to_string(), age: 30 };
 
         // Test atomic_save_json
         atomic_save_json(&file_path, &data).unwrap();
@@ -115,10 +112,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("test.bin");
 
-        let data = TestData {
-            name: "Alice".to_string(),
-            age: 25,
-        };
+        let data = TestData { name: "Alice".to_string(), age: 25 };
 
         // Test atomic_save_bin
         atomic_save_bin(&file_path, &data).unwrap();

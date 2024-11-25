@@ -1,23 +1,19 @@
+// rustfmt::skip
 mod common;
 pub mod index_searcer;
 mod inverted_index;
+mod loader;
 mod posting_list;
 mod scores;
-// mod search_context;
 mod sparse_vector;
-
-mod loader;
-
-use std::{any::Any, borrow::Cow, marker::PhantomData, path::PathBuf};
-
 pub use common::*;
-use index_searcer::IndexedPostingListIterator;
 pub use inverted_index::*;
 pub use posting_list::*;
-use rand::seq::index;
 pub use scores::*;
-// pub use search_context::SearchContext;
 pub use sparse_vector::*;
+
+use index_searcer::IndexedPostingListIterator;
+use std::{borrow::Cow, marker::PhantomData, path::PathBuf};
 
 use crate::{
     index::IndexSettings,
@@ -39,62 +35,37 @@ pub enum GenericInvertedIndexMmapType {
     CompressedInvertedIndexMmapU8NoQuantized(CompressedInvertedIndexMmap<u8, u8>),
 }
 
-pub enum GenericPostingsIterators<'a> {
-    F32NoQuantized(Vec<IndexedPostingListIterator<f32, f32, PostingListIterator<'a, f32, f32>>>),
-    F32Quantized(Vec<IndexedPostingListIterator<f32, u8, PostingListIterator<'a, u8, f32>>>),
-    F16NoQuantized(
-        Vec<
-            IndexedPostingListIterator<
-                half::f16,
-                half::f16,
-                PostingListIterator<'a, half::f16, half::f16>,
-            >,
-        >,
-    ),
-    F16Quantized(
-        Vec<IndexedPostingListIterator<half::f16, u8, PostingListIterator<'a, u8, half::f16>>>,
-    ),
-    U8NoQuantized(Vec<IndexedPostingListIterator<u8, u8, PostingListIterator<'a, u8, u8>>>),
-    CompressedF32NoQuantized(
-        Vec<IndexedPostingListIterator<f32, f32, CompressedPostingListIterator<'a, f32, f32>>>,
-    ),
-    CompressedF32Quantized(
-        Vec<IndexedPostingListIterator<f32, u8, CompressedPostingListIterator<'a, u8, f32>>>,
-    ),
-    CompressedF16NoQuantized(
-        Vec<
-            IndexedPostingListIterator<
-                half::f16,
-                half::f16,
-                CompressedPostingListIterator<'a, half::f16, half::f16>,
-            >,
-        >,
-    ),
-    CompressedF16Quantized(
-        Vec<
-            IndexedPostingListIterator<
-                half::f16,
-                u8,
-                CompressedPostingListIterator<'a, u8, half::f16>,
-            >,
-        >,
-    ),
-    CompressedU8NoQuantized(
-        Vec<IndexedPostingListIterator<u8, u8, CompressedPostingListIterator<'a, u8, u8>>>,
-    ),
-}
-
 pub enum GenericPostingsIterator<'a> {
     F32NoQuantized(IndexedPostingListIterator<f32, f32, PostingListIterator<'a, f32, f32>>),
     F32Quantized(IndexedPostingListIterator<f32, u8, PostingListIterator<'a, u8, f32>>),
-    F16NoQuantized(IndexedPostingListIterator<half::f16, half::f16, PostingListIterator<'a, half::f16, half::f16>>),
+    F16NoQuantized(
+        IndexedPostingListIterator<
+            half::f16,
+            half::f16,
+            PostingListIterator<'a, half::f16, half::f16>,
+        >,
+    ),
     F16Quantized(IndexedPostingListIterator<half::f16, u8, PostingListIterator<'a, u8, half::f16>>),
     U8NoQuantized(IndexedPostingListIterator<u8, u8, PostingListIterator<'a, u8, u8>>),
-    CompressedF32NoQuantized(IndexedPostingListIterator<f32, f32, CompressedPostingListIterator<'a, f32, f32>>),
-    CompressedF32Quantized(IndexedPostingListIterator<f32, u8, CompressedPostingListIterator<'a, u8, f32>>),
-    CompressedF16NoQuantized(IndexedPostingListIterator<half::f16, half::f16, CompressedPostingListIterator<'a, half::f16, half::f16>>),
-    CompressedF16Quantized(IndexedPostingListIterator<half::f16, u8, CompressedPostingListIterator<'a, u8, half::f16>>),
-    CompressedU8NoQuantized(IndexedPostingListIterator<u8, u8, CompressedPostingListIterator<'a, u8, u8>>),
+    CompressedF32NoQuantized(
+        IndexedPostingListIterator<f32, f32, CompressedPostingListIterator<'a, f32, f32>>,
+    ),
+    CompressedF32Quantized(
+        IndexedPostingListIterator<f32, u8, CompressedPostingListIterator<'a, u8, f32>>,
+    ),
+    CompressedF16NoQuantized(
+        IndexedPostingListIterator<
+            half::f16,
+            half::f16,
+            CompressedPostingListIterator<'a, half::f16, half::f16>,
+        >,
+    ),
+    CompressedF16Quantized(
+        IndexedPostingListIterator<half::f16, u8, CompressedPostingListIterator<'a, u8, half::f16>>,
+    ),
+    CompressedU8NoQuantized(
+        IndexedPostingListIterator<u8, u8, CompressedPostingListIterator<'a, u8, u8>>,
+    ),
 }
 
 pub enum GenericInvertedIndexRamBuilder {
@@ -269,10 +240,7 @@ impl GenericInvertedIndexRam {
 
 impl GenericInvertedIndexRamBuilder {
     pub fn new(index_settings: &IndexSettings) -> Self {
-        match (
-            index_settings.config.weight_type,
-            index_settings.config.quantized,
-        ) {
+        match (index_settings.config.weight_type, index_settings.config.quantized) {
             (IndexWeightType::Float32, true) => {
                 Self::F32Quantized(InvertedIndexRamBuilder::<f32, u8>::new())
             }

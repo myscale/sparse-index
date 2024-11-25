@@ -23,12 +23,7 @@ impl SegmentWriter {
     pub fn for_segment(memory_budget_in_bytes: usize, segment: Segment) -> crate::Result<Self> {
         let index_ram_builder =
             GenericInvertedIndexRamBuilder::new(&segment.index().index_settings());
-        Ok(Self {
-            num_rows_count: 0,
-            memory_budget_in_bytes,
-            segment,
-            index_ram_builder,
-        })
+        Ok(Self { num_rows_count: 0, memory_budget_in_bytes, segment, index_ram_builder })
     }
 
     pub fn finalize(self) -> crate::Result<Vec<PathBuf>> {
@@ -43,8 +38,7 @@ impl SegmentWriter {
         let directory = self.segment.index().directory().get_path();
         let segment_id = self.segment.id().uuid_string();
         let index_files =
-            self.index_ram_builder
-                .finalize(&index_settings, &directory, Some(&segment_id));
+            self.index_ram_builder.finalize(&index_settings, &directory, Some(&segment_id));
 
         return Ok(index_files);
     }
@@ -57,13 +51,9 @@ impl SegmentWriter {
     /// 索引一行数据
     /// TODO 数据的行数可以后续优化
     pub fn index_row_content(&mut self, add_operation: AddOperation) -> crate::Result<bool> {
-        let AddOperation {
-            opstamp: _,
-            row_content,
-        } = add_operation;
-        let is_insert_operation = self
-            .index_ram_builder
-            .add_row(row_content.row_id, row_content.sparse_vector);
+        let AddOperation { opstamp: _, row_content } = add_operation;
+        let is_insert_operation =
+            self.index_ram_builder.add_row(row_content.row_id, row_content.sparse_vector);
         if is_insert_operation {
             self.num_rows_count += 1;
         }

@@ -35,10 +35,7 @@ struct BlockedBitpackerEntryMetaData {
 impl BlockedBitpackerEntryMetaData {
     fn new(offset: u64, num_bits: u8, base_value: u64) -> Self {
         let encoded = offset | (num_bits as u64) << (64 - 8);
-        Self {
-            encoded,
-            base_value,
-        }
+        Self { encoded, base_value }
     }
     fn offset(&self) -> u64 {
         (self.encoded << 8) >> 8
@@ -64,11 +61,7 @@ fn mem_usage<T>(items: &Vec<T>) -> usize {
 
 impl BlockedBitpacker {
     pub fn new() -> Self {
-        Self {
-            compressed_blocks: vec![0; 8],
-            buffer: vec![],
-            offset_and_bits: vec![],
-        }
+        Self { compressed_blocks: vec![0; 8], buffer: vec![], offset_and_bits: vec![] }
     }
 
     /// The memory used (inclusive childs)
@@ -93,8 +86,7 @@ impl BlockedBitpacker {
             let num_bits_block = compute_num_bits(*max_value - min_value);
             // todo performance: the padding handling could be done better, e.g. use a slice and
             // return num_bytes written from bitpacker
-            self.compressed_blocks
-                .resize(self.compressed_blocks.len() - 8, 0); // remove padding for bitpacker
+            self.compressed_blocks.resize(self.compressed_blocks.len() - 8, 0); // remove padding for bitpacker
             let offset = self.compressed_blocks.len() as u64;
             // todo performance: for some bit_width we
             // can encode multiple vals into the
@@ -102,24 +94,19 @@ impl BlockedBitpacker {
             // (to be done in BitPacker)
             for val in self.buffer.iter() {
                 bit_packer
-                    .write(
-                        *val - min_value,
-                        num_bits_block,
-                        &mut self.compressed_blocks,
-                    )
-                    .expect("cannot write bitpacking to output"); // write to in memory can't fail
+                    .write(*val - min_value, num_bits_block, &mut self.compressed_blocks)
+                    .expect("cannot write bitpacking to output");
+                // write to in memory can't fail
             }
             bit_packer.flush(&mut self.compressed_blocks).unwrap();
-            self.offset_and_bits
-                .push(BlockedBitpackerEntryMetaData::new(
-                    offset,
-                    num_bits_block,
-                    *min_value,
-                ));
+            self.offset_and_bits.push(BlockedBitpackerEntryMetaData::new(
+                offset,
+                num_bits_block,
+                *min_value,
+            ));
 
             self.buffer.clear();
-            self.compressed_blocks
-                .resize(self.compressed_blocks.len() + 8, 0); // add padding for bitpacker
+            self.compressed_blocks.resize(self.compressed_blocks.len() + 8, 0); // add padding for bitpacker
         }
     }
     #[inline]
@@ -127,10 +114,8 @@ impl BlockedBitpacker {
         let metadata_pos = idx / BLOCK_SIZE;
         let pos_in_block = idx % BLOCK_SIZE;
         if let Some(metadata) = self.offset_and_bits.get(metadata_pos) {
-            let unpacked = BitUnpacker::new(metadata.num_bits()).get(
-                pos_in_block as u32,
-                &self.compressed_blocks[metadata.offset() as usize..],
-            );
+            let unpacked = BitUnpacker::new(metadata.num_bits())
+                .get(pos_in_block as u32, &self.compressed_blocks[metadata.offset() as usize..]);
             unpacked + metadata.base_value()
         } else {
             self.buffer[pos_in_block]
@@ -140,9 +125,8 @@ impl BlockedBitpacker {
     pub fn iter(&self) -> impl Iterator<Item = u64> + '_ {
         // todo performance: we could decompress a whole block and cache it instead
         let bitpacked_elems = self.offset_and_bits.len() * BLOCK_SIZE;
-        let iter = (0..bitpacked_elems)
-            .map(move |idx| self.get(idx))
-            .chain(self.buffer.iter().cloned());
+        let iter =
+            (0..bitpacked_elems).map(move |idx| self.get(idx)).chain(self.buffer.iter().cloned());
         iter
     }
 }

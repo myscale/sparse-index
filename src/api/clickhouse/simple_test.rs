@@ -15,13 +15,7 @@ mod test {
                     let dim_id = (i + j) % 1000000;
                     let weight_f32 = 0.1 + (i + j) as f32;
 
-                    TupleElement {
-                        dim_id,
-                        weight_f32,
-                        weight_u8: 0,
-                        weight_u32: 0,
-                        value_type: 0,
-                    }
+                    TupleElement { dim_id, weight_f32, weight_u8: 0, weight_u32: 0, value_type: 0 }
                 })
                 .collect()
         })

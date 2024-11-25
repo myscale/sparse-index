@@ -28,10 +28,7 @@ pub fn intersect_alive_bitsets(left: AliveBitSet, right: AliveBitSet) -> AliveBi
     assert_eq!(left.bitset().max_value(), right.bitset().max_value());
     let bitset = intersect_bitsets(left.bitset(), right.bitset());
     let num_alive_svs = bitset.len();
-    AliveBitSet {
-        num_alive_svs,
-        bitset,
-    }
+    AliveBitSet { num_alive_svs, bitset }
 }
 
 impl AliveBitSet {
@@ -92,10 +89,7 @@ impl AliveBitSet {
 impl From<ReadOnlyBitSet> for AliveBitSet {
     fn from(bitset: ReadOnlyBitSet) -> AliveBitSet {
         let num_alive_svs = bitset.len();
-        AliveBitSet {
-            num_alive_svs,
-            bitset,
-        }
+        AliveBitSet { num_alive_svs, bitset }
     }
 }
 
@@ -192,9 +186,7 @@ mod bench {
         let alive_bitset = AliveBitSet::for_test_from_deleted_docs(&[0, 1, 1000, 10000], 1_000_000);
 
         bench.iter(|| {
-            (0..1_000_000_u32)
-                .filter(|doc| alive_bitset.is_alive(*doc))
-                .collect::<Vec<_>>()
+            (0..1_000_000_u32).filter(|doc| alive_bitset.is_alive(*doc)).collect::<Vec<_>>()
         });
     }
 
@@ -210,9 +202,7 @@ mod bench {
         let alive_bitset = AliveBitSet::for_test_from_deleted_docs(&get_alive(), 1_000_000);
 
         bench.iter(|| {
-            (0..1_000_000_u32)
-                .filter(|doc| alive_bitset.is_alive(*doc))
-                .collect::<Vec<_>>()
+            (0..1_000_000_u32).filter(|doc| alive_bitset.is_alive(*doc)).collect::<Vec<_>>()
         });
     }
 }

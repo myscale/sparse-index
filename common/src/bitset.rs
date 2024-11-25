@@ -203,11 +203,7 @@ impl BitSet {
     pub fn with_max_value(max_value: u32) -> BitSet {
         let num_buckets = num_buckets(max_value);
         let tinybitsets = vec![TinySet::empty(); num_buckets as usize].into_boxed_slice();
-        BitSet {
-            tinysets: tinybitsets,
-            len: 0,
-            max_value,
-        }
+        BitSet { tinysets: tinybitsets, len: 0, max_value }
     }
 
     /// Create a new `BitSet` that may contain elements. Initially all values will be set.
@@ -221,11 +217,7 @@ impl BitSet {
         if lower != 0 {
             tinybitsets[tinybitsets.len() - 1] = TinySet::range_lower(lower);
         }
-        BitSet {
-            tinysets: tinybitsets,
-            len: max_value as u64,
-            max_value,
-        }
+        BitSet { tinysets: tinybitsets, len: max_value as u64, max_value }
     }
 
     /// Removes all elements from the `BitSet`.
@@ -323,10 +315,7 @@ pub fn intersect_bitsets(left: &ReadOnlyBitSet, other: &ReadOnlyBitSet) -> ReadO
     for tinyset in union_tinyset_it {
         output_dataset.extend_from_slice(&tinyset.into_bytes());
     }
-    ReadOnlyBitSet {
-        data: OwnedBytes::new(output_dataset),
-        max_value: left.max_value(),
-    }
+    ReadOnlyBitSet { data: OwnedBytes::new(output_dataset), max_value: left.max_value() }
 }
 
 impl ReadOnlyBitSet {
@@ -340,9 +329,7 @@ impl ReadOnlyBitSet {
     /// Number of elements in the bitset.
     #[inline]
     pub fn len(&self) -> usize {
-        self.iter_tinysets()
-            .map(|tinyset| tinyset.len() as usize)
-            .sum()
+        self.iter_tinysets().map(|tinyset| tinyset.len() as usize).sum()
     }
 
     /// Iterate the tinyset on the fly from serialized data.
@@ -357,15 +344,13 @@ impl ReadOnlyBitSet {
     /// Iterate over the positions of the elements.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = u32> + '_ {
-        self.iter_tinysets()
-            .enumerate()
-            .flat_map(move |(chunk_num, tinyset)| {
-                let chunk_base_val = chunk_num as u32 * 64;
-                tinyset
-                    .into_iter()
-                    .map(move |val| val + chunk_base_val)
-                    .take_while(move |doc| *doc < self.max_value)
-            })
+        self.iter_tinysets().enumerate().flat_map(move |(chunk_num, tinyset)| {
+            let chunk_base_val = chunk_num as u32 * 64;
+            tinyset
+                .into_iter()
+                .map(move |val| val + chunk_base_val)
+                .take_while(move |doc| *doc < self.max_value)
+        })
     }
 
     /// Returns true iff the elements is in the `BitSet`.
@@ -396,9 +381,7 @@ impl ReadOnlyBitSet {
 impl<'a> From<&'a BitSet> for ReadOnlyBitSet {
     fn from(bitset: &'a BitSet) -> ReadOnlyBitSet {
         let mut buffer = Vec::with_capacity(bitset.tinysets.len() * 8 + 4);
-        bitset
-            .serialize(&mut buffer)
-            .expect("serializing into a buffer should never fail");
+        bitset.serialize(&mut buffer).expect("serializing into a buffer should never fail");
         ReadOnlyBitSet::open(OwnedBytes::new(buffer))
     }
 }
@@ -515,11 +498,7 @@ mod tests {
             assert!(u.pop_lowest().is_none());
         }
         {
-            let mut u = TinySet::empty()
-                .insert(63u32)
-                .insert(1)
-                .insert(5)
-                .remove(63u32);
+            let mut u = TinySet::empty().insert(63u32).insert(1).insert(5).remove(63u32);
             assert_eq!(u.pop_lowest(), Some(1u32));
             assert_eq!(u.pop_lowest(), Some(5u32));
             assert!(u.pop_lowest().is_none());
@@ -621,27 +600,16 @@ mod tests {
 
     #[test]
     fn test_tinyset_range() {
-        assert_eq!(
-            TinySet::range_lower(3).into_iter().collect::<Vec<u32>>(),
-            [0, 1, 2]
-        );
+        assert_eq!(TinySet::range_lower(3).into_iter().collect::<Vec<u32>>(), [0, 1, 2]);
         assert!(TinySet::range_lower(0).is_empty());
         assert_eq!(
             TinySet::range_lower(63).into_iter().collect::<Vec<u32>>(),
             (0u32..63u32).collect::<Vec<_>>()
         );
+        assert_eq!(TinySet::range_lower(1).into_iter().collect::<Vec<u32>>(), [0]);
+        assert_eq!(TinySet::range_lower(2).into_iter().collect::<Vec<u32>>(), [0, 1]);
         assert_eq!(
-            TinySet::range_lower(1).into_iter().collect::<Vec<u32>>(),
-            [0]
-        );
-        assert_eq!(
-            TinySet::range_lower(2).into_iter().collect::<Vec<u32>>(),
-            [0, 1]
-        );
-        assert_eq!(
-            TinySet::range_greater_or_equal(3)
-                .into_iter()
-                .collect::<Vec<u32>>(),
+            TinySet::range_greater_or_equal(3).into_iter().collect::<Vec<u32>>(),
             (3u32..64u32).collect::<Vec<_>>()
         );
     }

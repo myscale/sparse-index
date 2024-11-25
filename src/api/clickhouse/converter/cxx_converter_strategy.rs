@@ -38,9 +38,7 @@ where
     T: Clone + VectorElement,
 {
     pub fn new() -> Self {
-        CxxVectorStrategy {
-            _marker: std::marker::PhantomData,
-        }
+        CxxVectorStrategy { _marker: std::marker::PhantomData }
     }
 }
 impl<T> ConvertStrategy<CxxVector<T>, Vec<T>> for CxxVectorStrategy<T>
@@ -59,11 +57,7 @@ impl ConvertStrategy<CxxVector<CxxString>, Vec<String>> for CxxVectorStringStrat
     fn convert(&self, items: &CxxVector<CxxString>) -> Result<Vec<String>, CxxConvertError> {
         items
             .iter()
-            .map(|item| {
-                item.to_str()
-                    .map(|t| t.to_string())
-                    .map_err(CxxConvertError::Utf8Error)
-            })
+            .map(|item| item.to_str().map(|t| t.to_string()).map_err(CxxConvertError::Utf8Error))
             .collect()
     }
 }

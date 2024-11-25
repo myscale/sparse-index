@@ -2,16 +2,11 @@ use super::{QuantizedParam, QuantizedWeight};
 
 impl QuantizedWeight for f32 {
     fn gen_quantized_param(min_weight: Self, max_weight: Self) -> QuantizedParam {
-        QuantizedParam {
-            min: min_weight,
-            diff256: (max_weight - min_weight) / 255.0,
-        }
+        QuantizedParam { min: min_weight, diff256: (max_weight - min_weight) / 255.0 }
     }
 
     fn quantize_with_param(value: Self, params: QuantizedParam) -> u8 {
-        ((value - params.min) / params.diff256)
-            .round()
-            .clamp(0.0, 255.0) as u8
+        ((value - params.min) / params.diff256).round().clamp(0.0, 255.0) as u8
     }
 
     fn unquantize_with_param(value: u8, params: QuantizedParam) -> Self {

@@ -70,17 +70,12 @@ impl SegmentRegister {
 
     /// 返回 register 存储的所有 seg metas
     pub fn segment_metas(&self) -> Vec<SegmentMeta> {
-        self.segment_states
-            .values()
-            .map(|segment_entry| segment_entry.meta().clone())
-            .collect()
+        self.segment_states.values().map(|segment_entry| segment_entry.meta().clone()).collect()
     }
 
     /// 判断 register 是否包含给出的所有 seg ids
     pub fn contains_all(&self, segment_ids: &[SegmentId]) -> bool {
-        segment_ids
-            .iter()
-            .all(|segment_id| self.segment_states.contains_key(segment_id))
+        segment_ids.iter().all(|segment_id| self.segment_states.contains_key(segment_id))
     }
 
     /// 新增一个 seg 记录项到 register
@@ -119,11 +114,7 @@ mod tests {
     use crate::index::SegmentMetaInventory;
 
     fn segment_ids(segment_register: &SegmentRegister) -> Vec<SegmentId> {
-        segment_register
-            .segment_metas()
-            .into_iter()
-            .map(|segment_meta| segment_meta.id())
-            .collect()
+        segment_register.segment_metas().into_iter().map(|segment_meta| segment_meta.id()).collect()
     }
 
     #[test]

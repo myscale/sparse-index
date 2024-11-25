@@ -66,14 +66,9 @@ where
     K: Clone,
 {
     fn new(inner: I, group_by_fn: F) -> Self {
-        let inner = GroupByShared {
-            iter: inner.peekable(),
-            group_by_fn,
-        };
+        let inner = GroupByShared { iter: inner.peekable(), group_by_fn };
 
-        Self {
-            inner: Rc::new(RefCell::new(inner)),
-        }
+        Self { inner: Rc::new(RefCell::new(inner)) }
     }
 }
 
@@ -93,10 +88,7 @@ where
 
         let inner = self.inner.clone();
 
-        let group_iter = GroupIterator {
-            inner,
-            group_key: key.clone(),
-        };
+        let group_iter = GroupIterator { inner, group_key: key.clone() };
         Some((key, group_iter))
     }
 }
@@ -158,9 +150,6 @@ mod tests {
     fn group_by_three_groups() {
         let vals = vec![1u32, 4, 15, 1];
         let grouped_vals = group_by_collect(vals.into_iter());
-        assert_eq!(
-            grouped_vals,
-            vec![(0, vec![1, 4]), (1, vec![15]), (0, vec![1])]
-        );
+        assert_eq!(grouped_vals, vec![(0, vec![1, 4]), (1, vec![15]), (0, vec![1])]);
     }
 }

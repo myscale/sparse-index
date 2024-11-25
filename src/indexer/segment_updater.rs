@@ -90,9 +90,7 @@ fn garbage_collect_files(
         segment_updater.list_files().len()
     );
     let mut index = segment_updater.index.clone();
-    index
-        .directory_mut()
-        .garbage_collect(move || segment_updater.list_files())
+    index.directory_mut().garbage_collect(move || segment_updater.list_files())
 }
 
 /// Merges a list of segments the list of segment givens in the `segment_entries`.
@@ -101,17 +99,12 @@ fn merge(
     index: &Index,
     mut segment_entries: Vec<SegmentEntry>,
 ) -> crate::Result<Option<SegmentEntry>> {
-    let total_rows_count = segment_entries
-        .iter()
-        .map(|segment| segment.meta().rows_count() as u64)
-        .sum::<u64>();
+    let total_rows_count =
+        segment_entries.iter().map(|segment| segment.meta().rows_count() as u64).sum::<u64>();
     if total_rows_count == 0 {
         return Ok(None);
     }
-    info!(
-        "[start_merge][merge] future merge rows count: {:?}",
-        total_rows_count
-    );
+    info!("[start_merge][merge] future merge rows count: {:?}", total_rows_count);
 
     // 初始化 merge 后的 segment
     let merged_segment = index.new_segment();
@@ -133,10 +126,8 @@ fn merge(
         segments.len()
     );
 
-    let (rows_count, index_files) = merger.unwrap().merge(
-        merged_segment.index().directory().get_path(),
-        Some(&segment_id),
-    )?;
+    let (rows_count, index_files) =
+        merger.unwrap().merge(merged_segment.index().directory().get_path(), Some(&segment_id))?;
 
     let merged_segment = merged_segment.clone().with_rows_count(rows_count as RowId);
 
@@ -154,10 +145,7 @@ fn merge(
     debug!(
         "[{}] - [merge] origin segments {:?}",
         thread::current().name().unwrap_or_default(),
-        segment_entries
-            .iter()
-            .map(|entry| entry.segment_id())
-            .collect::<Vec<_>>()
+        segment_entries.iter().map(|entry| entry.segment_id()).collect::<Vec<_>>()
     );
 
     let meta: SegmentMeta = index.new_segment_meta(merged_segment.id(), rows_count as RowId);
@@ -292,11 +280,8 @@ impl SegmentUpdater {
             // 将梯井提交的 segment 按照 rows 排序
             commited_segment_metas.sort_by_key(|segment_meta| -(segment_meta.rows_count() as i32));
 
-            let index_meta: IndexMeta = IndexMeta {
-                segments: commited_segment_metas,
-                opstamp,
-                payload: commit_message,
-            };
+            let index_meta: IndexMeta =
+                IndexMeta { segments: commited_segment_metas, opstamp, payload: commit_message };
             // TODO add context to the error.
             save_metas(&index_meta, directory.box_clone().borrow_mut())?;
             self.store_meta(&index_meta);
@@ -386,25 +371,20 @@ impl SegmentUpdater {
         &self,
         merge_operation: MergeOperation,
     ) -> FutureResult<Option<SegmentMeta>> {
-        assert!(
-            !merge_operation.segment_ids().is_empty(),
-            "Segment_ids cannot be empty."
-        );
+        assert!(!merge_operation.segment_ids().is_empty(), "Segment_ids cannot be empty.");
 
         let segment_updater = self.clone();
-        let segment_entries: Vec<SegmentEntry> = match self
-            .segment_manager
-            .start_merge(merge_operation.segment_ids())
-        {
-            Ok(segment_entries) => segment_entries,
-            Err(err) => {
-                warn!(
-                    "Starting the merge failed for the following reason. This is not fatal. {}",
-                    err
-                );
-                return err.into();
-            }
-        };
+        let segment_entries: Vec<SegmentEntry> =
+            match self.segment_manager.start_merge(merge_operation.segment_ids()) {
+                Ok(segment_entries) => segment_entries,
+                Err(err) => {
+                    warn!(
+                        "Starting the merge failed for the following reason. This is not fatal. {}",
+                        err
+                    );
+                    return err.into();
+                }
+            };
         info!(
             "[start_merge] get segment_entries for merge, segment entries: {:?}",
             segment_entries
@@ -452,8 +432,7 @@ impl SegmentUpdater {
     pub(crate) fn get_mergeable_segments(&self) -> (Vec<SegmentMeta>, Vec<SegmentMeta>) {
         // 从 segment updater 持有的 merge operations 仓库中获取所有的 seg ids, 这些 ids 会被用来 merge
         let merge_segment_ids: HashSet<SegmentId> = self.merge_operations.segment_in_merge();
-        self.segment_manager
-            .get_mergeable_segments(&merge_segment_ids)
+        self.segment_manager.get_mergeable_segments(&merge_segment_ids)
     }
 
     /// 获取 uncommitted 与 committed 两个集合中需要合并的 segments </br>
@@ -462,7 +441,12 @@ impl SegmentUpdater {
     fn consider_merge_options(&self) {
         // 获取 committed 和 uncommitted 两种集合状态下的 seg ids, 它们之间不能 *混合合并*
         let (committed_segments, uncommitted_segments) = self.get_mergeable_segments();
-        debug!("[{}] - [consider_merge_options] entry, committed_segs size:{}, uncommitted_segs size:{}", thread::current().name().unwrap_or_default(), committed_segments.len(), uncommitted_segments.len());
+        debug!(
+            "[{}] - [consider_merge_options] entry, committed_segs size:{}, uncommitted_segs size:{}",
+            thread::current().name().unwrap_or_default(),
+            committed_segments.len(),
+            uncommitted_segments.len()
+        );
 
         let merge_policy: Arc<dyn MergePolicy> = self.get_merge_policy();
 
@@ -509,9 +493,8 @@ impl SegmentUpdater {
         after_merge_segment_entry: Option<SegmentEntry>,
     ) -> crate::Result<Option<SegmentMeta>> {
         let segment_updater: SegmentUpdater = self.clone();
-        let after_merge_segment_meta: Option<SegmentMeta> = after_merge_segment_entry
-            .as_ref()
-            .map(|segment_entry| segment_entry.meta().clone());
+        let after_merge_segment_meta: Option<SegmentMeta> =
+            after_merge_segment_entry.as_ref().map(|segment_entry| segment_entry.meta().clone());
 
         self.schedule_task(move || {
             info!(

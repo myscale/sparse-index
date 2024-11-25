@@ -26,9 +26,7 @@ use crate::MANAGED_FILEPATH;
 /// are not managed.
 /// 以 "." 开头的文件名通常是锁文件，不会被管理
 fn is_managed(path: &Path) -> bool {
-    path.to_str()
-        .map(|p_str| !p_str.starts_with('.'))
-        .unwrap_or(true)
+    path.to_str().map(|p_str| !p_str.starts_with('.')).unwrap_or(true)
 }
 
 /// Wrapper of directories that keeps track of files created by Tantivy.
@@ -91,17 +89,14 @@ impl ManagedDirectory {
                     })),
                 })
             }
-            Err(OpenReadError::FileDoesNotExist(_)) => Ok(ManagedDirectory {
-                directory,
-                meta_informations: Arc::default(),
-            }),
+            Err(OpenReadError::FileDoesNotExist(_)) => {
+                Ok(ManagedDirectory { directory, meta_informations: Arc::default() })
+            }
             io_err @ Err(OpenReadError::IoError { .. }) => Err(io_err.err().unwrap().into()),
             Err(OpenReadError::IncompatibleIndex(incompatibility)) => {
                 // For the moment, this should never happen  `meta.json`
                 // do not have any footer and cannot detect incompatibility.
-                Err(crate::common::errors::SparseError::IncompatibleIndex(
-                    incompatibility,
-                ))
+                Err(crate::common::errors::SparseError::IncompatibleIndex(incompatibility))
             }
         }
     }
@@ -207,16 +202,20 @@ impl ManagedDirectory {
             }
         }
 
-        info!("[{}] - [garbage_collect] files_to_delete size: {}, failed delete: {}, success delete: {}", thread::current().name().unwrap_or_default(), files_to_delete.len(), failed_to_delete_files.len(), deleted_files.len());
+        info!(
+            "[{}] - [garbage_collect] files_to_delete size: {}, failed delete: {}, success delete: {}",
+            thread::current().name().unwrap_or_default(),
+            files_to_delete.len(),
+            failed_to_delete_files.len(),
+            deleted_files.len()
+        );
 
         // 删除垃圾文件之后更新 .managed.json 文件
         if !deleted_files.is_empty() {
             // update the list of managed files by removing
             // the file that were removed.
-            let mut meta_informations_wlock = self
-                .meta_informations
-                .write()
-                .expect("Managed directory wlock poisoned (2).");
+            let mut meta_informations_wlock =
+                self.meta_informations.write().expect("Managed directory wlock poisoned (2).");
             let managed_paths_write = &mut meta_informations_wlock.managed_paths;
             for delete_file in &deleted_files {
                 managed_paths_write.remove(delete_file);
@@ -225,10 +224,7 @@ impl ManagedDirectory {
             save_managed_paths(self.directory.as_mut(), &meta_informations_wlock)?;
         }
 
-        Ok(GarbageCollectionResult {
-            deleted_files,
-            failed_to_delete_files,
-        })
+        Ok(GarbageCollectionResult { deleted_files, failed_to_delete_files })
     }
 
     /// Registers a file as managed
@@ -247,24 +243,15 @@ impl ManagedDirectory {
     pub fn register_file_as_managed(&self, filepath: &Path) -> io::Result<()> {
         // Files starting by "." (e.g. lock files) are not managed.
         if !is_managed(filepath) {
-            info!(
-                "[register_file_as_managed] file is not belong to managed: {:?}",
-                filepath
-            );
+            info!("[register_file_as_managed] file is not belong to managed: {:?}", filepath);
             return Ok(());
         }
-        let mut meta_wlock = self
-            .meta_informations
-            .write()
-            .expect("Managed file lock poisoned");
+        let mut meta_wlock = self.meta_informations.write().expect("Managed file lock poisoned");
         let has_changed = meta_wlock.managed_paths.insert(filepath.to_owned());
         if !has_changed {
             return Ok(());
         } else {
-            info!(
-                "[register_file_as_managed] managed_paths inserted item: {:?}",
-                filepath
-            );
+            info!("[register_file_as_managed] managed_paths inserted item: {:?}", filepath);
         }
         save_managed_paths(self.directory.as_ref(), &meta_wlock)?;
         // This is not the first file we add.
@@ -288,12 +275,10 @@ impl ManagedDirectory {
         let reader = self.directory.open_read(path)?;
         let (footer, data) = Footer::extract_footer(reader)
             .map_err(|io_error| OpenReadError::wrap_io_error(io_error, path.to_path_buf()))?;
-        let bytes = data
-            .read_bytes()
-            .map_err(|io_error| OpenReadError::IoError {
-                io_error: Arc::new(io_error),
-                filepath: path.to_path_buf(),
-            })?;
+        let bytes = data.read_bytes().map_err(|io_error| OpenReadError::IoError {
+            io_error: Arc::new(io_error),
+            filepath: path.to_path_buf(),
+        })?;
         let mut hasher = Hasher::new();
         hasher.update(bytes.as_slice());
         let crc = hasher.finalize();
@@ -406,9 +391,7 @@ mod tests_mmap_specific {
             let mut managed_directory = ManagedDirectory::wrap(Box::new(mmap_directory)).unwrap();
             let write_file = managed_directory.open_write(test_path1).unwrap();
             write_file.terminate().unwrap();
-            managed_directory
-                .atomic_write(test_path2, &[0u8, 1u8])
-                .unwrap();
+            managed_directory.atomic_write(test_path2, &[0u8, 1u8]).unwrap();
             assert!(managed_directory.exists(test_path1).unwrap());
             assert!(managed_directory.exists(test_path2).unwrap());
             let living_files: HashSet<PathBuf> = [test_path1.to_owned()].iter().cloned().collect();
@@ -444,9 +427,7 @@ mod tests_mmap_specific {
         assert!(managed_directory.exists(test_path1).unwrap());
 
         let _mmap_read = managed_directory.open_read(test_path1).unwrap();
-        assert!(managed_directory
-            .garbage_collect(|| living_files.clone())
-            .is_ok());
+        assert!(managed_directory.garbage_collect(|| living_files.clone()).is_ok());
         if cfg!(target_os = "windows") {
             // On Windows, gc should try and fail the file as it is mmapped.
             assert!(managed_directory.exists(test_path1).unwrap());

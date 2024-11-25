@@ -102,10 +102,7 @@ impl MmapCache {
 
     fn get_info(&self) -> CacheInfo {
         let paths: Vec<PathBuf> = self.cache.keys().cloned().collect();
-        CacheInfo {
-            counters: self.counters.clone(),
-            mmapped: paths,
-        }
+        CacheInfo { counters: self.counters.clone(), mmapped: paths }
     }
 
     /// 移除所有已经过期, 无法升级的弱引用
@@ -205,9 +202,7 @@ impl fmt::Debug for MmapDirectory {
 impl MmapDirectory {
     fn new(root_path: PathBuf, temp_directory: Option<TempDir>) -> MmapDirectory {
         let inner = MmapDirectoryInner::new(root_path, temp_directory);
-        MmapDirectory {
-            inner: Arc::new(inner),
-        }
+        MmapDirectory { inner: Arc::new(inner) }
     }
 
     /// Creates a new MmapDirectory in a temporary directory.
@@ -217,10 +212,7 @@ impl MmapDirectory {
     pub fn create_from_tempdir() -> Result<MmapDirectory, OpenDirectoryError> {
         let tempdir = TempDir::new()
             .map_err(|io_err| OpenDirectoryError::FailedToCreateTempDir(Arc::new(io_err)))?;
-        Ok(MmapDirectory::new(
-            tempdir.path().to_path_buf(),
-            Some(tempdir),
-        ))
+        Ok(MmapDirectory::new(tempdir.path().to_path_buf(), Some(tempdir)))
     }
 
     /// Opens a MmapDirectory in a directory, with a given access pattern.
@@ -252,9 +244,7 @@ impl MmapDirectory {
         directory_path: &Path,
     ) -> Result<MmapDirectory, OpenDirectoryError> {
         if !directory_path.exists() {
-            return Err(OpenDirectoryError::DoesNotExist(PathBuf::from(
-                directory_path,
-            )));
+            return Err(OpenDirectoryError::DoesNotExist(PathBuf::from(directory_path)));
         }
         #[allow(clippy::bind_instead_of_map)]
         let canonical_path: PathBuf = directory_path.canonicalize().or_else(|io_err| {
@@ -273,9 +263,7 @@ impl MmapDirectory {
             Err(OpenDirectoryError::wrap_io_error(io_err, directory_path))
         })?;
         if !canonical_path.is_dir() {
-            return Err(OpenDirectoryError::NotADirectory(PathBuf::from(
-                directory_path,
-            )));
+            return Err(OpenDirectoryError::NotADirectory(PathBuf::from(directory_path)));
         }
         Ok(MmapDirectory::new(canonical_path, None))
     }
@@ -292,16 +280,8 @@ impl MmapDirectory {
     /// The `MmapDirectory` embeds a `MmapDirectory`
     /// to avoid multiplying the `mmap` system calls.
     pub fn get_cache_info(&self) -> CacheInfo {
-        self.inner
-            .mmap_cache
-            .write()
-            .expect("mmap cache lock is poisoned")
-            .remove_weak_ref();
-        self.inner
-            .mmap_cache
-            .read()
-            .expect("Mmap cache lock is poisoned.")
-            .get_info()
+        self.inner.mmap_cache.write().expect("mmap cache lock is poisoned").remove_weak_ref();
+        self.inner.mmap_cache.read().expect("Mmap cache lock is poisoned.").get_info()
     }
 }
 
@@ -369,10 +349,7 @@ pub(crate) fn atomic_write(path: &Path, content: &[u8]) -> io::Result<()> {
     // Indeed the canonical temp directory and the target file might sit in different
     // filesystem, in which case the atomic write may actually not work.
     let parent_path = path.parent().ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Path {:?} does not have parent directory.",
-        )
+        io::Error::new(io::ErrorKind::InvalidInput, "Path {:?} does not have parent directory.")
     })?;
     let mut tempfile = tempfile::Builder::new().tempfile_in(parent_path)?;
     tempfile.write_all(content)?;
@@ -418,10 +395,7 @@ impl Directory for MmapDirectory {
             if e.kind() == io::ErrorKind::NotFound {
                 DeleteError::FileDoesNotExist(path.to_owned())
             } else {
-                DeleteError::IoError {
-                    io_error: Arc::new(e),
-                    filepath: path.to_path_buf(),
-                }
+                DeleteError::IoError { io_error: Arc::new(e), filepath: path.to_path_buf() }
             }
         })?;
         Ok(())
@@ -438,10 +412,7 @@ impl Directory for MmapDirectory {
         debug!("Open Write {:?}", path);
         let full_path = self.resolve_path(path);
 
-        let open_res = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(full_path);
+        let open_res = OpenOptions::new().write(true).create_new(true).open(full_path);
 
         let mut file = open_res.map_err(|io_err| {
             if io_err.kind() == io::ErrorKind::AlreadyExists {
@@ -584,9 +555,8 @@ mod tests {
         // mmaps correctly.
         let mmap_directory = MmapDirectory::create_from_tempdir().unwrap();
         let num_paths = 10;
-        let paths: Vec<PathBuf> = (0..num_paths)
-            .map(|i| PathBuf::from(&*format!("file_{}", i)))
-            .collect();
+        let paths: Vec<PathBuf> =
+            (0..num_paths).map(|i| PathBuf::from(&*format!("file_{}", i))).collect();
         {
             for path in &paths {
                 let mut w = mmap_directory.open_write(path).unwrap();
