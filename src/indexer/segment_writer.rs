@@ -12,14 +12,10 @@ pub struct SegmentWriter {
     pub(crate) num_rows_count: RowId,
     pub(crate) memory_budget_in_bytes: usize,
     pub(crate) segment: Segment,
-    // TODO 需要能够检测到 ram builder 的内存, 超过限制之后就写入到 Segment, 然后创建新的 Segment
-    // 直接在 InvertedIndexRamBuilder 增加一个函数，用来获取当前 ram 的估计值
     pub(crate) index_ram_builder: GenericInvertedIndexRamBuilder,
-    // TODO 增加一个 data writer 的内容用来写入数据
 }
 
 impl SegmentWriter {
-    /// Segment 级别创建一个索引文件
     pub fn for_segment(memory_budget_in_bytes: usize, segment: Segment) -> crate::Result<Self> {
         let index_ram_builder =
             GenericInvertedIndexRamBuilder::new(&segment.index().index_settings());
@@ -43,13 +39,11 @@ impl SegmentWriter {
         return Ok(index_files);
     }
 
-    /// 检查 memory 使用
     pub fn mem_usage(&self) -> usize {
         self.index_ram_builder.memory_usage()
     }
 
-    /// 索引一行数据
-    /// TODO 数据的行数可以后续优化
+    /// TODO: Refine the way we compute num_rows_count.
     pub fn index_row_content(&mut self, add_operation: AddOperation) -> crate::Result<bool> {
         let AddOperation { opstamp: _, row_content } = add_operation;
         let is_insert_operation =

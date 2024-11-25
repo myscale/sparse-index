@@ -42,25 +42,25 @@ pub struct Lock {
 /// (creating more than one instance of the `IndexWriter`), are a spurious
 /// lock file remaining after a crash. In the latter case, removing the file after
 /// checking no process running tantivy is running is safe.
-///
-/// 保证任何时间只能够有一个进程创建写入 SparseIndex </br>
-/// 如果说写入索引的进程因为某些原因崩溃了, 这个文件仍然存在 index 文件夹中, 就可以手动删除该文件
 pub static INDEX_WRITER_LOCK: Lazy<Lock> =
     Lazy::new(|| Lock { filepath: PathBuf::from(".sparse-index-writer.lock"), is_blocking: false });
 
-/// The meta lock file is here to protect the segment files being opened by
+/// The meta lock file is used to protect the segment files being opened by
 /// `IndexReader::reload()` from being garbage collected.
-/// It makes it possible for another process to safely consume
-/// our index in-writing. Ideally, we may have preferred `RWLock` semantics
-/// here, but it is difficult to achieve on Windows.
+/// It allows another process to safely access our index while it is being written.
+/// Ideally, we would prefer `RWLock` semantics here, but achieving this on Windows
+/// is challenging.
 ///
 /// Opening segment readers is a very fast process.
 ///
-/// 在 SparseIndex 中, 当 IndexReader 重新加载 reload() 时, 需要打开 Segments 文件 </br>
-/// 在打开 Segments 文件的过程中 GC 可能正在运行, 并 delete 一些无用的 Segments 文件 </br>
-/// 这可能会导致 IndexReader 尝试打开正在被删除的 Segments 文件, 从而产生无法预测的问题 </br>
+/// In SparseIndex, when `IndexReader` reloads using `reload()`, it needs to open segment files.
+/// During this process, garbage collection (GC) may be running and deleting
+/// some unused segment files.
+/// This could lead to `IndexReader` attempting to open segment files that are being deleted,
+/// resulting in unpredictable issues.
 ///
-/// 为了避免该问题, 引入 META_LOCK, 当 IndexReader 重新加载 reload() 时, 会尝试获取 META_LOCK </br>
-/// 同样的, 在 GC 开始执行时也需要获取 META_LOCK
+/// To avoid this problem, a META_LOCK is introduced. When `IndexReader` reloads,
+/// it will attempt to acquire the META_LOCK.
+/// Similarly, the META_LOCK must also be acquired when GC begins executing.
 pub static META_LOCK: Lazy<Lock> =
     Lazy::new(|| Lock { filepath: PathBuf::from(".sparse-index-meta.lock"), is_blocking: true });

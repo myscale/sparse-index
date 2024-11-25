@@ -8,7 +8,7 @@ mod segment_id;
 mod segment_reader;
 
 pub use segment_component::SegmentComponent;
-pub use segment_id::{SegmentId, SegmentIdParseError};
+pub use segment_id::SegmentId;
 
 pub use index::Index;
 pub use index_builder::*;
@@ -16,5 +16,3 @@ pub use index_meta::*;
 pub use index_settings::IndexSettings;
 pub use segment::Segment;
 pub use segment_reader::SegmentReader;
-
-use crate::core::{index_searcer::IndexSearcher, CompressedInvertedIndexMmap, InvertedIndexMmap};

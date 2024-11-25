@@ -2,7 +2,6 @@
 mod common;
 pub mod index_searcer;
 mod inverted_index;
-mod loader;
 mod posting_list;
 mod scores;
 mod sparse_vector;
@@ -697,7 +696,6 @@ impl GenericInvertedIndexMmapType {
         min_row_id: &mut RowId,
         max_row_id: &mut RowId,
     ) -> Option<Vec<GenericPostingsIterator>> {
-        // let postings_iterators: Option<GenericPostingsIterators>;
         let mut postings_iterators: Vec<GenericPostingsIterator> = vec![];
         match self {
             GenericInvertedIndexMmapType::InvertedIndexMmapF32NoQuantized(inverted_index_mmap) => {

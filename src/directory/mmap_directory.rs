@@ -33,10 +33,10 @@ pub(crate) fn make_io_err(msg: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, msg)
 }
 
-/// 尝试对位于 full_path 的文件进行内存映射 </br>
-/// Ok(Some(Mmap)) 表示内存映射成功 </br>
-/// Ok(None) 表示文件为空 </br>
-/// Err(...) 表示映射过程发生错误 </br>
+/// Attempt to memory-map the file located at full_path. </br>
+/// Ok(Some(Mmap)) indicates that the memory mapping was successful. </br>
+/// Ok(None) indicates that the file is empty. </br>
+/// Err(...) indicates that an error occurred during the mapping process. </br>
 fn open_mmap(full_path: &Path) -> Result<Option<Mmap>, OpenReadError> {
     let file = File::open(full_path).map_err(|io_err| {
         if io_err.kind() == io::ErrorKind::NotFound {
@@ -50,7 +50,7 @@ fn open_mmap(full_path: &Path) -> Result<Option<Mmap>, OpenReadError> {
         .metadata()
         .map_err(|io_err| OpenReadError::wrap_io_error(io_err, full_path.to_owned()))?;
 
-    // 文件名存在但是文件内容是空的
+    // file exist, but file content is empty.
     if meta_data.len() == 0 {
         return Ok(None);
     }
@@ -105,7 +105,7 @@ impl MmapCache {
         CacheInfo { counters: self.counters.clone(), mmapped: paths }
     }
 
-    /// 移除所有已经过期, 无法升级的弱引用
+    /// Remove all outdated and can't upgrade weak_reference.
     fn remove_weak_ref(&mut self) {
         let keys_to_remove: Vec<PathBuf> = self
             .cache
@@ -128,8 +128,8 @@ impl MmapCache {
         Ok(mmap_opt)
     }
 
-    // Returns None if the file exists but as a len of 0 (and hence is not mmappable).
-    /// 尝试从缓存内获得文件的内存映射
+    /// Returns None if the file exists but as a len of 0 (and hence is not mmappable). </br>
+    /// Try get file's mmap from mmap_cache.
     fn get_mmap(&mut self, full_path: &Path) -> Result<Option<ArcBytes>, OpenReadError> {
         if let Some(mmap_weak) = self.cache.get(full_path) {
             if let Some(mmap_arc) = mmap_weak.upgrade() {
@@ -163,18 +163,14 @@ impl MmapCache {
 /// On Windows the semantics are again different.
 #[derive(Clone)]
 pub struct MmapDirectory {
-    /// 共享目录的内部状态
     inner: Arc<MmapDirectoryInner>,
 }
 
 struct MmapDirectoryInner {
-    /// 目录的跟路径
+    /// directory root path
     root_path: PathBuf,
-    /// 内存映射文件 cache
     mmap_cache: RwLock<MmapCache>,
-    /// 临时目录
     _temp_directory: Option<TempDir>,
-    /// 文件监视器
     watcher: FileWatcher,
 }
 
@@ -217,9 +213,7 @@ impl MmapDirectory {
 
     /// Opens a MmapDirectory in a directory, with a given access pattern.
     ///
-    /// This is only supported on unix platforms.
-    ///
-    /// unix 平台上使用给定的 madvice 内存映射访问模式来打开一个 MmapDirectory
+    /// **This is only supported on unix platforms.**
     #[cfg(unix)]
     pub fn open_with_madvice(
         directory_path: impl AsRef<Path>,
@@ -238,7 +232,7 @@ impl MmapDirectory {
         Self::open_impl_to_avoid_monomorphization(directory_path.as_ref())
     }
 
-    /// 禁用内联来避免单态优化，减小二进制文件大小
+    // Disable inlining to avoid monomorphization optimization and reduce the binary size.
     #[inline(never)]
     fn open_impl_to_avoid_monomorphization(
         directory_path: &Path,
@@ -290,7 +284,7 @@ impl MmapDirectory {
 /// the `File` object is dropped and its associated file descriptor
 /// is closed.
 ///
-/// 用于在文件锁定期间持有文件句柄以及文件路径
+/// Used to hold the file handle and file path during the file locking period.
 struct ReleaseLockFile {
     _file: File,
     path: PathBuf,
@@ -330,7 +324,7 @@ impl TerminatingWrite for SafeFileWriter {
     }
 }
 
-/// 表示一个内存映射的字节数组, 可以在多个线程之间安全共享
+/// Represents a memory-mapped byte array that can be safely shared across multiple threads.
 #[derive(Clone)]
 struct MmapArc(Arc<dyn Deref<Target = [u8]> + Send + Sync>);
 
@@ -364,8 +358,8 @@ impl Directory for MmapDirectory {
         self.inner.root_path.clone()
     }
 
-    /// 从 mmap cache 中获得指定路径的内存映射 </br>
-    /// 返回该路径对应数据的 OwnedBytes 对象
+    /// Obtain the memory mapping for the specified path from the mmap cache.
+    /// Returns an `OwnedBytes` object corresponding to the data at that path.
     fn get_file_handle(&self, path: &Path) -> Result<Arc<dyn FileHandle>, OpenReadError> {
         debug!("Open Read {:?}", path);
         let full_path = self.resolve_path(path);

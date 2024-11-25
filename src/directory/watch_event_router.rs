@@ -5,13 +5,12 @@ use log::error;
 use crate::future_result::FutureResult;
 
 /// Cloneable wrapper for callbacks registered when watching files of a `Directory`.</br>
-/// 存储回调函数
+/// Store callback function.
 #[derive(Clone)]
 pub struct WatchCallback(Arc<dyn Fn() + Sync + Send>);
 
 impl WatchCallback {
-    /// Wraps a `Fn()` to create a WatchCallback. </br>
-    /// 创建一个回调函数
+    /// Wraps a `Fn()` to create a WatchCallback.
     pub fn new<F: Fn() + Sync + Send + 'static>(op: F) -> Self {
         WatchCallback(Arc::new(op))
     }
@@ -27,7 +26,7 @@ impl WatchCallback {
 /// It registers callbacks (See `.subscribe(...)`) and
 /// calls them upon calls to `.broadcast(...)`.
 ///
-/// 用于在 `Directory` trait 实现中管理回调函数的注册和触发
+/// Used to manage the registration and triggering of callback functions in the `Directory` trait implementation.
 #[derive(Default)]
 pub struct WatchCallbackList {
     router: RwLock<Vec<Weak<WatchCallback>>>,
@@ -38,7 +37,8 @@ pub struct WatchCallbackList {
 /// After all the clones of `WatchHandle` are dropped, the associated will not be called when a
 /// file change is detected.
 ///
-/// 控制回调函数生命周期的句柄, 所有的 WatchHandle clone 对象都被丢弃的时候，相关的回调函数将不会再被使用
+/// A handle that controls the lifecycle of callback functions. 
+/// When all cloned WatchHandle objects are discarded, the associated callback functions will no longer be used.
 #[must_use = "This `WatchHandle` controls the lifetime of the watch and should therefore be used."]
 #[derive(Clone)]
 pub struct WatchHandle(Arc<WatchCallback>);
@@ -59,8 +59,8 @@ impl WatchHandle {
 
 impl WatchCallbackList {
     /// Subscribes a new callback and returns a handle that controls the lifetime of the callback. </br>
-    /// 将传入的 WatchCallback 包装在 Arc 并降级为 Weak 存储到内部回调函数 list 中 </br>
-    /// 返回一个空的 WatchHandle 包装的 WatchCallback
+    /// Wrap the provided WatchCallback in an Arc and downgrade it to a Weak reference, storing it in the internal callback function list. </br>
+    /// Returns an empty WatchHandle that wraps the WatchCallback.
     pub fn subscribe(&self, watch_callback: WatchCallback) -> WatchHandle {
         let watch_callback_arc = Arc::new(watch_callback);
         let watch_callback_weak = Arc::downgrade(&watch_callback_arc);
@@ -68,7 +68,7 @@ impl WatchCallbackList {
         WatchHandle::new(watch_callback_arc)
     }
 
-    /// 获取当前注册的所有回调函数, 清理已经失效的回调函数
+    /// Retrieve all currently registered callback functions and clean up any that are no longer valid.
     fn list_callback(&self) -> Vec<WatchCallback> {
         let mut callbacks: Vec<WatchCallback> = vec![];
         let mut router_wlock = self.router.write().unwrap();
@@ -84,8 +84,7 @@ impl WatchCallbackList {
         callbacks
     }
 
-    /// Triggers all callbacks </br>
-    /// 触发所有的回调函数
+    /// Triggers all callbacks
     pub fn broadcast(&self) -> FutureResult<()> {
         let callbacks = self.list_callback();
         let (result, sender) = FutureResult::create("One of the callback panicked.");

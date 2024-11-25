@@ -23,15 +23,17 @@ use crate::indexer::{MergePolicy, SegmentEntry, SegmentWriter};
 use crate::sparse_index::StorageType;
 use crate::Opstamp;
 
-/// 用于设置 memory_arena 的边界大小, 当 memory_area 中剩余内存低于该值时(1MB), 关闭 segment
+/// Used to set the boundary size for the memory arena; 
+/// when the remaining memory in the memory arena falls below this value (1MB), the segment will be closed.
 pub const MARGIN_IN_BYTES: usize = 1_000_000;
 
-/// 定义每个线程的最小内存预算
+/// Defines the minimum memory budget for each thread.
 pub const MEMORY_BUDGET_NUM_BYTES_MIN: usize = ((MARGIN_IN_BYTES as u32) * 15u32) as usize;
-/// 定义每个线程的最大内存预算
+/// Defines the maximum memory budget for each thread.
 pub const MEMORY_BUDGET_NUM_BYTES_MAX: usize = u32::MAX as usize - MARGIN_IN_BYTES;
 
-/// 并发写入索引的线程数（不建议超过 8）
+/// Number of threads for concurrent index writing (not recommended to exceed 8).
+/// TODO: Consider making it have an actual effect.
 pub const MAX_NUM_THREAD: usize = 8;
 
 /// Add document will block if the number of docs waiting in the queue to be indexed reaches `PIPELINE_MAX_SIZE_IN_DOCS`
@@ -43,28 +45,27 @@ fn error_in_index_worker_thread(context: &str) -> SparseError {
     ))
 }
 
-/// `IndexWriter` 用于往一个 Index 中插入数据 </br>
-/// 它管理了一些 indexing 线程, 以及一个共享的 indexing 队列 </br>
+/// `IndexWriter` is used to insert data into an Index.
+/// It manages several indexing threads and a shared indexing queue.
 ///
-/// 每个 indexing 线程都在通过 `SegmentWriter` 去 构建 独立的 Segment
+/// Each indexing thread constructs independent Segments through a `SegmentWriter`.
 pub struct IndexWriter {
-    // the lock is just used to bind the lifetime of the lock with that of the IndexWriter.
+    /// the lock is just used to bind the lifetime of the lock with that of the IndexWriter.
     _directory_lock: Option<DirectoryLock>,
 
     index: Index,
 
     // The memory budget per thread, after which a commit is triggered.
-    // 每个线程的内存预算，超过这个内存预算就会触发 commit
     memory_budget_in_bytes_per_thread: usize,
 
-    /// 存储多线程句柄
+    /// Stores threads handle.
     workers_join_handle: Vec<JoinHandle<crate::Result<()>>>,
 
     index_writer_status: IndexWriterStatus,
 
     operation_sender: AddBatchSender,
 
-    /// 用来更新 segment 的类（合并操作）
+    /// Used to update segment, like merge operation.
     segment_updater: SegmentUpdater,
 
     worker_id: usize,
@@ -75,10 +76,10 @@ pub struct IndexWriter {
     committed_opstamp: Opstamp,
 }
 
-/// 在 index worker 内部会 loop 不断获取 AddBatch 并尝试调用 index_documents.
-/// - memory_budget: 索引单个 segment 的内存预算
-/// - grouped_sv_iterator: 从 Chanel 获取 sv
-/// - segment_updater: 更新写入 segment 的类
+/// Inside the index worker, there will be a loop that continuously retrieves AddBatch and attempts to call index_documents.
+/// - memory_budget: Memory budget for indexing a single segment.
+/// - grouped_sv_iterator: Retrieves sparse-vector from the channel.
+/// - segment_updater: Object for updating the written segment.
 fn index_documents(
     index_settings: &IndexSettings,
     memory_budget: usize,
@@ -86,14 +87,13 @@ fn index_documents(
     grouped_sv_iterator: &mut dyn Iterator<Item = AddBatch>,
     segment_updater: &SegmentUpdater,
 ) -> crate::Result<()> {
-    info!("{} [index documents] enter", thread::current().name().unwrap_or_default());
+    debug!("{} [index documents] enter", thread::current().name().unwrap_or_default());
     let mmap_type: StorageType = index_settings.config.storage_type;
     assert_ne!(mmap_type, StorageType::Ram);
 
-    // 初始化 segment writer
     let mut segment_writer = SegmentWriter::for_segment(memory_budget, segment.clone())?;
 
-    // 遍历接收到的 svs
+    // iterate the sparse-vector we received
     for sv_group in grouped_sv_iterator {
         // 逐行写入 sparse row content 到 segment 内部
         for sv in sv_group {
@@ -112,7 +112,7 @@ fn index_documents(
             mem_usage,
             memory_budget - MARGIN_IN_BYTES
         );
-        // 统计当前的内存超过了限制, 就停止继续索引, 后面会 构建 新的 segment
+        // If reach memory limit, we should serialize this segment.
         if mem_usage >= memory_budget - MARGIN_IN_BYTES {
             info!(
                 "[{}] [index_documents] memory limit reached, flushing segment {} with rows_count={}.",
@@ -137,8 +137,7 @@ fn index_documents(
     // this is ensured by the call to peek before starting the worker thread.
     assert!(rows_count > 0);
 
-    // 序列化存储
-    // TODO 目前这个 doc_opstamps 不会直接使用到, 是和 delete 相关的，可以先直接删除了
+    // execute serialize.
     let file_relative_paths: Vec<PathBuf> = segment_writer.finalize()?;
     for path in file_relative_paths {
         segment.index().directory().register_file_as_managed(&path)?;
@@ -150,9 +149,7 @@ fn index_documents(
     meta.untrack_temp_svstore();
 
     // update segment_updater inventory to remove tempstore
-    // let segment_entry = SegmentEntry::new(meta, delete_cursor, alive_bitset_opt);
     let segment_entry = SegmentEntry::new(meta, None);
-    // 将 segment 加入 merge 计划
     segment_updater.schedule_add_segment(segment_entry).wait()?;
     Ok(())
 }
@@ -219,24 +216,25 @@ impl IndexWriter {
         &self.index
     }
 
-    /// 停止掉所有的 merge 线程
-    /// 消耗 self 对象，最终使 IndexWriter 销毁
+    /// Stop all merge threads.
+    /// Consume the self object, ultimately causing the IndexWriter to be destroyed.
     pub fn wait_merging_threads(mut self) -> crate::Result<()> {
         // this will stop the indexing thread,
         // dropping the last reference to the segment_updater.
-        // TODO 搞清楚为什么 drop sender 之后就能够停止继续索引了
+
+        // TODO: Figure out why it can stop merging after drop sender.
         self.drop_sender();
 
         let former_workers_handles = std::mem::take(&mut self.workers_join_handle);
         for join_handle in former_workers_handles {
-            // 阻塞当前线程, 直到对应的工作线程完成并返回一个 Result
+            // Block the current thread until the corresponding worker thread completes and returns a Result.
             join_handle
                 .join()
                 .map_err(|_| error_in_index_worker_thread("Worker thread panicked."))?
                 .map_err(|_| error_in_index_worker_thread("Worker thread failed."))?;
         }
 
-        // 在 segment updater 停止掉 merge 线程
+        // Stop the merge threads in the segment updater.
         let result = self
             .segment_updater
             .wait_merging_thread()
@@ -355,9 +353,9 @@ impl IndexWriter {
         self.segment_updater.schedule_garbage_collect()
     }
 
-    /// 删除索引中的所有数据
+    /// delete all data in index.
     ///
-    /// TODO 搞清楚为什么 revert 的对象是 self.committed_opstamp
+    /// TODO: Figure out the logic in `revert` and the effect of `self.committed_opstamp`
     pub fn delete_all_documents(&self) -> crate::Result<Opstamp> {
         // Delete segments
         self.segment_updater.remove_all_segments();
@@ -366,7 +364,7 @@ impl IndexWriter {
         Ok(self.committed_opstamp)
     }
 
-    /// merge 给定的一组 segment_ids，并返回新的 SegmentMeta
+    /// Merge the given set of segment_ids and return the new SegmentMeta.
     pub fn merge(&mut self, segment_ids: &[SegmentId]) -> FutureResult<Option<SegmentMeta>> {
         let merge_operation = self.segment_updater.make_merge_operation(segment_ids);
         let segment_updater = self.segment_updater.clone();
@@ -381,7 +379,8 @@ impl IndexWriter {
     /// when no documents are remaining.
     ///
     /// Returns the former segment_ready channel.
-    /// TODO 旧通道中的数据大概率是会发生丢失的，这段注释应该是有点儿问题，被替换掉的通道也没有返回给用户
+    /// 
+    /// TODO: Data in the old channel is likely to be lost. This comment may have issues, as the replaced channel is not returned to the user.
     fn recreate_document_channel(&mut self) {
         let (document_sender, document_receiver) =
             crossbeam_channel::bounded(PIPELINE_MAX_SIZE_IN_DOCS);
@@ -478,12 +477,12 @@ impl IndexWriter {
 
         let former_workers_join_handle = std::mem::take(&mut self.workers_join_handle);
 
-        // 阻塞等待旧的 index 线程结束掉
+        // Block and wait for the old index threads to finish.
         for worker_handle in former_workers_join_handle {
             let indexing_worker_result =
                 worker_handle.join().map_err(|e| SparseError::ErrorInThread(format!("{e:?}")))?;
             indexing_worker_result?;
-            // 结束一个 index 线程就重新创建一个新的
+            // After ending an index thread, create a new one.
             self.add_indexing_worker()?;
         }
 
@@ -556,20 +555,21 @@ impl IndexWriter {
         (last_opstamp, start..last_opstamp)
     }
 
-    /// 执行一组文档操作，确保操作被分配连续的 u64 操作印戳，
-    /// 并且同一组的添加操作被刷新到同一段中。
+    /// Execute a set of document operations, ensuring that the operations are assigned
+    /// consecutive u64 operation timestamps, and that add operations from the same group
+    /// are flushed to the same segment.
     ///
-    /// 如果索引管道已满，此调用可能会阻塞。
+    /// This call may block if the indexing pipeline is full.
     ///
-    /// 给定的 `user_operations` 中的每个操作都会接收到按顺序的连续 u64 操作印戳。
-    /// 整个批处理本身也会得到一个比最后一个操作印戳大 1 的印戳。
-    /// 此 `batch_opstamp` 是 `run` 的返回值。即使是空的 `user_operations` 组，
-    /// 一个空的 `Vec<UserOperation>`，也会收到一个有效的印戳，
-    /// 即使实际上没有对索引进行更改。
+    /// Each operation in the given `user_operations` will receive sequential consecutive u64
+    /// operation timestamps. The entire batch itself will also receive a timestamp that is
+    /// one greater than the last operation's timestamp. This `batch_opstamp` is the return value of `run`.
+    /// Even an empty `user_operations` group, represented as an empty `Vec<UserOperation>`, 
+    /// will receive a valid timestamp, even if no actual changes are made to the index.
     ///
-    /// 与添加和删除操作类似（参见 `IndexWriter.add_document` 和
-    /// `IndexWriter.delete_term`），调用 `run` 所做的更改只有在调用 `commit()` 后
-    /// 对读者可见。
+    /// Similar to add and delete operations (see `IndexWriter.add_document` and 
+    /// `IndexWriter.delete_term`), changes made by calling `run` will only be visible to 
+    /// readers after `commit()` is called.
     pub fn run<I>(&self, user_operations: I) -> crate::Result<Opstamp>
     where
         I: IntoIterator<Item = UserOperation>,

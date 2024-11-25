@@ -53,9 +53,7 @@ impl IndexBuilder {
         self.create(mmap_directory)
     }
 
-    // 该函数未经过测试 </br>
-    // 它期望给一个空的目录，并且不会创建任何的垃圾回收操作。
-    // 猜测这个函数是避免 segment 合并和垃圾清理的工作, 应该就是在 Index 层面创建 1 个 sparse index, 并且将数据索引到 1 个 segment 里面
+    // This function has not been tested.
     // pub fn single_segment_index_writer(
     //     self,
     //     dir: impl Into<Box<dyn Directory>>,
@@ -69,7 +67,6 @@ impl IndexBuilder {
     //     Ok(index_simple_writer)
     // }
 
-    /// 在 Index 对象销毁之后，这个 temp 路径也会被删除，函数用来测试 MmapDirectory
     /// When [`Index`] is destroyed, the `tempdir` will be removed.
     pub fn create_from_tempdir(self) -> crate::Result<Index> {
         debug_assert_eq!(self.index_settings.config.storage_type, StorageType::Mmap);

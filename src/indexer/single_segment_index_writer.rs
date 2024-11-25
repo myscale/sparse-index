@@ -32,7 +32,6 @@ impl SingleSegmentIndexWriter {
         self.segment_writer.mem_usage()
     }
 
-    /// 增加一行数据到 segment 内部
     pub fn add_row_content(&mut self, row_content: SparseRowContent) -> crate::Result<()> {
         let opstamp = self.opstamp;
         self.opstamp += 1;

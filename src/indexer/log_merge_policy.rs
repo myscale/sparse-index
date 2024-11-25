@@ -6,24 +6,24 @@ use log::debug;
 use super::merge_policy::{MergeCandidate, MergePolicy};
 use crate::{index::SegmentMeta, RowId};
 
-// 默认的级别日志大小
+// Default level log size
 const DEFAULT_LEVEL_LOG_SIZE: f64 = 0.75;
-// 默认的最小层大小
+// Default minimum layer size
 const DEFAULT_MIN_LAYER_SIZE: u32 = 10_000;
-// 默认的最小合并段数
+// Default minimum number of segments to merge
 const DEFAULT_MIN_NUM_SEGMENTS_IN_MERGE: usize = 8;
-// 默认的合并前最大文档数
+// Default maximum number of documents before merging
 const DEFAULT_MAX_DOCS_BEFORE_MERGE: usize = 10_000_000;
 
 /// `LogMergePolicy` tries to merge segments that have a similar number of
 /// documents.
-/// `LogMergePolicy` 尝试合并具有相似文档数量的段。
+/// `LogMergePolicy` attempts to merge segments with a similar number of documents.
 #[derive(Debug, Clone)]
 pub struct LogMergePolicy {
-    min_num_segments: usize,      // 最小段数
-    max_docs_before_merge: usize, // 合并前最大文档数
-    min_layer_size: u32,          // 最小层大小
-    level_log_size: f64,          // 级别日志大小
+    min_num_segments: usize,      // Minimum number of segments
+    max_docs_before_merge: usize, // Maximum number of documents before merging
+    min_layer_size: u32,          // Minimum layer size
+    level_log_size: f64,          // Level log size
 }
 
 impl LogMergePolicy {
@@ -62,9 +62,9 @@ impl LogMergePolicy {
 }
 
 impl MergePolicy for LogMergePolicy {
-    // 计算合并候选项
+    // Calculate merge candidates
     fn compute_merge_candidates(&self, segments: &[SegmentMeta]) -> Vec<MergeCandidate> {
-        // 按大小排序的段
+        // Segments sorted by size
         let size_sorted_segments: Vec<&SegmentMeta> = segments
             .iter()
             .filter(|seg| seg.alive_rows_count() <= (self.max_docs_before_merge as RowId))
@@ -77,7 +77,7 @@ impl MergePolicy for LogMergePolicy {
 
         let mut current_max_log_size = f64::MAX;
         let mut levels = vec![];
-        // 按日志大小分组
+        // Group by log size
         for (_, merge_group) in &size_sorted_segments.into_iter().group_by(|segment| {
             let segment_log_size = f64::from(self.clip_min_size(segment.alive_rows_count())).log2();
             if segment_log_size < (current_max_log_size - self.level_log_size) {
@@ -90,7 +90,7 @@ impl MergePolicy for LogMergePolicy {
             levels.push(merge_group.collect::<Vec<&SegmentMeta>>());
         }
 
-        // 过滤并生成合并候选项
+        // Filter and generate merge candidates
         let candidates: Vec<MergeCandidate> = levels
             .iter()
             .filter(|level| level.len() >= self.min_num_segments)
@@ -107,7 +107,6 @@ impl MergePolicy for LogMergePolicy {
 }
 
 impl Default for LogMergePolicy {
-    // 默认的 LogMergePolicy 配置
     fn default() -> LogMergePolicy {
         LogMergePolicy {
             min_num_segments: DEFAULT_MIN_NUM_SEGMENTS_IN_MERGE,

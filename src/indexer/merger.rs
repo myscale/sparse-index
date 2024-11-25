@@ -3,43 +3,39 @@ use std::path::PathBuf;
 use log::info;
 
 use crate::{
-    common::errors::SparseError,
     core::{
         CompressedInvertedIndexMmap, CompressedInvertedIndexMmapMerger,
         GenericInvertedIndexMmapType, InvertedIndexMmap, InvertedIndexMmapAccess,
         InvertedIndexMmapMerger,
     },
-    index::{IndexSettings, Segment, SegmentReader},
+    index::{Segment, SegmentReader},
 };
 
 pub struct IndexMerger {
     pub(crate) readers: Vec<SegmentReader>,
-    pub(crate) index_settings: Option<IndexSettings>,
 }
 
 impl IndexMerger {
     pub fn open(segments: &[Segment]) -> crate::Result<IndexMerger> {
         if segments.len() == 0 {
-            return Ok(Self { readers: vec![], index_settings: None });
+            return Ok(Self { readers: vec![]});
         }
-        // WARN 编译器隐式转换, map 操作应该是返回 Vec<Result>，但是返回的是 Result<Vec>，这是编译器的隐式转换，如果所有的元素都是 Ok，就正常，若有一个是 Error，就会立刻返回 Error
         let segment_readers: Vec<SegmentReader> = segments
             .iter()
             .map(|seg| SegmentReader::open(seg))
             .collect::<crate::Result<Vec<SegmentReader>>>()?;
 
-        // 获取所有 segment 对应的 index_settings
+        // make sure all index_settings are same.
         let index_settings_vec: Vec<_> =
             segments.iter().map(|seg| seg.index().index_settings()).collect();
 
-        // 断言所有的 index_settings 彼此相等
         if !index_settings_vec.windows(2).all(|w| w[0] == w[1]) {
             return Err(crate::SparseError::Error(
                 "index_settings should be same in IndexMerger".to_string(),
             ));
         }
 
-        Ok(Self { readers: segment_readers, index_settings: Some(index_settings_vec[0].clone()) })
+        Ok(Self { readers: segment_readers})
     }
 
     pub fn merge(

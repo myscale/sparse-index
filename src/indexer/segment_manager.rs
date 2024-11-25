@@ -22,8 +22,8 @@ struct SegmentRegisters {
 }
 
 impl SegmentRegisters {
-    /// 获取所有 seg ids 一致的提交状态 </br>
-    /// 当找不到 seg id 时或者 seg ids 状态不一致时候就返回 None
+    /// Retrieve the commit status for all segment IDs that are consistent.
+    /// Returns None if segment IDs cannot be found or if their statuses are inconsistent.
     fn segments_status(&self, segment_ids: &[SegmentId]) -> Option<SegmentsStatus> {
         if self.uncommitted.contains_all(segment_ids) {
             Some(SegmentsStatus::Uncommitted)
@@ -41,8 +41,8 @@ impl SegmentRegisters {
     }
 }
 
-/// 用于管理 Segment 以及它们的状态（提交/未提交）</br>
-/// 能够保证在合并过程中对 seg registers 的原子更改
+/// Used to manage segments and their statuses (committed/uncommitted).
+/// Ensures atomic changes to segment registers during the merging process.
 #[derive(Default)]
 pub struct SegmentManager {
     registers: RwLock<SegmentRegisters>,
@@ -67,8 +67,8 @@ impl SegmentManager {
         self.registers.write().expect("Failed to acquire write lock on SegmentManager.")
     }
 
-    /// 初始化 SegmentManager </br>
-    /// 提供的 seg metas 参数均被视为 committed
+    /// Initialize SegmentManager.
+    /// The provided segment metas are all considered committed.
     pub fn from_segments(segment_metas: Vec<SegmentMeta>) -> SegmentManager {
         SegmentManager {
             registers: RwLock::new(SegmentRegisters {
@@ -78,8 +78,8 @@ impl SegmentManager {
         }
     }
 
-    /// 从 committed 和 uncommitted 集合内获取可以进行合并的 seg ids </br>
-    /// 提供的 `in_merge_segment_ids` 存储了正在合并的 ids
+    /// Retrieve the segment IDs that can be merged from the committed and uncommitted collections.
+    /// The provided `in_merge_segment_ids` stores the IDs that are currently being merged.
     ///
     /// return (committed mergeable, uncommitted mergeable)
     pub fn get_mergeable_segments(
@@ -92,7 +92,7 @@ impl SegmentManager {
             registers_lock.uncommitted.get_mergeable_segments(in_merge_segment_ids),
         )
     }
-    /// 返回记录的所有 seg entries (committed and uncommitted)
+    /// return all segment entries (committed and uncommitted)
     pub fn segment_entries(&self) -> Vec<SegmentEntry> {
         let registers_lock = self.read();
         let mut segment_entries = registers_lock.uncommitted.segment_entries();
@@ -100,7 +100,7 @@ impl SegmentManager {
         segment_entries
     }
 
-    /// 删除 segment management 记录中所有空的 seg ids
+    /// Remove all empty segment IDs from the segment management records.
     fn remove_empty_segments(&self) {
         let mut registers_lock = self.write();
         registers_lock
@@ -111,14 +111,14 @@ impl SegmentManager {
             .for_each(|segment| registers_lock.committed.remove_segment(&segment.segment_id()));
     }
 
-    /// 清空 commit 和 uncommitted 内所有的 seg ids
+    /// Clear all segment IDs from both committed and uncommitted collections.
     pub(crate) fn remove_all_segments(&self) {
         let mut registers_lock = self.write();
         registers_lock.committed.clear();
         registers_lock.uncommitted.clear();
     }
 
-    /// 清理 committed 和 uncommitted 并将给出的 segment_entris 全部添加到 committed 集合
+    /// Clean up the committed and uncommitted collections, and add all provided segment entries to the committed collection.
     pub fn commit(&self, segment_entries: Vec<SegmentEntry>) {
         let mut registers_lock: RwLockWriteGuard<'_, SegmentRegisters> = self.write();
         registers_lock.committed.clear();
@@ -128,9 +128,9 @@ impl SegmentManager {
         }
     }
 
-    /// 给定一组要进行合并的 seg ids 并返回其对应的 SegmentEntry </br>
-    /// 函数保证了这些 seg ids 均在 uncommitted 或者 committed 其中一个集合内部 </br>
-    /// 如果 seg ids 不全部属于其中一个集合就报错
+    /// Given a set of segment IDs to be merged, return their corresponding SegmentEntry.
+    /// The function ensures that these segment IDs are all within either the uncommitted or committed collection.
+    /// If the segment IDs do not all belong to one of the collections, an error will be raised.
     pub fn start_merge(&self, segment_ids: &[SegmentId]) -> crate::Result<Vec<SegmentEntry>> {
         let registers_lock = self.read();
         let mut segment_entries = vec![];
@@ -160,13 +160,17 @@ impl SegmentManager {
         Ok(segment_entries)
     }
 
-    /// 将 seg entry 添加到 uncommitted 集合
+    /// Add the segment entry to the uncommitted collection.
     pub fn add_segment(&self, segment_entry: SegmentEntry) {
         let mut registers_lock = self.write();
         registers_lock.uncommitted.add_segment_entry(segment_entry);
     }
-    /// 返回 seg ids 合并前的一致状态（committed or uncommitted）</br>
-    /// 确定合并前的 seg ids 属于 committed 还是 uncommitted 集合，并将这组 seg ids 从对应集合移除，最后将合并后产生的新的 seg 放到对应集合
+
+    /// Return the consistent status of the segment IDs before merging (committed or uncommitted).
+    /// 
+    /// Determine whether the segment IDs belong to the committed or uncommitted collection,
+    /// remove this set of segment IDs from the corresponding collection, and finally add the new segments 
+    /// produced from the merge to the appropriate collection.
     pub(crate) fn end_merge(
         &self,
         before_merge_segment_ids: &[SegmentId],
@@ -196,7 +200,7 @@ impl SegmentManager {
         Ok(segments_status)
     }
 
-    /// 返回已经提交的 segment metas（committed 状态）
+    /// Return the segment metas that have been committed (committed status).
     pub fn committed_segment_metas(&self) -> Vec<SegmentMeta> {
         self.remove_empty_segments();
         let registers_lock = self.read();

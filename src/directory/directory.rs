@@ -107,7 +107,7 @@ fn retry_policy(is_blocking: bool) -> RetryPolicy {
 /// - The [`RamDirectory`][crate::directory::RamDirectory], which
 /// should be used mostly for tests.
 pub trait Directory: DirectoryClone + fmt::Debug + Send + Sync + 'static {
-    fn get_path(&self) -> PathBuf; // 新增方法
+    fn get_path(&self) -> PathBuf;
 
     /// Opens a file and returns a boxed `FileHandle`.
     ///

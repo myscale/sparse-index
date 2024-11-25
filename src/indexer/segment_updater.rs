@@ -25,7 +25,7 @@ use crate::{Opstamp, RowId, META_FILEPATH};
 
 const NUM_MERGE_THREADS: usize = 4;
 
-/// 保存 index meta.json 文件
+/// store index meta.json into disk.
 pub fn save_metas(metas: &IndexMeta, directory: &dyn Directory) -> crate::Result<()> {
     let mut buffer = serde_json::to_vec_pretty(metas)?;
     // Just adding a new line at the end of the buffer.
@@ -42,14 +42,14 @@ pub fn save_metas(metas: &IndexMeta, directory: &dyn Directory) -> crate::Result
     Ok(())
 }
 
-/// 负责处理所有 segment 更新操作
-/// 所有的处理均在 1 个 thread 上进行, 使用一个 共享队列 消费任务
+/// Responsible for handling all segment update operations.
+/// All processing is done on a single thread, using a shared queue to consume tasks.
 #[derive(Clone)]
 pub(crate) struct SegmentUpdater(Arc<InnerSegmentUpdater>);
 
 pub(crate) struct InnerSegmentUpdater {
-    /// 存储当前活动的 IndexMeta 副本, 避免在 SegmentUpdater 中每次需要时都从文件加载 </br>
-    /// 该副本始终保持最新, 因为所有的更新都通过唯一活跃的 SegmentUpdater 进行
+    /// Stores the current active copy of IndexMeta to avoid loading from the file each time it's needed in SegmentUpdater.
+    /// This copy is always kept up to date, as all updates are performed through the single active SegmentUpdater.
     active_index_meta: RwLock<Arc<IndexMeta>>,
 
     /// segment updater thread pool size = 1
@@ -60,15 +60,15 @@ pub(crate) struct InnerSegmentUpdater {
 
     index: Index,
 
-    /// 管理 Uncommitted 和 Committed 状态的 Segments
+    /// Manages segments in Uncommitted and Committed states.
     segment_manager: SegmentManager,
 
-    /// Merge 策略
+    /// Merge policy.
     merge_policy: RwLock<Arc<dyn MergePolicy>>,
     killed: AtomicBool,
     stamper: Stamper,
 
-    /// MergeOperation 的仓库
+    /// Repository for MergeOperations.
     merge_operations: MergeOperationInventory,
 }
 
@@ -106,11 +106,11 @@ fn merge(
     }
     info!("[start_merge][merge] future merge rows count: {:?}", total_rows_count);
 
-    // 初始化 merge 后的 segment
+    // initialized a new segment for merged.
     let merged_segment = index.new_segment();
     let segment_id = merged_segment.id().uuid_string();
 
-    // 通过函数传入的一组 segment_entries 获取对应的一组 Segment 对象
+    // collect a group of segments need merged.
     let segments: Vec<Segment> = segment_entries
         .iter()
         .map(|segment_entry| index.segment(segment_entry.meta().clone()))
@@ -157,14 +157,14 @@ fn merge(
 }
 
 impl SegmentUpdater {
-    /// 为 index 创建 segment updater
+    /// create segment updater for index.
     pub fn create(index: Index, stamper: Stamper) -> crate::Result<SegmentUpdater> {
         let segments: Vec<SegmentMeta> = index.searchable_segment_metas()?;
         debug!("[create] load segment metas, size {}", segments.len());
 
         let segment_manager = SegmentManager::from_segments(segments);
 
-        // SegmentUpdater 仅使用线程数为 1 的线程池
+        // SegmentUpdater thread is 1.
         let pool: ThreadPool = ThreadPoolBuilder::new()
             .thread_name(|_| "seg_updater".to_string())
             .num_threads(1)
@@ -175,7 +175,7 @@ impl SegmentUpdater {
                 )
             })?;
 
-        // 用于合并 Segment 的线程池
+        // For merge operation, we use pool size = 4.
         let merge_thread_pool: ThreadPool = ThreadPoolBuilder::new()
             .thread_name(|i| format!("merge_thd_{i}"))
             .num_threads(NUM_MERGE_THREADS)
@@ -186,10 +186,10 @@ impl SegmentUpdater {
                 )
             })?;
 
-        // 从 disk 上加载 meta.json
+        // load `meta.json` from disk.
         let index_meta: IndexMeta = index.load_metas()?;
 
-        // 初始化 SegmentUpdater
+        // initialize SegmentUpdater
         Ok(SegmentUpdater(Arc::new(InnerSegmentUpdater {
             active_index_meta: RwLock::new(Arc::new(index_meta)),
             pool,
@@ -212,7 +212,7 @@ impl SegmentUpdater {
         *self.merge_policy.write().unwrap() = arc_merge_policy;
     }
 
-    /// [private] 用来调度异步任务
+    /// [private] It is used to schedule asynchronous tasks
     fn schedule_task<T: 'static + Send, F: FnOnce() -> crate::Result<T> + 'static + Send>(
         &self,
         task: F,
@@ -226,16 +226,18 @@ impl SegmentUpdater {
         let (scheduled_result, sender) = FutureResult::create(
             "A segment_updater future did not succeed. This should never happen.",
         );
-        // 异步执行任务，将任务放在后台线程中执行，允许主线进程继续运行而不被阻塞
+        // Asynchronously execute the task, placing it in a background thread 
+        // to allow the main process to continue running without being blocked.
         self.pool.spawn(|| {
             let task_result = task();
             let _ = sender.send(task_result);
         });
-        // 结果传递，FutureResult 是一个用于异步操作的结构，允许调用者在任务完成时获得结果
+        // Result passing; FutureResult is a structure for asynchronous operations,
+        // allowing the caller to obtain the result when the task is completed.
         scheduled_result
     }
 
-    // 把一个新的 SegmentEntry 放到段管理器内，并在添加后考虑合并选项
+    // Place a new SegmentEntry into the segment manager and consider merge options after adding.
     pub fn schedule_add_segment(&self, segment_entry: SegmentEntry) -> FutureResult<()> {
         info!(
             "[{}] - [schedule_add_segment] segment-id: {}",
@@ -251,22 +253,22 @@ impl SegmentUpdater {
         })
     }
 
-    /// 清理掉持有的 segment_manager 记录的 committed 和 uncommitted 集合中的所有 seg ids
+    /// Clean up all segment IDs in the committed and uncommitted collections held by the segment manager.
     pub(crate) fn remove_all_segments(&self) {
         self.segment_manager.remove_all_segments();
     }
 
-    /// 停止 segment updater 线程
+    /// Stop the segment updater thread.
     pub fn kill(&mut self) {
         self.killed.store(true, Ordering::Release);
     }
 
-    /// 判断 segment updater 线程是否存活
+    /// Check if the segment updater thread is alive.
     pub fn is_alive(&self) -> bool {
         !self.killed.load(Ordering::Acquire)
     }
 
-    /// commit 后存储 meta 内容到文件
+    /// Store meta content to file after commit.
     pub fn save_metas(
         &self,
         opstamp: Opstamp,
@@ -289,7 +291,7 @@ impl SegmentUpdater {
         Ok(())
     }
 
-    /// 执行 GC 操作
+    /// Starting GC thread.
     pub fn schedule_garbage_collect(&self) -> FutureResult<GarbageCollectionResult> {
         info!(
             "[{}] - [schedule_garbage_collect] entry",
@@ -299,8 +301,8 @@ impl SegmentUpdater {
         self.schedule_task(move || garbage_collect_files(self_clone))
     }
 
-    /// 获取对 Index 有用的文件 </br>
-    /// 不包含锁文件以、暂未被 GC 删除的过时文件
+    /// Retrieve files useful to the Index.
+    /// Does not include lock files or outdated files that have not yet been deleted by GC.
     fn list_files(&self) -> HashSet<PathBuf> {
         let mut files: HashSet<PathBuf> = self
             .index
@@ -312,7 +314,7 @@ impl SegmentUpdater {
         files
     }
 
-    /// 执行索引 commit 操作
+    /// Execute the index commit operation.
     pub(crate) fn schedule_commit(
         &self,
         opstamp: Opstamp,
@@ -326,47 +328,51 @@ impl SegmentUpdater {
                 opstamp
             );
 
-            // 获得 segment management 记录的所有 seg entries
+            // Obtain all segment entries from the segment management records.
             let segment_entries = segment_updater.segment_manager.segment_entries();
-            // 将所有的 seg entries 标记为提交状态
+            // Mark all segment entries as committed.
             segment_updater.segment_manager.commit(segment_entries);
-            // commit 之后更新存储 meta.json 信息
+            // After commit, update and store meta.json information.
             segment_updater.save_metas(opstamp, payload)?;
-            // 手动 GC
+            // Manually trigger garbage collection.
             let _ = garbage_collect_files(segment_updater.clone());
-            // commit 后考虑是否合并
+            // Consider merging after commit.
             segment_updater.consider_merge_options();
             Ok(opstamp)
         })
     }
 
-    /// [private] 更新当前 seg updater 持有的 active_index_meta
+    /// [private] Update the active_index_meta held by the current segment updater.
     fn store_meta(&self, index_meta: &IndexMeta) {
         *self.active_index_meta.write().unwrap() = Arc::new(index_meta.clone());
     }
 
-    /// [private] 获取当前 seg updater 持有的 active_index_meta
+    /// [private] Retrieve the active_index_meta held by the current segment updater.
     fn load_meta(&self) -> Arc<IndexMeta> {
         self.active_index_meta.read().unwrap().clone()
     }
 
-    /// 生成一个 MergeOperation 合并操作 </br>
-    /// 参数 segment_ids 表示需要进行 merge 的 seg ids </br>
-    /// 该 MergeOperation 将会被记录在 seg updater 对应的仓库 inventory 中 </br>
+    /// Generate a MergeOperation for merging.
+    /// The parameter `segment_ids` indicates the segment IDs that need to be merged.
+    /// This MergeOperation will be recorded in the corresponding inventory of the segment updater.
     pub(crate) fn make_merge_operation(&self, segment_ids: &[SegmentId]) -> MergeOperation {
         let commit_opstamp = self.load_meta().opstamp;
         MergeOperation::new(&self.merge_operations, commit_opstamp, segment_ids.to_vec())
     }
 
-    /// 开始执行一个 MergeOperation 合并操作, 函数将会阻塞直到 MergeOperation 实际开始, 但是函数不会等待 MergeOperation 结束 </br>
-    /// 调用线程不应该被长时间阻塞, 因为这仅涉及等待 `SegmentUpdater` 队列, 该队列仅包含轻量级操作.</br>
+    /// Start executing a MergeOperation. The function will block until the MergeOperation actually begins,
+    /// but it will not wait for the MergeOperation to finish.
+    /// The calling thread should not be blocked for a long time, as this only involves waiting for the 
+    /// `SegmentUpdater` queue, which contains only lightweight operations.
     ///
-    /// MergeOperation 合并操作发生在不同的线程 </br>
+    /// The MergeOperation occurs in a different thread.
     ///
-    /// 当执行成功时，函数返回 `Future`, 代表合并操作的实际结果, 即 `Result<SegmentMeta>`. </br>
-    /// 如果无法启动合并操作, 将返回错误 </br>
+    /// When executed successfully, the function returns a `Future`, representing the actual result of the 
+    /// merge operation, i.e., `Result<SegmentMeta>`. 
+    /// If the merge operation cannot be started, an error will be returned.
     ///
-    /// 函数返回的错误不一定代表发生了故障，也有可能是合并操作的瞬间和实际执行合并之间发生了回滚。
+    /// The error returned by the function does not necessarily indicate a failure; it may also indicate 
+    /// a rollback that occurred between the moment of the merge operation and the actual execution of the merge.
     pub fn start_merge(
         &self,
         merge_operation: MergeOperation,
@@ -390,7 +396,7 @@ impl SegmentUpdater {
             segment_entries
         );
 
-        // 创建一个 FutureResult, 用于处理合并操作的结果
+        // Create a FutureResult to handle the result of the merge operation.
         let (scheduled_result, merging_future_send) =
             FutureResult::create("Merge operation failed.");
 
@@ -428,18 +434,18 @@ impl SegmentUpdater {
         scheduled_result
     }
 
-    /// 从 uncommitted 和 committeed 两个集合中获取对应的可以用来合并的 seg metas
+    /// Retrieve the corresponding segment metas that can be used for merging from the uncommitted and committed collections.
     pub(crate) fn get_mergeable_segments(&self) -> (Vec<SegmentMeta>, Vec<SegmentMeta>) {
-        // 从 segment updater 持有的 merge operations 仓库中获取所有的 seg ids, 这些 ids 会被用来 merge
+        // Get all segment IDs from the merge operations repository held by the segment updater; these IDs will be used for merging.
         let merge_segment_ids: HashSet<SegmentId> = self.merge_operations.segment_in_merge();
         self.segment_manager.get_mergeable_segments(&merge_segment_ids)
     }
 
-    /// 获取 uncommitted 与 committed 两个集合中需要合并的 segments </br>
-    /// 根据 merge policy 规则生成相应的 MergeOperation </br>
-    /// 依次执行 MergeOperation 完成合并流程
+    /// Get the segments that need to be merged from the uncommitted and committed collections.
+    /// Generate the corresponding MergeOperation based on the merge policy rules.
+    /// Execute the MergeOperation sequentially to complete the merge process.
     fn consider_merge_options(&self) {
-        // 获取 committed 和 uncommitted 两种集合状态下的 seg ids, 它们之间不能 *混合合并*
+        // Get segment IDs in both committed and uncommitted states; they cannot be *mixed* for merging.
         let (committed_segments, uncommitted_segments) = self.get_mergeable_segments();
         debug!(
             "[{}] - [consider_merge_options] entry, committed_segs size:{}, uncommitted_segs size:{}",
@@ -450,7 +456,7 @@ impl SegmentUpdater {
 
         let merge_policy: Arc<dyn MergePolicy> = self.get_merge_policy();
 
-        // 根据 merge 策略, 在 uncommitted_segments 中挑选需要合并的 segs 并生成一组 MergeOperation
+        // Based on the merge policy, select segments to merge from uncommitted_segments and generate a set of MergeOperations.
         let current_opstamp = self.stamper.stamp();
         let mut merge_candidates: Vec<MergeOperation> = merge_policy
             .compute_merge_candidates(&uncommitted_segments)
@@ -460,7 +466,7 @@ impl SegmentUpdater {
             })
             .collect();
 
-        // 根据 merge 策略, 在 committed_segments 中挑选需要合并的 segs 并生成一组 MergeOperation
+        // Based on the merge policy, select segments to merge from committed_segments and generate a set of MergeOperations.
         let commit_opstamp = self.load_meta().opstamp;
         let committed_merge_candidates = merge_policy
             .compute_merge_candidates(&committed_segments)
@@ -469,7 +475,7 @@ impl SegmentUpdater {
                 MergeOperation::new(&self.merge_operations, commit_opstamp, merge_candidate.0)
             });
 
-        // 执行两个集合中生成的所有 MergeOperation
+        // Execute all MergeOperations generated from both collections.
         merge_candidates.extend(committed_merge_candidates);
 
         debug!(
@@ -479,14 +485,15 @@ impl SegmentUpdater {
         );
 
         for merge_operation in merge_candidates {
-            // 如果 merge 不能进行, 这不是一个 Fatal 错误，我们会使用 warning 记录在 `start_merge`
+            // TODO: If the merge cannot proceed, this is not a fatal error; we will log it as a warning in `start_merge`.
             drop(self.start_merge(merge_operation));
         }
     }
 
     /// Queues a `end_merge` in the segment updater and blocks until it is successfully processed.
     ///
-    /// 结束合并操作，在 Segment 合并完成后进行必要的清理和更新操作，确保合并之后的 Segment 正确的集成到索引中
+    /// End the merge operation, performing necessary cleanup and updates after the segment merge is complete,
+    /// ensuring that the merged segment is correctly integrated into the index.
     fn end_merge(
         &self,
         merge_operation: MergeOperation,
@@ -504,12 +511,12 @@ impl SegmentUpdater {
             );
             {
                 let previous_metas: Arc<IndexMeta> = segment_updater.load_meta();
-                // 更新 segment updater 内部两个集合的状态
+                // Update the status of the two collections within the segment updater.
                 let segments_status: SegmentsStatus = segment_updater
                     .segment_manager
                     .end_merge(merge_operation.segment_ids(), after_merge_segment_entry)?;
 
-                // 更新 disk 上存储的 meta.json 文件
+                // Update the meta.json file stored on disk.
                 if segments_status == SegmentsStatus::Committed {
                     segment_updater
                         .save_metas(previous_metas.opstamp, previous_metas.payload.clone())?;
@@ -518,7 +525,7 @@ impl SegmentUpdater {
                 segment_updater.consider_merge_options();
             } // we drop all possible handle to a now useless `SegmentMeta`.
 
-            // 手动 GC
+            // manually trigger GC
             let _ = garbage_collect_files(segment_updater);
             Ok(())
         })
@@ -542,7 +549,6 @@ impl SegmentUpdater {
     /// Obsolete files will eventually be cleaned up
     /// by the directory garbage collector.
     pub fn wait_merging_thread(&self) -> crate::Result<()> {
-        // 用于阻塞所有的合并操作完成
         self.merge_operations.wait_until_empty();
         Ok(())
     }

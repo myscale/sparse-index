@@ -40,13 +40,13 @@ impl Display for SegmentRegister {
 }
 
 impl SegmentRegister {
-    /// 清空所有 seg 记录项
+    /// clear all record in segment_states.
     pub fn clear(&mut self) {
         self.segment_states.clear();
     }
 
-    /// 获取可以进行合并的 segment metas (那些未正在合并的 seg ids)
-    /// - `in_merge_segment_ids` 包含当前正在合并的 segment ids, 这些 seg ids 不应该被再次合并
+    /// Retrieve the segment metas that can be merged (those segment IDs that are not currently being merged).
+    /// - `in_merge_segment_ids` contains the segment IDs that are currently being merged; these segment IDs should not be merged again.
     pub fn get_mergeable_segments(
         &self,
         in_merge_segment_ids: &HashSet<SegmentId>,
@@ -58,43 +58,43 @@ impl SegmentRegister {
             .collect()
     }
 
-    /// 返回 register 存储的所有 seg ids
+    /// Return all segment IDs stored in the register.
     pub fn segment_ids(&self) -> Vec<SegmentId> {
         self.segment_states.keys().cloned().collect()
     }
 
-    /// 返回 register 存储的所有 seg entries
+    /// Return all segment entries stored in the register.
     pub fn segment_entries(&self) -> Vec<SegmentEntry> {
         self.segment_states.values().cloned().collect()
     }
 
-    /// 返回 register 存储的所有 seg metas
+    /// Return all segment metas stored in the register.
     pub fn segment_metas(&self) -> Vec<SegmentMeta> {
         self.segment_states.values().map(|segment_entry| segment_entry.meta().clone()).collect()
     }
 
-    /// 判断 register 是否包含给出的所有 seg ids
+    /// Check if the register contains all the given segment IDs.
     pub fn contains_all(&self, segment_ids: &[SegmentId]) -> bool {
         segment_ids.iter().all(|segment_id| self.segment_states.contains_key(segment_id))
     }
 
-    /// 新增一个 seg 记录项到 register
+    /// Add a segment entry to the register.
     pub fn add_segment_entry(&mut self, segment_entry: SegmentEntry) {
         let segment_id = segment_entry.segment_id();
         self.segment_states.insert(segment_id, segment_entry);
     }
 
-    /// 移除一个 seg 记录项
+    /// Remove a segment entry.
     pub fn remove_segment(&mut self, segment_id: &SegmentId) {
         self.segment_states.remove(segment_id);
     }
 
-    /// 从 register 中获取 seg id 对应的 SegmentEntry
+    /// Retrieve the SegmentEntry corresponding to a segment ID from the register.
     pub fn get(&self, segment_id: &SegmentId) -> Option<SegmentEntry> {
         self.segment_states.get(segment_id).cloned()
     }
 
-    /// 给定一组 seg metas, 初始化一个 register
+    /// Initialize a register with a given set of segment metas.
     pub fn new(segment_metas: Vec<SegmentMeta>) -> SegmentRegister {
         let mut segment_states = HashMap::new();
         for segment_meta in segment_metas {

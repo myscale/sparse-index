@@ -1,4 +1,3 @@
-pub mod doc_opstamp_mapping;
 pub mod index_writer;
 pub mod index_writer_status;
 pub mod log_merge_policy;

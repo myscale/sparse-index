@@ -21,9 +21,9 @@ use crate::{RowId, INDEX_CONFIG_FILEPATH};
 use super::index_meta::{IndexMeta, SegmentMetaInventory};
 use super::{IndexBuilder, IndexSettings, Segment, SegmentId, SegmentMeta};
 
-/// 根据 directory 读取当前索引目录下的 meta.json 文件 </br>
-/// 将未被追踪的 `UntrackedIndexMeta` 转换为 `IndexMeta` (tracked by inventory) </br>
-/// 返回 `IndexMeta` 对象
+/// Read the `meta.json` file from the current index directory based on the directory path.
+/// Convert the untracked `UntrackedIndexMeta` to `IndexMeta` (tracked by inventory).
+/// Return the `IndexMeta` object.
 fn load_metas(
     directory: &dyn Directory,
     inventory: &SegmentMetaInventory,
@@ -46,34 +46,31 @@ fn load_metas(
         .map_err(From::from)
 }
 
-/// Sparse Index 入口位置
+/// Entry point for the Sparse Index
 #[derive(Clone)]
 pub struct Index {
-    /// directory 负责进行文件 IO
+    /// The directory responsible for file I/O
     pub(super) directory: ManagedDirectory,
-    /// SparseIndex 的配置文件
+    /// Configuration file for the SparseIndex
     pub(super) index_settings: IndexSettings,
-    /// 用于搜索的线程池
+    /// Thread pool for searching
     pub(super) executor: Arc<Executor>,
-    /// 追踪 SegmentMeta 的仓库
+    /// Repository for tracking SegmentMeta
     pub(super) inventory: SegmentMetaInventory,
 }
 
 /// For `Search Executor`
 /// User can set the thread pool to be used for searching
 impl Index {
-    /// 获取 search executor
     pub fn search_executor(&self) -> &Executor {
         self.executor.as_ref()
     }
 
-    /// 使用多线程搜索
     pub fn set_multithread_executor(&mut self, num_threads: usize) -> crate::Result<()> {
         self.executor = Arc::new(Executor::multi_thread(num_threads, "sparse-search-")?);
         Ok(())
     }
 
-    /// 使用共享线程池
     pub fn set_shared_multithread_executor(
         &mut self,
         shared_thread_pool: Arc<Executor>,
@@ -82,14 +79,13 @@ impl Index {
         Ok(())
     }
 
-    /// 默认 1 个 Index 对应 cpu logic number 数量的线程池
     pub fn set_default_multithread_executor(&mut self) -> crate::Result<()> {
         let default_num_threads = num_cpus::get();
         self.set_multithread_executor(default_num_threads)
     }
 }
 
-/// create, write.
+// For index create and write.
 impl Index {
     /// Create [`Index`] with custom [`Directory`] and [`IndexSettings`]
     pub fn create<T: Into<Box<dyn Directory>>>(
@@ -110,25 +106,27 @@ impl Index {
         IndexBuilder::new().with_settings(settings).create_in_dir(directory_path)
     }
 
-    /// 创建一个新的 segment_meta（仅限高级用户）。
+    /// Create a new segment_meta (for advanced users only).
     ///
-    /// 只要 `SegmentMeta` 存在，与 `SegmentMeta` 关联的文件就保证不会被垃圾回收，
-    /// 无论该段是否被记录为索引的一部分。
+    /// As long as the `SegmentMeta` exists, the files associated with it are guaranteed
+    /// not to be garbage collected, regardless of whether the segment is recorded as part of the index.
     pub fn new_segment_meta(&self, segment_id: SegmentId, rows_count: RowId) -> SegmentMeta {
         self.inventory.new_segment_meta(self.directory().get_path(), segment_id, rows_count)
     }
 
-    /// 打开一个新的索引写入器。尝试获取一个锁文件。
+    /// Open a new index writer and attempt to acquire a lock file.
     ///
-    /// 锁文件应该在结束时删除，但可能由于程序崩溃或其他错误，导致一个过期的锁文件留在索引目录中。如果确定系统上没有其他 `IndexWriter` 正在访问索引目录，手动删除锁文件是安全的。
+    /// The lock file should be deleted at the end, but it may be left in the index directory
+    /// due to program crashes or other errors. It is safe to manually delete the lock file
+    /// if you are sure that no other `IndexWriter` is accessing the index directory.
     ///
-    /// - `num_threads` 定义了同时工作的索引工作线程数。
-    /// - `overall_memory_budget_in_bytes` 设置为所有索引线程分配的内存量。
-    /// 每个线程将分配到 `overall_memory_budget_in_bytes / num_threads` 的内存预算。
+    /// - `num_threads` defines the number of index worker threads that will operate concurrently.
+    /// - `overall_memory_budget_in_bytes` sets the total amount of memory allocated for all index threads.
+    /// Each thread will be allocated a memory budget of `overall_memory_budget_in_bytes / num_threads`.
     ///
-    /// # 错误
-    /// 如果锁文件已经存在，返回 `Error::DirectoryLockBusy` 或 `Error::IoError`。
-    /// 如果每个线程的内存空间太小或太大，返回 `SparseError::InvalidArgument`。
+    /// # Errors
+    /// If the lock file already exists, return `Error::DirectoryLockBusy` or `Error::IoError`.
+    /// If the memory allocation per thread is too small or too large, return `SparseError::InvalidArgument`.
     pub fn writer_with_num_threads(
         &self,
         num_threads: usize,
@@ -150,20 +148,20 @@ impl Index {
         IndexWriter::new(self, num_threads, memory_arena_in_bytes_per_thread, directory_lock)
     }
 
-    /// 内存预算 15MB, 仅用来测试
+    /// Memory budget of 15MB, used for testing only.
     #[cfg(test)]
     pub fn writer_for_tests(&self) -> crate::Result<IndexWriter> {
         self.writer_with_num_threads(1, MEMORY_BUDGET_NUM_BYTES_MIN)
     }
 
-    /// 创建一个多线程写入器。
+    /// Create a multi-threaded writer.
     ///
-    /// Sparse 会自动定义要使用的线程数，但不会超过 8 个线程。
-    /// `overall_memory_arena_in_bytes` 是将在一定数量的线程之间分配的总目标内存使用量。
+    /// Sparse will automatically define the number of threads to use, but it will not exceed 8 threads.
+    /// `overall_memory_arena_in_bytes` is the total target memory usage that will be allocated across a specified number of threads.
     ///
-    /// # 错误
-    /// 如果锁文件已经存在，返回 `Error::FileAlreadyExists`。
-    /// 如果每个线程的内存空间太小或太大，返回 `TantivyError::InvalidArgument`。
+    /// # Errors
+    /// If the lock file already exists, return `Error::FileAlreadyExists`.
+    /// If the memory allocation per thread is too small or too large, return `TantivyError::InvalidArgument`.
     pub fn writer(&self, memory_budget_in_bytes: usize) -> crate::Result<IndexWriter> {
         let mut num_threads = std::cmp::min(num_cpus::get(), MAX_NUM_THREAD);
         let memory_budget_num_bytes_per_thread = memory_budget_in_bytes / num_threads;
@@ -197,7 +195,6 @@ impl Index {
         Segment::for_index(self.clone(), segment_meta)
     }
 
-    /// 返回可以被搜索的 Segments
     pub fn searchable_segments(&self) -> crate::Result<Vec<Segment>> {
         Ok(self
             .searchable_segment_metas()?
@@ -206,49 +203,48 @@ impl Index {
             .collect())
     }
 
-    /// 通过读取 `meta.json` 文件获取当前 Index 的 `SegmentMeta` 列表(从最后一次 commit 开始)
+    /// Retrieve the current Index's `SegmentMeta` list by reading the `meta.json` file (starting from the last commit).
     pub fn searchable_segment_metas(&self) -> crate::Result<Vec<SegmentMeta>> {
         Ok(self.load_metas()?.segments)
     }
 
-    /// 返回可以被搜索的 segment ids
     pub fn searchable_segment_ids(&self) -> crate::Result<Vec<SegmentId>> {
         Ok(self.searchable_segment_metas()?.iter().map(SegmentMeta::id).collect())
     }
 
-    /// 列出所有的 segment metas，这些 segment meta 可能是正在 build 或者是正在 merge 中
+    /// List all segment metas, which may be in the process of being built or merged.
     pub(crate) fn list_all_segment_metas(&self) -> Vec<SegmentMeta> {
         self.inventory.all()
     }
 
-    /// 返回当前 Index 使用的 directory
+    /// Return the directory currently used by the Index.
     pub fn directory(&self) -> &ManagedDirectory {
         &self.directory
     }
 
-    /// 返回当前 Index 使用的 mutable 类型的 directory
+    /// Return the mutable directory currently used by the Index.
     pub fn directory_mut(&mut self) -> &mut ManagedDirectory {
         &mut self.directory
     }
 
-    /// 判断 meta.json 文件是否存在
+    /// Check if the meta.json file exists.
     pub fn exists(dir: &dyn Directory) -> Result<bool, OpenReadError> {
         dir.exists(&META_FILEPATH)
     }
 
     /// Returns the set of corrupted files
     pub fn validate_checksum(&self) -> crate::Result<HashSet<PathBuf>> {
-        // 列出管理目录中所有的文件
+        // List all files in the managed directory
         let managed_files = self.directory.list_managed_files();
 
-        // 获取所有可搜索的 segment 文件，并将其收集到一个 HashSet 中
+        // Get all searchable segment files and collect them into a HashSet
         let active_segments_files: HashSet<PathBuf> = self
             .searchable_segment_metas()?
             .iter()
             .flat_map(|segment_meta| segment_meta.list_files())
             .collect();
 
-        // 找到同时存在于管理文件和 segments 中的文件
+        // Find files that exist in both managed files and segments
         let active_existing_files: HashSet<&PathBuf> =
             active_segments_files.intersection(&managed_files).collect();
 
@@ -269,11 +265,11 @@ impl Index {
         let directory: Box<dyn Directory> = directory.into();
         let directory: ManagedDirectory = ManagedDirectory::wrap(directory)?;
 
-        // 加载 IndexMeta, 初始化 IndexMeta 的仓库 inventory
+        // init inventory to manage IndexMeta.
         let inventory: SegmentMetaInventory = SegmentMetaInventory::default();
         let _metas: IndexMeta = load_metas(&directory, &inventory)?;
 
-        // 加载 sparse index 配置文件
+        // Loading index configuration from disk file.
         let _data: Vec<u8> = directory.atomic_read(&INDEX_CONFIG_FILEPATH)?;
         let _index_config_str: Cow<'_, str> = String::from_utf8_lossy(&_data);
         let index_config: SparseIndexConfig = serde_json::from_str(&_index_config_str)?;
@@ -287,7 +283,7 @@ impl Index {
         })
     }
 
-    /// 加载 Index Reader
+    /// load [`IndexReader`]
     pub fn reader(&self) -> crate::Result<IndexReader> {
         self.reader_builder().try_into()
     }
@@ -305,7 +301,6 @@ impl Index {
     }
 
     /// 使用 mmap 方式打开 index
-    // TODO #[cfg(feature = "mmap")]
     pub fn open_in_dir<P: AsRef<Path>>(directory_path: P) -> crate::Result<Index> {
         let mmap_directory = MmapDirectory::open(directory_path)?;
         Index::open(mmap_directory)

@@ -18,9 +18,7 @@ use std::path::Path;
 use crate::api::clickhouse::*;
 use crate::ffi::ScoredPointOffset;
 
-/// 每个 Segment 存储的 SparseVector 数量上限是 u32
 pub type SparseVectorId = u32;
-/// 每个 Segment 存储的 SparseVector 数量上限是 u32
 pub type RowId = u32;
 pub type SegmentOrdinal = u32;
 pub type Opstamp = u64;

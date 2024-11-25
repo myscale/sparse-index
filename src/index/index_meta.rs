@@ -14,19 +14,19 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-/// SegmentMeta 仓库
+/// SegmentMeta Inventory
 #[derive(Clone, Default)]
 pub(crate) struct SegmentMetaInventory {
     inventory: Inventory<InnerSegmentMeta>,
 }
 
 impl SegmentMetaInventory {
-    /// 返回 inventory 仓库中记录的所有 SegmentMeta
+    /// return all segment_metas in inventory.
     pub fn all(&self) -> Vec<SegmentMeta> {
         self.inventory.list().into_iter().map(SegmentMeta::from).collect::<Vec<_>>()
     }
 
-    /// 创建新的 SegmentMeta 并记录到 inventory 仓库
+    /// create new segment_meta and record it into inventory.
     pub fn new_segment_meta(
         &self,
         directory: PathBuf,
@@ -43,8 +43,6 @@ impl SegmentMetaInventory {
     }
 }
 
-/// `SegmentMeta` 包含一个 `Segment` 相关的元数据信息, 如 `rows_count`, `deleted_count` 等 </br>
-/// *目前不考虑实现删除功能*
 #[derive(Clone)]
 pub struct SegmentMeta {
     tracked: TrackedObject<InnerSegmentMeta>,
@@ -72,48 +70,32 @@ impl From<TrackedObject<InnerSegmentMeta>> for SegmentMeta {
 }
 
 impl SegmentMeta {
-    /// 返回当前 segment id
+    /// return current segment id
     pub fn id(&self) -> SegmentId {
         self.tracked.segment_id
     }
 
-    /// 移除掉 `Component::TempInvertedIndex`
+    /// remove `Component::TempInvertedIndex`
     ///
-    /// 这可使得 `.tmp` 文件被垃圾回收机制收集清理
+    /// It makes `.tmp` file can get GC.
     pub fn untrack_temp_svstore(&self) {
         self.tracked.include_temp_sv_store.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
-    /// 返回 SegmentMeta 中需要的所有 segment 文件路径（文件名）
+    /// Return all file names used by this segment_meta.(files related in a single segment.)
     /// Note: Some of the returned files may not exist depending on the state of the segment.
     ///
-    /// 这对于移除那些不再被 segment 使用的文件是非常必要的
+    /// It's important for these files will not used by segment anymore.
     pub fn list_files(&self) -> HashSet<PathBuf> {
-        // if self
-        //     .tracked
-        //     .include_temp_sv_store
-        //     .load(std::sync::atomic::Ordering::Relaxed)
-        // {
-        //     SegmentComponent::iterator()
-        //         .map(|component| self.relative_path(*component))
-        //         .collect::<HashSet<PathBuf>>()
-        // } else {
-        //     SegmentComponent::iterator()
-        //         .filter(|comp| *comp != &SegmentComponent::TempInvertedIndex)
-        //         .map(|component| self.relative_path(*component))
-        //         .collect::<HashSet<PathBuf>>()
-        // }
         SegmentComponent::iterator()
             .map(|component| self.relative_path(*component))
             .collect::<HashSet<PathBuf>>()
     }
 
-    /// 返回一个特定类型 segment 的文件名称
-    /// TODO 在参数里面加上 version 参数，函数内部根据不同的 version 去返回每个版本需要的文件路径
+    // TODO: refine for different version.
     pub fn relative_path(&self, component: SegmentComponent) -> PathBuf {
         let mut path = self.id().uuid_string();
         path.push_str(&match component {
-            // TODO 怎么处理比较好？
             SegmentComponent::InvertedIndexMeta => INVERTED_INDEX_META_FILE_SUFFIX.to_string(),
             SegmentComponent::InvertedIndexHeaders => INVERTED_INDEX_HEADERS_SUFFIX.to_string(),
             SegmentComponent::InvertedIndexPostings => INVERTED_INDEX_POSTINGS_SUFFIX.to_string(),
@@ -130,20 +112,17 @@ impl SegmentMeta {
         PathBuf::from(path)
     }
 
-    /// 返回当前 segment 存储的 sparse vectors 的数量
     pub fn rows_count(&self) -> RowId {
         self.tracked.rows_count
     }
 
-    /// 返回当前 segment 存储的 sparse vectors 数量
-    /// *后续支持 delete rows 时会使用到 alive rows count*
+    // TODO: support delete operation.
     pub fn alive_rows_count(&self) -> RowId {
         self.rows_count()
     }
 
-    /// 更新当前 `SegmentMeta` 的 rows_count 字段
-    ///
-    /// 该方法只有在 SegmentMeta 的 rows_count 为 0 的时候才会被调用，目的是序列化一个新的 segment
+    /// This function will only be called when SegmentMeta.rows_count is ZERO.
+    /// It usually called after a new segment was serialized.
     pub(crate) fn with_rows_count(self, rows_count: RowId) -> SegmentMeta {
         assert_eq!(self.tracked.rows_count, 0);
         // assert!(self.tracked.deletes.is_none());
@@ -152,24 +131,20 @@ impl SegmentMeta {
             segment_id: inner_meta.segment_id,
             rows_count,
             // deletes: None,
-            // TODO 理解这里为什么加上了 temp 类型的 store
             include_temp_sv_store: Arc::new(AtomicBool::new(true)),
         });
         SegmentMeta { tracked }
     }
 }
 
-/// 这里的 include temp sv store 应该被真正使用起来
-/// 在 Segments 对应的 mmap 文件被增量合并的时候, 需要把后缀加上 .tmp, 避免被垃圾回收机制进行回收
-/// 但是问题是，手动在 Directory 里面创建的文件是不受到垃圾回收机制管理的，所以增量更新之前应该不影响吧？
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct InnerSegmentMeta {
-    // 当前 segment 所处的路径, 即 index 所在的路径
+    // directory of segment, is also index's path
     directory: PathBuf,
     segment_id: SegmentId,
     rows_count: RowId,
 
-    /// 如果要避免合并过程产生的 temp 文件被 GC, 就将这个字段设置为 true
+    /// If want avoid GC temp file, set it to true.
     #[serde(skip)]
     #[serde(default = "default_temp_store")]
     pub(crate) include_temp_sv_store: Arc<AtomicBool>,
@@ -179,22 +154,23 @@ fn default_temp_store() -> Arc<AtomicBool> {
 }
 
 impl InnerSegmentMeta {
-    /// 消耗当前 InnerSegmentMeta 并交给 inventory 管理
+    /// consume InnerSegmentMeta and put it into inventory.
     pub fn track(self, inventory: &SegmentMetaInventory) -> SegmentMeta {
         SegmentMeta { tracked: inventory.inventory.track(self) }
     }
 }
 
-/// Index 的 Meta 元数据信息
+/// Metadata information for the Index
 ///
-/// 该 Meta 数据存储在磁盘上的 meta.json 文件，记录了可被用来搜索的一组 segments 元数据等信息。
+/// This metadata is stored in a `meta.json` file on disk and records a set of segment metadata 
+/// that can be used for searching.
 #[derive(Clone, Serialize)]
 pub struct IndexMeta {
-    /// 存储一组已经 `serialized` 的 `segment` 元数据信息
+    /// Stores a set of segment metadata which already serialized.
     pub segments: Vec<SegmentMeta>,
-    /// 最后一次 `commit` 的操作戳
+    /// Opstamp of the last `commit` operation
     pub opstamp: Opstamp,
-    /// 用户在 `commit` 时给出的注释信息, 在代码层面它是无意义的
+    /// User-provided comment information at the time of `commit`, which is meaningless at the code level
     #[serde(skip_serializing_if = "Option::is_none")]
     pub payload: Option<String>,
 }
@@ -211,12 +187,12 @@ impl fmt::Debug for IndexMeta {
 }
 
 impl IndexMeta {
-    /// 创建一个全新的 IndexMeta，不包含任何 segment
+    /// Create a brand new IndexMeta, doesn't contain any segment. 
     pub fn default() -> Self {
         Self { segments: Vec::new(), opstamp: 0u64, payload: None }
     }
 
-    /// 将 meta.json 字符串内容转换为 IndexMeta 对象
+    /// parse meta.json into IndexMeta obj.
     pub(crate) fn deserialize(
         meta_json: &str,
         inventory: &SegmentMetaInventory,
@@ -226,22 +202,21 @@ impl IndexMeta {
     }
 }
 
-/// 在加载 Index 时，需要使用 UntrackedIndexMeta 解析所有的 Segments 文件
+/// When loading the Index, UntrackedIndexMeta is needed to parse all the segment files.
 #[derive(Deserialize, Debug)]
 pub struct UntrackedIndexMeta {
     pub segments: Vec<InnerSegmentMeta>,
 
-    /// 最后一次 `commit` 的操作戳
+    /// Opstamp of last `commit`
     pub opstamp: Opstamp,
 
-    /// 用户可选的 commit 备注信息
     #[serde(skip_serializing_if = "Option::is_none")]
     pub payload: Option<String>,
 }
 
 impl UntrackedIndexMeta {
-    /// 将未被追踪的 `segments` 交给 `inventory` 管理 </br>
-    /// 消耗 `UntrackedIndexMeta` 并生成新的 `IndexMeta` 对象
+    /// Hand over the untracked `segments` to the `inventory` for management.
+    /// Consume `UntrackedIndexMeta` and generate a new `IndexMeta` object.
     pub fn track(self, inventory: &SegmentMetaInventory) -> IndexMeta {
         IndexMeta {
             segments: self

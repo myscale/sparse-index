@@ -18,7 +18,7 @@ pub enum StorageType {
     Ram,
 }
 
-// TODO Copy 和 Clone 啥关系
+// TODO: Figure out difference between Copy and Clone
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default, Copy, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum IndexWeightType {

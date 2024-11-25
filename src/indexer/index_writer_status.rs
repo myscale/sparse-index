@@ -2,7 +2,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
 use super::AddBatchReceiver;
-use crate::core::SparseRowContent;
 
 #[derive(Clone)]
 pub(crate) struct IndexWriterStatus {

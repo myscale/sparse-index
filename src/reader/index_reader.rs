@@ -13,12 +13,12 @@ use super::searcher::{Searcher, SearcherGeneration, SearcherInner};
 use super::warming::WarmingState;
 use super::Warmer;
 
-/// 用来指定何时重新加载索引的新版本
+/// Used to specify when to reload a new version of the index.
 #[derive(Clone, Copy)]
 pub enum ReloadPolicy {
-    /// 所有的索引更新都需要手动进行，任何更改都不会自动反应在索引中
+    /// All index updates need to be done manually; any changes will not automatically reflect in the index.
     Manual,
-    /// 在新的提交可用之后，索引会在几毫秒内自动重新加载
+    /// The index will automatically reload within a few milliseconds after a new commit is available.
     OnCommitWithDelay,
 }
 
@@ -54,7 +54,7 @@ impl IndexReaderBuilder {
     /// to open different segment readers. It may take hundreds of milliseconds
     /// of time and it may return an error.
     ///
-    /// 将 IndexReaderBuilder 转换为 IndexReader
+    /// Convert `IndexReaderBuilder` into `IndexReader`
     pub fn try_into(self) -> crate::Result<IndexReader> {
         let searcher_generation_inventory = Inventory::default();
         let warming_state = WarmingState::new(
@@ -85,7 +85,7 @@ impl IndexReaderBuilder {
         Ok(IndexReader { inner: inner_reader_arc, _watch_handle_opt: watch_handle_opt })
     }
 
-    /// 更新 reload policy
+    /// update reload policy
     #[must_use]
     pub fn reload_policy(mut self, reload_policy: ReloadPolicy) -> IndexReaderBuilder {
         self.reload_policy = reload_policy;

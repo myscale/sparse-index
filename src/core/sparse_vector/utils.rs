@@ -11,7 +11,6 @@ const VALUE_RANGE: Range<f64> = -100.0..100.0;
 const MAX_VALUES_PER_VECTOR: usize = 300;
 
 /// Sort two arrays by the first array.
-/// 根据 indices 数组对 values 数组进行排序
 pub(super) fn double_sort<T: Ord + Copy, V: Copy>(indices: &mut [T], values: &mut [V]) {
     // Check if the indices are already sorted
     if indices.windows(2).all(|w| w[0] < w[1]) {
@@ -30,7 +29,7 @@ pub(super) fn double_sort<T: Ord + Copy, V: Copy>(indices: &mut [T], values: &mu
     }
 }
 
-/// 计算两个稀疏向量之间的点积
+/// compute dot distance with given two sparse vectors
 pub(super) fn score_vectors<T: Ord + Eq>(
     self_indices: &[T],
     self_values: &[DimWeight],
@@ -57,7 +56,7 @@ pub(super) fn score_vectors<T: Ord + Eq>(
     if overlap {
         Some(score)
     } else {
-        None // 两个向量没有发生重叠
+        None // vectors not overlapped
     }
 }
 
@@ -82,7 +81,6 @@ pub(super) fn validate_sparse_vector_impl<T: Clone + Eq + Hash>(
 }
 
 /// Generates a random and not empty sparse vector
-/// 生成一个非空的随机稀疏向量
 pub fn random_sparse_vector<R: Rng + ?Sized>(rnd_gen: &mut R, max_dim_size: usize) -> SparseVector {
     let size = rnd_gen.gen_range(1..max_dim_size);
     let mut tuples: Vec<(u32, f32)> = vec![];
@@ -111,7 +109,6 @@ pub fn random_sparse_vector<R: Rng + ?Sized>(rnd_gen: &mut R, max_dim_size: usiz
 }
 
 /// Generates a sparse vector with all dimensions filled
-/// 生成一个满的稀疏向量
 pub fn random_full_sparse_vector<R: Rng + ?Sized>(
     rnd_gen: &mut R,
     max_size: usize,
@@ -126,7 +123,6 @@ pub fn random_full_sparse_vector<R: Rng + ?Sized>(
 }
 
 /// Generates a sparse vector with only positive values
-/// 生成一个只包含正值的随机稀疏向量
 pub fn random_positive_sparse_vector<R: Rng + ?Sized>(
     rnd_gen: &mut R,
     max_dim_size: usize,

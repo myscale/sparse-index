@@ -12,7 +12,5 @@ lazy_static! {
     /// Scaled according to the number of logical CPU cores to account for concurrent operations.
     pub static ref POOL_KEEP_LIMIT: usize = num_cpus::get().clamp(8, 128);
 }
-pub use pooled_scores_handle::PooledScoresHandle;
-pub use scores_memory_pool::ScoresMemoryPool;
 
 pub use top_k::TopK;

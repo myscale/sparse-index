@@ -18,18 +18,17 @@ use crate::directory::{
 use crate::MANAGED_FILEPATH;
 
 /// Returns true if the file is "managed".
-/// 判断文件是否被管理
-/// Non-managed file are not subject to garbage collection.
-/// 不被管理的文件将不会被记入垃圾收集 GC 机制
+///
+/// Non-managed file are not subject to garbage collection(GC).
+///
 ///
 /// Filenames that starts by a "." -typically locks-
 /// are not managed.
-/// 以 "." 开头的文件名通常是锁文件，不会被管理
 fn is_managed(path: &Path) -> bool {
     path.to_str().map(|p_str| !p_str.starts_with('.')).unwrap_or(true)
 }
 
-/// Wrapper of directories that keeps track of files created by Tantivy.
+/// Wrapper of directories that keeps track of files created by Sparse.
 ///
 /// A managed directory is just a wrapper of a directory
 /// that keeps a (persisted) list of the files that
@@ -38,10 +37,6 @@ fn is_managed(path: &Path) -> bool {
 /// Thanks to this list, it implements a `garbage_collect` method
 /// that removes the files that were created by tantivy and are not
 /// useful anymore.
-///
-/// 跟踪 SparseIndex 创建的文件
-/// - `directory`: 表示实际的目录
-/// - `meta_informations`: 存储元信息
 #[derive(Debug)]
 pub struct ManagedDirectory {
     directory: Box<dyn Directory>,
@@ -54,9 +49,9 @@ struct MetaInformation {
 }
 
 /// Saves the file containing the list of existing files
-/// that were created by tantivy.
-///
-/// 将被管理的文件路径列表作为 json 数组保存到 `.managed.json` 文件
+/// that were created by sparse.
+/// 
+/// These files will record in `.managed.json`.
 fn save_managed_paths(
     directory: &dyn Directory,
     wlock: &RwLockWriteGuard<'_, MetaInformation>,
@@ -69,8 +64,6 @@ fn save_managed_paths(
 
 impl ManagedDirectory {
     /// Wraps a directory as managed directory.
-    ///
-    /// 将一个 Directory 的实现包装为 ManagedDirectory
     pub fn wrap(directory: Box<dyn Directory>) -> crate::Result<ManagedDirectory> {
         match directory.atomic_read(&MANAGED_FILEPATH) {
             Ok(data) => {
@@ -116,14 +109,12 @@ impl ManagedDirectory {
     /// an error is simply logged, and the file remains in the list of managed
     /// files.
     ///
-    /// 删除那些由 SparseIndex 创建但是不会再被任何 segments 使用的文件
     ///
-    /// - `get_living_files`: 回调函数, 返回当前仍然被 Index 使用到的 files
+    /// - `get_living_files`: callback function, return files still used by [`Index`].
     pub fn garbage_collect<L: FnOnce() -> HashSet<PathBuf>>(
         &mut self,
         get_living_files: L,
     ) -> crate::Result<GarbageCollectionResult> {
-        // 存储待删除的文件
         let mut files_to_delete = vec![];
 
         // It is crucial to get the living files after acquiring the
@@ -137,7 +128,6 @@ impl ManagedDirectory {
         //
         // releasing the lock as .delete() will use it too.
         {
-            // 获取 meta_information 的读锁, 确保在读取路径的时候不会被其它操作干扰
             let meta_informations_rlock = self
                 .meta_informations
                 .read()
@@ -149,18 +139,16 @@ impl ManagedDirectory {
             // 2) writer change meta.json (for instance after a merge or a commit)
             // 3) gc kicks in.
             // 4) gc removes a file that was useful for process B, before process B opened it.
-            // 尝试获取 META lock
-            // 确保在进行 GC 的时候不会有其它进程进行文件修改
             match self.acquire_lock(&META_LOCK) {
                 Ok(_meta_lock) => {
-                    // 调用回掉函数, 拿到存活的文件列表
+                    // get alive files used by current index.
                     let living_files = get_living_files();
                     debug!(
                         "[{}] [garbage_collect] directory managed_paths: {:?}",
                         thread::current().name().unwrap_or_default(),
                         &meta_informations_rlock.managed_paths
                     );
-                    // 如果 .managed.json 中记录的文件不在这个 living files 里面, 就需要删除它
+                    // If file in `.managed.json`, but not in the living files, we need remove it.
                     for managed_path in &meta_informations_rlock.managed_paths {
                         if !living_files.contains(managed_path) {
                             files_to_delete.push(managed_path.clone());
@@ -177,7 +165,7 @@ impl ManagedDirectory {
         let mut failed_to_delete_files = vec![];
         let mut deleted_files = vec![];
 
-        // 执行具体删除操作
+        // execute delete operation.
         for file_to_delete in files_to_delete.clone() {
             match self.delete(&file_to_delete) {
                 Ok(_) => {
@@ -210,7 +198,7 @@ impl ManagedDirectory {
             deleted_files.len()
         );
 
-        // 删除垃圾文件之后更新 .managed.json 文件
+        // When garbage files were removed, update the `.managed.json` file.
         if !deleted_files.is_empty() {
             // update the list of managed files by removing
             // the file that were removed.
@@ -239,7 +227,7 @@ impl ManagedDirectory {
     /// They are not managed and cannot be subjected
     /// to garbage collection.
     ///
-    /// - `filepath`: 是相对路径
+    /// - `filepath`: if relative path.
     pub fn register_file_as_managed(&self, filepath: &Path) -> io::Result<()> {
         // Files starting by "." (e.g. lock files) are not managed.
         if !is_managed(filepath) {

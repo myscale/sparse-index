@@ -14,12 +14,11 @@ pub enum SegmentComponent {
     CompressedInvertedIndexHeaders,
     CompressedInvertedIndexRowIds,
     CompressedInvertedIndexBlocks,
-    // TODO 追加一些 merge 过程中产生的临时文件
 
-    // 临时索引文件存储
+    // TODO: temp files for merging.
     // TempInvertedIndex,
 
-    // 删除掉的 row_id，用来构造 alive bitset
+    // TODO: removed row_id, used to consturct alive bitset
     // Delete,
 }
 
