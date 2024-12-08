@@ -9,7 +9,7 @@ use std::{
 use crate::{
     core::{
         atomic_save_json, madvise, transmute_to_u8, transmute_to_u8_slice, DimId,
-        InvertedIndexMeta, InvertedIndexMmapAccess, PostingElementEx, PostingListHeader,
+        InvertedIndexMeta, InvertedIndexMmapAccess, ExtendedElement, PostingListHeader,
         PostingListMerger, QuantizedParam, QuantizedWeight, Revision, Version, WeightType,
         POSTING_HEADER_SIZE,
     },
@@ -24,15 +24,15 @@ pub struct InvertedIndexMmapMerger<'a, OW: QuantizedWeight, TW: QuantizedWeight>
 }
 
 fn unquantized_posting<OW: QuantizedWeight, TW: QuantizedWeight>(
-    quantized_posting: &[PostingElementEx<TW>],
+    quantized_posting: &[ExtendedElement<TW>],
     param: Option<QuantizedParam>,
-) -> Vec<PostingElementEx<OW>> {
+) -> Vec<ExtendedElement<OW>> {
     if param.is_none() {
         assert!(OW::weight_type() == TW::weight_type() || quantized_posting.len() == 0);
 
         let mut converted_posting = vec![];
         for element in quantized_posting {
-            let converted_element: PostingElementEx<OW> = PostingElementEx {
+            let converted_element: ExtendedElement<OW> = ExtendedElement {
                 row_id: element.row_id,
                 weight: OW::from_f32(TW::to_f32(element.weight)),
                 max_next_weight: OW::from_f32(TW::to_f32(element.max_next_weight)),
@@ -46,7 +46,7 @@ fn unquantized_posting<OW: QuantizedWeight, TW: QuantizedWeight>(
 
         let mut unquantized_posting = vec![];
         for quantized_element in quantized_posting {
-            let unquantized_element: PostingElementEx<OW> = PostingElementEx::<OW> {
+            let unquantized_element: ExtendedElement<OW> = ExtendedElement::<OW> {
                 row_id: quantized_element.row_id,
                 weight: OW::unquantize_with_param(TW::to_u8(quantized_element.weight), param),
                 max_next_weight: OW::unquantize_with_param(
@@ -65,9 +65,9 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
         Self { inverted_index_mmaps }
     }
 
-    fn get_unquantized_postings_with_dim(&self, dim_id: DimId) -> Vec<Vec<PostingElementEx<OW>>> {
-        let mut unquantized_postings: Vec<Vec<PostingElementEx<OW>>> = vec![];
-        let empty_posting: &[PostingElementEx<TW>] = &[];
+    fn get_unquantized_postings_with_dim(&self, dim_id: DimId) -> Vec<Vec<ExtendedElement<OW>>> {
+        let mut unquantized_postings: Vec<Vec<ExtendedElement<OW>>> = vec![];
+        let empty_posting: &[ExtendedElement<TW>] = &[];
 
         for mmap_index in self.inverted_index_mmaps {
             let (posting, quantized_param) =
@@ -125,7 +125,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
         let mut current_element_offset = 0;
         for dim_id in min_dim_id..(max_dim_id + 1) {
             // Merging all postings in current dim-id
-            let postings: Vec<Vec<PostingElementEx<OW>>> =
+            let postings: Vec<Vec<ExtendedElement<OW>>> =
                 self.get_unquantized_postings_with_dim(dim_id);
 
             let (merged_posting, quantized_param) =
@@ -135,7 +135,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
             let header_obj = PostingListHeader {
                 start: current_element_offset,
                 end: current_element_offset
-                    + (merged_posting.len() * size_of::<PostingElementEx<TW>>()),
+                    + (merged_posting.len() * size_of::<ExtendedElement<TW>>()),
                 quantized_params: quantized_param,
                 row_ids_count: merged_posting.len() as RowId,
                 max_row_id,

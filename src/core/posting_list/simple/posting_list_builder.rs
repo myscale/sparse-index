@@ -1,51 +1,74 @@
 use itertools::Itertools;
-use log::{error, warn};
+use log::error;
+use typed_builder::TypedBuilder;
 use std::{marker::PhantomData, mem::size_of};
 
-use super::super::traits::PostingElementEx;
 use super::PostingList;
 use crate::{
-    core::{DimWeight, QuantizedParam, QuantizedWeight, WeightType, DEFAULT_MAX_NEXT_WEIGHT},
+    core::{DimWeight, Element, ExtendedElement, GenericElement, QuantizedParam, QuantizedWeight, SimpleElement, WeightType, DEFAULT_MAX_NEXT_WEIGHT, EXTENDED_ELEMENT_TYPE, SIMPLE_ELEMENT_TYPE},
     RowId,
 };
 
-#[derive(Default)]
+#[derive(TypedBuilder)]
 pub struct PostingListBuilder<OW: QuantizedWeight, TW: QuantizedWeight> {
+    /// [`PostingListBuilder`] will operate inner [`PostingList`]
+    #[builder(default=PostingList::<OW>::new(SIMPLE_ELEMENT_TYPE))]
     posting: PostingList<OW>,
+
+    /// Element type in [`PostingList`]
+    #[builder(default = SIMPLE_ELEMENT_TYPE)]
+    element_type: u8,
+
+    /// Whether need quantize weight in [`PostingList`]
+    #[builder(default = false)]
+    need_quantized: bool,
+
+    /// This switch is supported when the element type is [`EXTENDED_ELEMENT_TYPE`].
+    #[builder(default=false)]
     propagate_while_upserting: bool,
+
+    /// Whether need sort the whole [`PostingList`] when finally build.
+    #[builder(default=false)]
     finally_sort: bool,
+
+    /// This switch is supported when the element type is [`EXTENDED_ELEMENT_TYPE`].
+    /// It is conflict with switcher [`propagate_while_upserting`]
+    #[builder(default=false)]
     finally_propagate: bool,
 
-    pub(super) _phantom_ow: PhantomData<OW>,
     pub(super) _phantom_tw: PhantomData<TW>,
 }
 
 // Builder pattern
 impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
-    pub fn new() -> Self {
-        Self {
-            posting: PostingList::new(),
-            finally_sort: false,
-            propagate_while_upserting: false,
-            finally_propagate: true,
-            _phantom_ow: PhantomData,
-            _phantom_tw: PhantomData,
+    pub fn new(element_type: u8, finally_sort: bool, propagate_while_upserting: bool) -> Self {
+        // If we need quantize weight.
+        let need_quantized = TW::weight_type() != OW::weight_type() && TW::weight_type() == WeightType::WeightU8;
+        if !need_quantized {
+            assert_eq!(TW::weight_type(), OW::weight_type());
         }
+
+        // only simple element support quantized.
+        // quantize extended element will lead max_next_weight nonsense.
+        if need_quantized && element_type==EXTENDED_ELEMENT_TYPE {
+            let error_msg = format!("extended element not supported be quantized.");
+            error!("{}", error_msg);
+            panic!("{}", error_msg);
+        }
+
+        Self::builder()
+            .posting(PostingList::<OW>::new(element_type))
+            .element_type(element_type)
+            .need_quantized(need_quantized)
+            .propagate_while_upserting(element_type == EXTENDED_ELEMENT_TYPE && propagate_while_upserting)
+            .finally_sort(finally_sort)
+            .finally_propagate(element_type == EXTENDED_ELEMENT_TYPE && !propagate_while_upserting)
+            ._phantom_tw(PhantomData)
+            .build()
     }
 
-    pub fn with_finally_sort(mut self, sort: bool) -> Self {
-        self.finally_sort = sort;
-        self
-    }
-
-    pub fn with_finally_propagate(mut self, propagate: bool) -> Self {
-        self.finally_propagate = propagate;
-        self
-    }
-
-    pub fn with_propagate_while_upserting(mut self, propagate: bool) -> Self {
-        self.propagate_while_upserting = propagate;
-        self
+    pub fn default() -> Self {
+        Self::new(SIMPLE_ELEMENT_TYPE, false, false)
     }
 }
 
@@ -55,61 +78,110 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
     /// ## return
     /// bool: `ture` means the `insert` operation, `false` means `update`.
     pub fn add(&mut self, row_id: RowId, weight: DimWeight) -> bool {
+        let generic_element: GenericElement<OW> = match self.element_type {
+            SIMPLE_ELEMENT_TYPE => {
+                SimpleElement::<OW>::new(row_id, weight).into()
+            }
+            EXTENDED_ELEMENT_TYPE => {
+                ExtendedElement::<OW>::new(row_id, weight).into()
+            }
+            _ => panic!("Not supported element type, this panic should not happen."),
+        };
+
         if self.propagate_while_upserting {
-            self.posting.upsert_with_propagate(PostingElementEx::<OW>::new(row_id, weight))
+            self.posting.upsert_with_propagate(generic_element)
         } else {
-            self.posting.upsert(PostingElementEx::<OW>::new(row_id, weight)).1
+            self.posting.upsert(generic_element).1
         }
     }
 
-    pub fn memory_usage(&self) -> usize {
-        self.posting.len() * size_of::<PostingElementEx<OW>>()
+    /// return actual and inner memory usage
+    pub fn memory_usage(&self) -> (usize, usize) {
+        let actual_memory_usage = self.posting.len() * size_of::<GenericElement<OW>>();
+        let inner_memory_usage = match self.element_type {
+            SIMPLE_ELEMENT_TYPE => {
+                self.posting.len() * size_of::<SimpleElement<OW>>()
+            }
+            EXTENDED_ELEMENT_TYPE => {
+                self.posting.len() * size_of::<ExtendedElement<OW>>()
+            }
+            _ => panic!("Not supported element type, this panic should not happen."),
+        };
+        (actual_memory_usage, inner_memory_usage)
+    }
+
+    fn execute_finally_propagate(&mut self, need_quantized:bool) -> Option<QuantizedParam> {
+        // boundary
+        assert!(self.element_type==EXTENDED_ELEMENT_TYPE);
+
+        let mut max_next_weight: OW = OW::from_f32(DEFAULT_MAX_NEXT_WEIGHT);
+        let mut min_weight = self.posting.elements.last().unwrap().weight();
+        let mut max_weight = min_weight.clone();
+
+        // reverse iter, update max_next_weight for element_ex.
+        for element in self.posting.elements.iter_mut().rev() {
+            element.update_max_next_weight(max_next_weight);
+            max_next_weight = max_next_weight.max(element.weight());
+
+            if need_quantized {
+                min_weight = OW::min(min_weight, element.weight());
+                max_weight = OW::max(max_weight, element.weight());
+            }
+        }
+        if need_quantized {Some(OW::gen_quantized_param(min_weight, max_weight))} else {None}
+    }
+
+    fn quantize_posting(self, quantized_param: Option<QuantizedParam>) -> PostingList<TW> {
+        // boundary
+        if self.need_quantized {
+            assert!(quantized_param.is_some())
+        } else {
+            assert!(quantized_param.is_none())
+        }
+
+        if self.need_quantized && quantized_param.is_some() {
+            let mut quantized_posting_list: PostingList<TW> = PostingList::<TW>::new(self.element_type);
+            for element in self.posting.elements {
+                let quantized_element = element.quantized_with_param::<TW>(quantized_param.unwrap());
+                quantized_posting_list.elements.push(quantized_element);
+            }
+            return quantized_posting_list;
+        } else {
+            assert_eq!(TW::weight_type(), OW::weight_type());
+            let quantized_posting_list: PostingList<TW> = unsafe { std::mem::transmute(self.posting) };
+            return quantized_posting_list;
+        }
     }
 
     pub fn build(mut self) -> (PostingList<TW>, Option<QuantizedParam>) {
-        let need_quantized =
-            TW::weight_type() != OW::weight_type() && TW::weight_type() == WeightType::WeightU8;
-
-        if need_quantized {
-            assert_eq!(TW::weight_type(), WeightType::WeightU8);
-        } else {
-            assert_eq!(OW::weight_type(), TW::weight_type());
-        }
-
         if self.finally_sort {
-            self.posting.elements.sort_unstable_by_key(|e| e.row_id);
+            self.posting.elements.sort_unstable_by_key(|e| e.row_id());
         }
 
         #[cfg(debug_assertions)]
         {
-            if let Some(res) = self.posting.elements.windows(2).find(|e| e[0].row_id >= e[1].row_id)
+            if let Some(res) = self.posting.elements.windows(2).find(|e| e[0].row_id() >= e[1].row_id())
             {
-                let error_msg = format!("Duplicated row_id, or Posting is not sorted by row_id correctly, left: {:?}, right: {:?}.", res[0], res[1]);
+                let error_msg = format!("Duplicated row_id, or posting is not sorted by row_id correctly, left_row_id: {:?}, right_row_id: {:?}.", res[0], res[1]);
                 error!("{}", error_msg);
                 panic!("{}", error_msg);
             }
         }
 
         let mut quantized_param: Option<QuantizedParam> = None;
+
         if self.finally_propagate {
-            let mut max_next_weight: OW = OW::from_f32(DEFAULT_MAX_NEXT_WEIGHT);
-            let mut min_weight = OW::from_f32(DimWeight::INFINITY);
-            let mut max_weight = OW::from_f32(DimWeight::NEG_INFINITY);
+            // We should ensure that only extended type can execute weight propagate.
+            assert_eq!(self.element_type, EXTENDED_ELEMENT_TYPE);
 
-            for element in self.posting.elements.iter_mut().rev() {
-                element.max_next_weight = max_next_weight;
-                max_next_weight = max_next_weight.max(element.weight);
-
-                min_weight = OW::min(min_weight, element.weight);
-                max_weight = OW::max(max_weight, element.weight);
-            }
-            if need_quantized {
-                quantized_param = Some(OW::gen_quantized_param(min_weight, max_weight));
+            if self.posting.len()==0 {
+                quantized_param = if self.need_quantized {Some(QuantizedParam::default())} else {None};
+            } else {
+                quantized_param = self.execute_finally_propagate(self.need_quantized);
             }
         } else {
-            warn!("Skip propagating the Posting finally, please make sure it has already been propagated.");
-            if need_quantized {
-                let elements_iter = self.posting.elements.iter().map(|e| e.weight);
+            if self.need_quantized {
+                let elements_iter = self.posting.elements.iter().map(|e| e.weight());
                 let (min, max) = match elements_iter.minmax() {
                     itertools::MinMaxResult::NoElements => (OW::MINIMUM(), OW::MINIMUM()),
                     itertools::MinMaxResult::OneElement(e) => (e, e),
@@ -119,53 +191,24 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
             }
         }
 
-        if need_quantized {
-            assert!(quantized_param.is_some());
-            let mut tw_posting_list: PostingList<TW> = PostingList::<TW>::new();
-            for element in self.posting.elements {
-                let quantized_element_u8: PostingElementEx<u8> = PostingElementEx {
-                    row_id: element.row_id,
-                    weight: OW::quantize_with_param(element.weight, quantized_param.unwrap()),
-                    max_next_weight: OW::quantize_with_param(
-                        element.max_next_weight,
-                        quantized_param.unwrap(),
-                    ),
-                };
-
-                let quantized_element_convert: PostingElementEx<TW> = PostingElementEx {
-                    row_id: quantized_element_u8.row_id,
-                    weight: TW::unquantize_with_param(
-                        quantized_element_u8.weight,
-                        quantized_param.unwrap(),
-                    ),
-                    max_next_weight: TW::unquantize_with_param(
-                        quantized_element_u8.max_next_weight,
-                        quantized_param.unwrap(),
-                    ),
-                };
-
-                tw_posting_list.elements.push(quantized_element_convert);
-            }
-            (tw_posting_list, quantized_param)
-        } else {
-            let tw_posting_list: PostingList<TW> = unsafe { std::mem::transmute(self.posting) };
-            (tw_posting_list, None)
-        }
+        // quantized or convert posting.
+        (self.quantize_posting(quantized_param), quantized_param)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::core::posting_list::traits::PostingElementEx;
+    use crate::core::{Element, ExtendedElement, GenericElement};
+
 
     #[test]
     fn test_sort_unstable_by() {
-        let mut elements = vec![
-            PostingElementEx::<f32>::new(2, 0.9),
-            PostingElementEx::<f32>::new(1, 1.2),
-            PostingElementEx::<f32>::new(3, 0.2),
+        let mut elements: Vec<GenericElement<f32>> = vec![
+            ExtendedElement::<f32>::new(2, 0.9).into(),
+            ExtendedElement::<f32>::new(1, 1.2).into(),
+            ExtendedElement::<f32>::new(3, 0.2).into(),
         ];
-        elements.sort_unstable_by_key(|e| e.row_id);
+        elements.sort_unstable_by_key(|e| e.row_id());
         println!("{:?}", elements);
     }
 

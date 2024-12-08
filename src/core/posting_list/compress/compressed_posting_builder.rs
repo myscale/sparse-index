@@ -2,7 +2,7 @@ use super::CompressedPostingList;
 use crate::{
     core::{
         posting_list::{compress::CompressedPostingBlock, encoder::VIntEncoder},
-        BlockEncoder, DimWeight, PostingElementEx, PostingList, QuantizedParam, QuantizedWeight,
+        BlockEncoder, DimWeight, ExtendedElement, PostingList, QuantizedParam, QuantizedWeight,
         WeightType, COMPRESSION_BLOCK_SIZE, DEFAULT_MAX_NEXT_WEIGHT,
     },
     RowId,
@@ -59,16 +59,16 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
     /// bool: `ture` means the `insert` operation, `false` means `update`.
     pub fn add(&mut self, row_id: RowId, weight: DimWeight) -> bool {
         if self.propagate_while_upserting {
-            self.posting.upsert_with_propagate(PostingElementEx::new(row_id, weight))
+            self.posting.upsert_with_propagate(ExtendedElement::new(row_id, weight))
         } else {
-            self.posting.upsert(PostingElementEx::new(row_id, weight)).1
+            self.posting.upsert(ExtendedElement::new(row_id, weight)).1
         }
     }
 
     /// ## brief
     /// retrun all elements in the posting storage size.
     pub fn memory_usage(&self) -> usize {
-        self.posting.len() * size_of::<PostingElementEx<OW>>()
+        self.posting.len() * size_of::<ExtendedElement<OW>>()
     }
 
     pub fn pre_build(
@@ -241,15 +241,15 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
 fn quantized_weights_for_block<
     OW: QuantizedWeight,
     TW: QuantizedWeight,
-    F: Fn(&PostingElementEx<OW>) -> OW,
+    F: Fn(&ExtendedElement<OW>) -> OW,
 >(
-    block: &[PostingElementEx<OW>],
+    block: &[ExtendedElement<OW>],
     quantization_params: Option<QuantizedParam>,
     weight_selector: F,
 ) -> [TW; COMPRESSION_BLOCK_SIZE] {
     let quantized_weights: Vec<TW> = block
         .iter()
-        .map(|e: &PostingElementEx<OW>| {
+        .map(|e: &ExtendedElement<OW>| {
             TW::from_u8(OW::quantize_with_param(weight_selector(e), quantization_params.unwrap()))
         })
         .collect::<Vec<TW>>();
@@ -270,14 +270,14 @@ fn quantized_weights_for_block<
 fn convert_weights_type_for_block<
     OW: QuantizedWeight,
     TW: QuantizedWeight,
-    F: Fn(&PostingElementEx<OW>) -> OW,
+    F: Fn(&ExtendedElement<OW>) -> OW,
 >(
-    block: &[PostingElementEx<OW>],
+    block: &[ExtendedElement<OW>],
     weight_selector: F,
 ) -> [TW; COMPRESSION_BLOCK_SIZE] {
     let weights: Vec<TW> = block
         .iter()
-        .map(|e: &PostingElementEx<OW>| TW::from_f32(OW::to_f32(weight_selector(e))))
+        .map(|e: &ExtendedElement<OW>| TW::from_f32(OW::to_f32(weight_selector(e))))
         .collect::<Vec<TW>>();
     if weights.len() > COMPRESSION_BLOCK_SIZE {
         panic!(

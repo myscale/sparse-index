@@ -2,7 +2,7 @@ use log::{debug, info};
 
 use crate::{
     core::{
-        BlockDecoder, PostingElementEx, PostingListIteratorTrait, QuantizedParam, QuantizedWeight,
+        BlockDecoder, ExtendedElement, PostingListIteratorTrait, QuantizedParam, QuantizedWeight,
         WeightType, COMPRESSION_BLOCK_SIZE,
     },
     RowId,
@@ -49,13 +49,13 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingListIterator
         }
     }
     // convert OW (inner storage type) into TW (unquantized type)
-    fn convert_type(&self, raw_element: &PostingElementEx<OW>) -> PostingElementEx<TW> {
+    fn convert_type(&self, raw_element: &ExtendedElement<OW>) -> ExtendedElement<TW> {
         if self.quantized_param.is_none() {
             assert_eq!(OW::weight_type(), TW::weight_type());
 
             let weight_convert = TW::from_f32(OW::to_f32(raw_element.weight));
             let max_next_weight_convert = TW::from_f32(OW::to_f32(raw_element.max_next_weight));
-            let converted_element: PostingElementEx<TW> = PostingElementEx {
+            let converted_element: ExtendedElement<TW> = ExtendedElement {
                 row_id: raw_element.row_id,
                 weight: weight_convert,
                 max_next_weight: max_next_weight_convert,
@@ -65,7 +65,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingListIterator
         } else {
             assert_eq!(OW::weight_type(), WeightType::WeightU8);
             let param: QuantizedParam = self.quantized_param.unwrap();
-            let converted: PostingElementEx<TW> = PostingElementEx::<TW> {
+            let converted: ExtendedElement<TW> = ExtendedElement::<TW> {
                 row_id: raw_element.row_id,
                 weight: TW::unquantize_with_param(OW::to_u8(raw_element.weight), param),
                 max_next_weight: TW::unquantize_with_param(
@@ -78,7 +78,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingListIterator
     }
 
     // TODO: make sure element returned should be current element, and then increase cursor, keep same with SimplePosting.
-    pub fn next(&mut self) -> Option<PostingElementEx<TW>> {
+    pub fn next(&mut self) -> Option<ExtendedElement<TW>> {
         // Boundary
         if self.cursor >= self.posting.row_ids_count as usize {
             return None;
@@ -87,7 +87,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingListIterator
         if self.cursor % COMPRESSION_BLOCK_SIZE == 0 {
             self.is_uncompressed = false;
         }
-        let element_opt: Option<PostingElementEx<TW>> = self.peek();
+        let element_opt: Option<ExtendedElement<TW>> = self.peek();
         // increase cursor
         self.cursor += 1;
         element_opt
@@ -97,7 +97,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingListIterator
 impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIteratorTrait<OW, TW>
     for CompressedPostingListIterator<'a, OW, TW>
 {
-    fn peek(&mut self) -> Option<PostingElementEx<TW>> {
+    fn peek(&mut self) -> Option<ExtendedElement<TW>> {
         // Boundary
         if self.cursor >= self.posting.row_ids_count as usize {
             return None;
@@ -118,12 +118,12 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIteratorTrait<OW, 
 
         let relative_row_id = self.cursor % COMPRESSION_BLOCK_SIZE;
 
-        let element_ow = PostingElementEx {
+        let element_ow = ExtendedElement {
             row_id: self.row_ids_uncompressed_in_block[relative_row_id],
             weight: block.weights[relative_row_id],
             max_next_weight: block.max_next_weights[relative_row_id],
         };
-        let posting_element: PostingElementEx<TW> = self.convert_type(&element_ow);
+        let posting_element: ExtendedElement<TW> = self.convert_type(&element_ow);
         Some(posting_element)
     }
 
@@ -131,7 +131,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIteratorTrait<OW, 
         self.posting.max_row_id
     }
 
-    fn skip_to(&mut self, row_id: RowId) -> Option<PostingElementEx<TW>> {
+    fn skip_to(&mut self, row_id: RowId) -> Option<ExtendedElement<TW>> {
         while let Some(element) = self.peek() {
             match element.row_id.cmp(&row_id) {
                 std::cmp::Ordering::Less => {
@@ -160,7 +160,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIteratorTrait<OW, 
         self.cursor
     }
 
-    fn for_each_till_row_id(&mut self, row_id: RowId, mut f: impl FnMut(&PostingElementEx<TW>)) {
+    fn for_each_till_row_id(&mut self, row_id: RowId, mut f: impl FnMut(&ExtendedElement<TW>)) {
         let mut element_opt = self.peek();
         while let Some(element) = element_opt {
             if element.row_id > row_id {

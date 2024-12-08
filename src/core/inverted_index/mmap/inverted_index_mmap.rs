@@ -1,6 +1,6 @@
 use crate::core::common::ops::*;
 use crate::core::common::types::{DimId, DimOffset};
-use crate::core::posting_list::{PostingElementEx, PostingListIterator};
+use crate::core::posting_list::{ExtendedElement, PostingListIterator};
 use crate::core::{
     InvertedIndexMeta, InvertedIndexMetrics, InvertedIndexMmapAccess, InvertedIndexRam,
     InvertedIndexRamAccess, QuantizedParam, QuantizedWeight, Revision, Version, WeightType,
@@ -102,7 +102,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
     pub fn posting_with_param(
         &self,
         dim_id: &DimId,
-    ) -> Option<(&[PostingElementEx<TW>], Option<QuantizedParam>)> {
+    ) -> Option<(&[ExtendedElement<TW>], Option<QuantizedParam>)> {
         // check that the id is not out of bounds (posting_count includes the empty zeroth entry)
         if *dim_id >= self.size() as DimId {
             warn!("dim_id is overflow, dim_id should smaller than {}", self.size());
@@ -119,7 +119,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
         let elements_bytes = &self.postings_mmap[header.start as usize..header.end as usize];
 
         // TODO: Make sure this weight type convert operation is safe.
-        let posting_slice: &[PostingElementEx<TW>] = transmute_from_u8_to_slice(elements_bytes);
+        let posting_slice: &[ExtendedElement<TW>] = transmute_from_u8_to_slice(elements_bytes);
 
         Some((posting_slice, header.quantized_params))
     }

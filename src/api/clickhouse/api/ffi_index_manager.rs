@@ -53,7 +53,6 @@ pub fn ffi_create_index_with_parameter(
     }
 }
 
-/// 向 ram 状态的索引中插入数据
 pub fn ffi_insert_sparse_vector(
     index_path: &CxxString,
     row_id: RowId,

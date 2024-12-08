@@ -52,9 +52,10 @@ impl IndexManager {
     pub(crate) fn persist_index_params(
         index_path: &str,
         index_json_parameter: &str,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<SparseIndexConfig> {
         let config: SparseIndexConfig = serde_json::from_str(&index_json_parameter)?;
-        Ok(config.save(Path::new(&index_path))?)
+        let _ = config.save(Path::new(&index_path))?;
+        Ok(config)
     }
 
     pub(crate) fn create_writer(

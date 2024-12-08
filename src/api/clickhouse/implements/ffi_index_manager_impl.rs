@@ -15,7 +15,7 @@ pub fn ffi_create_index_with_parameter_impl(
     let _ = IndexManager::prepare_directory(&index_path)?;
 
     // TODO: Put into SparseIndex's inner logic. 
-    let _ = IndexManager::persist_index_params(&index_path, &index_json_parameter)?;
+    let sparse_index_config = IndexManager::persist_index_params(&index_path, &index_json_parameter)?;
 
     // TODO: parse json_parameter and generate IndexSettings.
     let index = Index::create_in_dir(Path::new(index_path), IndexSettings::default())?;

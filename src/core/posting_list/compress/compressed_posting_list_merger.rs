@@ -39,88 +39,88 @@ impl CompressedPostingListMerger {
 mod tests {
     use core::f32;
 
-    use crate::core::{PostingElementEx, PostingList};
+    use crate::core::{ExtendedElement, PostingList};
 
     /// mock 7 postings for the same dim-id.
-    fn get_mocked_postings() -> (Vec<Vec<PostingElementEx<f32>>>, PostingList<f32>) {
-        let lists: Vec<Vec<PostingElementEx<f32>>> = vec![
+    fn get_mocked_postings() -> (Vec<Vec<ExtendedElement<f32>>>, PostingList<f32>) {
+        let lists: Vec<Vec<ExtendedElement<f32>>> = vec![
             vec![], // 0
             vec![
                 // 1
-                PostingElementEx { row_id: 0, weight: 2.3, max_next_weight: 2.8 },
-                PostingElementEx { row_id: 4, weight: 1.4, max_next_weight: 2.8 },
-                PostingElementEx { row_id: 5, weight: 2.1, max_next_weight: 2.8 },
-                PostingElementEx { row_id: 9, weight: 2.8, max_next_weight: 1.2 },
-                PostingElementEx { row_id: 12, weight: 1.2, max_next_weight: f32::NEG_INFINITY },
+                ExtendedElement { row_id: 0, weight: 2.3, max_next_weight: 2.8 },
+                ExtendedElement { row_id: 4, weight: 1.4, max_next_weight: 2.8 },
+                ExtendedElement { row_id: 5, weight: 2.1, max_next_weight: 2.8 },
+                ExtendedElement { row_id: 9, weight: 2.8, max_next_weight: 1.2 },
+                ExtendedElement { row_id: 12, weight: 1.2, max_next_weight: f32::NEG_INFINITY },
             ],
             vec![], // 2
             vec![
                 // 3
-                PostingElementEx { row_id: 1, weight: 1.2, max_next_weight: 4.3 },
-                PostingElementEx { row_id: 3, weight: 4.3, max_next_weight: 3.1 },
-                PostingElementEx { row_id: 8, weight: 2.9, max_next_weight: 3.1 },
-                PostingElementEx { row_id: 10, weight: 1.8, max_next_weight: 3.1 },
-                PostingElementEx { row_id: 14, weight: 3.1, max_next_weight: f32::NEG_INFINITY },
+                ExtendedElement { row_id: 1, weight: 1.2, max_next_weight: 4.3 },
+                ExtendedElement { row_id: 3, weight: 4.3, max_next_weight: 3.1 },
+                ExtendedElement { row_id: 8, weight: 2.9, max_next_weight: 3.1 },
+                ExtendedElement { row_id: 10, weight: 1.8, max_next_weight: 3.1 },
+                ExtendedElement { row_id: 14, weight: 3.1, max_next_weight: f32::NEG_INFINITY },
             ],
             vec![
                 // 4
-                PostingElementEx { row_id: 2, weight: 0.3, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 11, weight: 3.4, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 13, weight: 2.1, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 15, weight: 1.1, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 17, weight: 1.5, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 21, weight: 3.8, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 24, weight: 4.2, max_next_weight: f32::NEG_INFINITY },
+                ExtendedElement { row_id: 2, weight: 0.3, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 11, weight: 3.4, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 13, weight: 2.1, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 15, weight: 1.1, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 17, weight: 1.5, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 21, weight: 3.8, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 24, weight: 4.2, max_next_weight: f32::NEG_INFINITY },
             ],
             vec![
                 // 5
-                PostingElementEx { row_id: 6, weight: 2.3, max_next_weight: 3.4 },
-                PostingElementEx { row_id: 7, weight: 3.4, max_next_weight: 3.2 },
-                PostingElementEx { row_id: 16, weight: 3.2, max_next_weight: 2.8 },
-                PostingElementEx { row_id: 19, weight: 2.8, max_next_weight: 1.9 },
-                PostingElementEx { row_id: 20, weight: 1.9, max_next_weight: f32::NEG_INFINITY },
+                ExtendedElement { row_id: 6, weight: 2.3, max_next_weight: 3.4 },
+                ExtendedElement { row_id: 7, weight: 3.4, max_next_weight: 3.2 },
+                ExtendedElement { row_id: 16, weight: 3.2, max_next_weight: 2.8 },
+                ExtendedElement { row_id: 19, weight: 2.8, max_next_weight: 1.9 },
+                ExtendedElement { row_id: 20, weight: 1.9, max_next_weight: f32::NEG_INFINITY },
             ],
             vec![
                 // 6
-                PostingElementEx { row_id: 18, weight: 2.1, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 22, weight: 4.2, max_next_weight: 4.1 },
-                PostingElementEx { row_id: 23, weight: 3.9, max_next_weight: 4.1 },
-                PostingElementEx { row_id: 25, weight: 1.6, max_next_weight: 4.1 },
-                PostingElementEx { row_id: 26, weight: 1.2, max_next_weight: 4.1 },
-                PostingElementEx { row_id: 30, weight: 4.1, max_next_weight: f32::NEG_INFINITY },
+                ExtendedElement { row_id: 18, weight: 2.1, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 22, weight: 4.2, max_next_weight: 4.1 },
+                ExtendedElement { row_id: 23, weight: 3.9, max_next_weight: 4.1 },
+                ExtendedElement { row_id: 25, weight: 1.6, max_next_weight: 4.1 },
+                ExtendedElement { row_id: 26, weight: 1.2, max_next_weight: 4.1 },
+                ExtendedElement { row_id: 30, weight: 4.1, max_next_weight: f32::NEG_INFINITY },
             ],
         ];
 
         let merged = PostingList {
             elements: vec![
-                PostingElementEx { row_id: 0, weight: 2.3, max_next_weight: 4.3 },
-                PostingElementEx { row_id: 1, weight: 1.2, max_next_weight: 4.3 },
-                PostingElementEx { row_id: 2, weight: 0.3, max_next_weight: 4.3 },
-                PostingElementEx { row_id: 3, weight: 4.3, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 4, weight: 1.4, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 5, weight: 2.1, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 6, weight: 2.3, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 7, weight: 3.4, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 8, weight: 2.9, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 9, weight: 2.8, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 10, weight: 1.8, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 11, weight: 3.4, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 12, weight: 1.2, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 13, weight: 2.1, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 14, weight: 3.1, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 15, weight: 1.1, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 16, weight: 3.2, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 17, weight: 1.5, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 18, weight: 2.1, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 19, weight: 2.8, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 20, weight: 1.9, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 21, weight: 3.8, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 22, weight: 4.2, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 23, weight: 3.9, max_next_weight: 4.2 },
-                PostingElementEx { row_id: 24, weight: 4.2, max_next_weight: 4.1 },
-                PostingElementEx { row_id: 25, weight: 1.6, max_next_weight: 4.1 },
-                PostingElementEx { row_id: 26, weight: 1.2, max_next_weight: 4.1 },
-                PostingElementEx { row_id: 30, weight: 4.1, max_next_weight: f32::NEG_INFINITY },
+                ExtendedElement { row_id: 0, weight: 2.3, max_next_weight: 4.3 },
+                ExtendedElement { row_id: 1, weight: 1.2, max_next_weight: 4.3 },
+                ExtendedElement { row_id: 2, weight: 0.3, max_next_weight: 4.3 },
+                ExtendedElement { row_id: 3, weight: 4.3, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 4, weight: 1.4, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 5, weight: 2.1, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 6, weight: 2.3, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 7, weight: 3.4, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 8, weight: 2.9, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 9, weight: 2.8, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 10, weight: 1.8, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 11, weight: 3.4, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 12, weight: 1.2, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 13, weight: 2.1, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 14, weight: 3.1, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 15, weight: 1.1, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 16, weight: 3.2, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 17, weight: 1.5, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 18, weight: 2.1, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 19, weight: 2.8, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 20, weight: 1.9, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 21, weight: 3.8, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 22, weight: 4.2, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 23, weight: 3.9, max_next_weight: 4.2 },
+                ExtendedElement { row_id: 24, weight: 4.2, max_next_weight: 4.1 },
+                ExtendedElement { row_id: 25, weight: 1.6, max_next_weight: 4.1 },
+                ExtendedElement { row_id: 26, weight: 1.2, max_next_weight: 4.1 },
+                ExtendedElement { row_id: 30, weight: 4.1, max_next_weight: f32::NEG_INFINITY },
             ],
         };
         return (lists, merged);

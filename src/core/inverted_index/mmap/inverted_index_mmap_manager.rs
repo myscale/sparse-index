@@ -12,7 +12,7 @@ use crate::{
         create_and_ensure_length,
         madvise::{self, Advice},
         open_write_mmap, transmute_to_u8, transmute_to_u8_slice, InvertedIndexRam,
-        InvertedIndexRamAccess, PostingElementEx, QuantizedWeight,
+        InvertedIndexRamAccess, ExtendedElement, QuantizedWeight,
     },
     RowId,
 };
@@ -83,7 +83,7 @@ impl MmapManager {
         let total_postings_elements_size: usize = inv_idx_ram
             .postings()
             .iter()
-            .map(|posting| posting.len() * size_of::<PostingElementEx<TW>>())
+            .map(|posting| posting.len() * size_of::<ExtendedElement<TW>>())
             .sum();
 
         // Init two mmap file paths.
@@ -132,7 +132,7 @@ impl MmapManager {
             let header_obj = PostingListHeader {
                 start: cur_postings_storage_size,
                 end: cur_postings_storage_size
-                    + (posting.len() * size_of::<PostingElementEx<TW>>()),
+                    + (posting.len() * size_of::<ExtendedElement<TW>>()),
                 quantized_params: param.clone(),
                 row_ids_count: posting.len() as RowId,
                 max_row_id: posting.elements.last().map(|e| e.row_id).unwrap_or_default(),

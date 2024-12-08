@@ -20,11 +20,19 @@ pub enum WeightType {
     WeightU8,
 }
 
-#[derive(PartialEq, Default, Copy, Clone, Debug)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 pub struct QuantizedParam {
     min: f32,
     diff256: f32,
 }
+
+impl Default for QuantizedParam {
+    fn default() -> Self {
+        Self { min: 0.0, diff256: (0.0-0.0)/255.0 }
+    }
+}
+
+
 
 pub trait QuantizedWeight: Clone + Copy + Debug + PartialEq + PartialOrd + 'static {
     /// Return current [`Weight`] minimum value.

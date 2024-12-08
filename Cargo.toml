@@ -53,7 +53,8 @@ measure_time = "0.8.2"
 arc-swap="1.7.0"
 sparse-bitpacker = { version= "0.1.0", path="./bitpacker" }
 common = { version= "0.1.0", path = "./common/", package = "sparse-common" }
-derive_builder="0.11"
+enum_dispatch = "0.3.13"
+typed-builder = "0.20.0"
 
 
 [build-dependencies]
