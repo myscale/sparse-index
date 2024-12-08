@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
         }
 
         std::cout << "Load index..." << endl;
-        ffi_load_index(index_path);
+        ffi_load_index_reader(index_path);
 
         std::cout << "Search from index..." << endl;
         loader.iterateQueryRows([&](const MsMacroQuery& row) {
@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
                     }
                 );
             }
-            rust::Vec<uint8_t> filter;
+            std::vector<uint8_t> filter = {};
             std::cout<<"Hello begin" <<std::endl;
             const auto& result = ffi_sparse_search(
                 index_path, 

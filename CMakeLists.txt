@@ -6,6 +6,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 project(SPARSE_INDEX_LIB)
 
 set(SANITIZER "" CACHE STRING "Sanitizer to enable (address, thread, memory)")
+set(BENCHMARK_ENABLE_TESTING OFF)
 
 message(STATUS ${SANITIZER})
 if(SANITIZER STREQUAL "address")
