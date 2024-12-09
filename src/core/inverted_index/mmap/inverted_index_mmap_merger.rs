@@ -8,10 +8,7 @@ use std::{
 
 use crate::{
     core::{
-        atomic_save_json, madvise, transmute_to_u8, transmute_to_u8_slice, DimId,
-        InvertedIndexMeta, InvertedIndexMmapAccess, ExtendedElement, PostingListHeader,
-        PostingListMerger, QuantizedParam, QuantizedWeight, Revision, Version, WeightType,
-        POSTING_HEADER_SIZE,
+        atomic_save_json, madvise, transmute_to_u8, transmute_to_u8_slice, DimId, ExtendedElement, InvertedIndexMeta, InvertedIndexMmapAccess, PostingListHeader, PostingListMerger, QuantizedParam, QuantizedWeight, Revision, Version, WeightType, POSTING_HEADER_SIZE, SIMPLE_ELEMENT_TYPE
     },
     RowId,
 };
@@ -129,7 +126,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
                 self.get_unquantized_postings_with_dim(dim_id);
 
             let (merged_posting, quantized_param) =
-                PostingListMerger::merge_posting_lists::<OW, TW>(&postings);
+                PostingListMerger::merge_posting_lists::<OW, TW>(&postings, SIMPLE_ELEMENT_TYPE);
 
             // Step 1: Generate header
             let header_obj = PostingListHeader {

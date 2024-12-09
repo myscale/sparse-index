@@ -4,7 +4,7 @@ mod encoder;
 mod simple;
 // mod traits;
 mod element;
-
+mod errors;
 pub use compress::*;
 pub use encoder::{BlockDecoder, BlockEncoder, COMPRESSION_BLOCK_SIZE};
 pub use simple::{PostingList, PostingListBuilder, PostingListIterator, PostingListMerger};
@@ -16,16 +16,16 @@ use crate::RowId;
 use super::QuantizedWeight;
 
 
-
-/// TW: Weight type actually stored in disk.
 /// OW: We should restore weight type to `origin type`.
-pub trait PostingListIter<TW: QuantizedWeight, OW: QuantizedWeight> {
+/// TW: Weight type actually stored in disk.
+pub trait PostingListIter<OW: QuantizedWeight, TW: QuantizedWeight> {
     fn peek(&mut self) -> Option<GenericElement<OW>>;
 
     fn last_id(&self) -> Option<RowId>;
 
     fn skip_to(&mut self, row_id: RowId) -> Option<GenericElement<OW>>;
 
+    // TODO: skip_to_end 使用 length 还是 length-1？
     fn skip_to_end(&mut self);
 
     fn remains(&self) -> usize;

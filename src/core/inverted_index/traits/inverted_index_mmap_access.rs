@@ -1,5 +1,5 @@
 use crate::core::inverted_index::InvertedIndexRam;
-use crate::core::{DimId, PostingListIteratorTrait, QuantizedWeight};
+use crate::core::{DimId, PostingListIter, QuantizedWeight};
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 use super::InvertedIndexMetrics;
 
 // OW: weight type before quantized.
-// TW: weight type after quantized.
+// TW: weight type after quantized. stored in disk.
 pub trait InvertedIndexMmapAccess<OW: QuantizedWeight, TW: QuantizedWeight>: Sized + Debug {
     // iterator should return original weight type when calling peek func.
-    type Iter<'a>: PostingListIteratorTrait<TW, OW> + Clone
+    type Iter<'a>: PostingListIter<OW, TW> + Clone
     where
         Self: 'a;
 

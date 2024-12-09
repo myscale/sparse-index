@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::core::{GenericElement, PostingListIter, QuantizedParam, QuantizedWeight, WeightType};
+use crate::core::{Element, GenericElement, PostingListIter, QuantizedParam, QuantizedWeight, WeightType};
 use crate::RowId;
 
 #[derive(Debug, Clone)]
@@ -19,23 +19,8 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterator<'a, OW, T
         PostingListIterator { posting, quantized_param, cursor: 0, _tw: PhantomData }
     }
 
-    fn convert_type(&self, raw_element: &GenericElement<TW>) -> GenericElement<OW> {
-        if self.quantized_param.is_none() {
-            assert_eq!(OW::weight_type(), TW::weight_type());
-            raw_element.type_convert::<OW>()
-        } else {
-            assert_eq!(OW::weight_type(), WeightType::WeightU8);
-            let param: QuantizedParam = self.quantized_param.unwrap();
-            let converted: ExtendedElement<TW> = ExtendedElement::<TW> {
-                row_id: raw_element.row_id,
-                weight: TW::unquantize_with_param(OW::to_u8(raw_element.weight), param),
-                max_next_weight: TW::unquantize_with_param(
-                    OW::to_u8(raw_element.max_next_weight),
-                    param,
-                ),
-            };
-            return converted;
-        }
+    fn type_convert(&self, raw_element: &GenericElement<TW>) -> GenericElement<OW> {
+        raw_element.type_convert::<OW>(self.quantized_param)
     }
 }
 
@@ -47,12 +32,12 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW> for P
             return None;
         } else {
             let element: GenericElement<TW> = element_opt.unwrap().clone();
-            return Some(self.convert_type(&element));
+            return Some(self.type_convert(&element));
         }
     }
 
     fn last_id(&self) -> Option<RowId> {
-        self.posting.last().map(|e| e.row_id)
+        self.posting.last().map(|e| e.row_id())
     }
 
     fn skip_to(&mut self, row_id: RowId) -> Option<GenericElement<OW>> {
@@ -68,7 +53,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW> for P
             Ok(found_offset) => {
                 self.cursor += found_offset;
                 let raw_element: GenericElement<TW> = self.posting[self.cursor].clone();
-                return Some(self.convert_type(&raw_element));
+                return Some(self.type_convert(&raw_element));
             }
             Err(insert_index) => {
                 self.cursor += insert_index;
@@ -92,10 +77,10 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW> for P
     fn for_each_till_row_id(&mut self, row_id: RowId, mut f: impl FnMut(&GenericElement<OW>)) {
         let mut cursor = self.cursor;
         for element in &self.posting[cursor..] {
-            if element.row_id > row_id {
+            if element.row_id() > row_id {
                 break;
             }
-            let converted: GenericElement<OW> = self.convert_type(element);
+            let converted: GenericElement<OW> = self.type_convert(element);
             f(&converted);
             cursor += 1;
         }

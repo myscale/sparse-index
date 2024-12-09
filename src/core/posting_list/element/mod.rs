@@ -85,6 +85,7 @@ impl<W: QuantizedWeight> GenericElement<W> {
         }
     }
 
+    /// 这是执行反量化的操作，并非是把 f32 存储为量化的操作
     pub fn type_convert<T: QuantizedWeight>(&self, quantized_param: Option<QuantizedParam>) -> GenericElement<T> {
         match self {
             GenericElement::SimpleElement(simple_element) => {

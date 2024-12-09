@@ -1,54 +1,77 @@
-use super::CompressedPostingList;
+use super::{CompressedPostingList, GenericCompressedPostingBlock};
 use crate::{
     core::{
-        posting_list::{compress::CompressedPostingBlock, encoder::VIntEncoder},
-        BlockEncoder, DimWeight, ExtendedElement, PostingList, QuantizedParam, QuantizedWeight,
-        WeightType, COMPRESSION_BLOCK_SIZE, DEFAULT_MAX_NEXT_WEIGHT,
+        posting_list::encoder::VIntEncoder, BlockEncoder, DimWeight, Element, ExtendedElement, GenericElement, PostingList, QuantizedParam, QuantizedWeight, SimpleElement, WeightType, COMPRESSION_BLOCK_SIZE, DEFAULT_MAX_NEXT_WEIGHT, EXTENDED_ELEMENT_TYPE, SIMPLE_ELEMENT_TYPE
     },
     RowId,
 };
 use itertools::Itertools;
 use log::{error, info, warn};
+use typed_builder::TypedBuilder;
 use std::{cmp::max, marker::PhantomData, mem::size_of};
 
+
+#[derive(TypedBuilder)]
 pub struct CompressedPostingBuilder<OW: QuantizedWeight, TW: QuantizedWeight> {
+    /// [`CompressedPostingBuilder`] will operate inner [`PostingList`]
+    #[builder(default=PostingList::<OW>::new(SIMPLE_ELEMENT_TYPE))]
     posting: PostingList<OW>,
 
+    /// Element type in [`PostingList`]
+    #[builder(default = SIMPLE_ELEMENT_TYPE)]
+    element_type: u8,
+
+    /// Whether need quantize weight in [`PostingList`]
+    #[builder(default = false)]
+    need_quantized: bool,
+
+    /// This switch is supported when the element type is [`EXTENDED_ELEMENT_TYPE`].
+    #[builder(default=false)]
     propagate_while_upserting: bool,
+
+    /// Whether need sort the whole [`PostingList`] when finally build.
+    #[builder(default=false)]
     finally_sort: bool,
+
+    /// This switch is supported when the element type is [`EXTENDED_ELEMENT_TYPE`].
+    /// It is conflict with switcher [`propagate_while_upserting`]
+    #[builder(default=false)]
     finally_propagate: bool,
 
-    _ow: PhantomData<OW>,
-    _tw: PhantomData<TW>,
+    _phantom_tw: PhantomData<TW>,
 }
 
 // TODO: Find some third-party dependency to simplify the builder pattern.
 // Builder pattern
 impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> {
-    pub fn new() -> Self {
-        Self {
-            posting: PostingList::new(),
-            propagate_while_upserting: false,
-            finally_sort: false,
-            finally_propagate: true,
-            _ow: PhantomData,
-            _tw: PhantomData,
+    pub fn new(element_type: u8, finally_sort: bool, propagate_while_upserting: bool) -> Self {
+        // If we need quantize weight.
+        let need_quantized = TW::weight_type() != OW::weight_type() && TW::weight_type() == WeightType::WeightU8;
+        if !need_quantized {
+            assert_eq!(TW::weight_type(), OW::weight_type());
         }
+
+        // only simple element support quantized.
+        // quantize extended element will lead max_next_weight nonsense.
+        if need_quantized && element_type==EXTENDED_ELEMENT_TYPE {
+            let error_msg = format!("extended element not supported be quantized.");
+            error!("{}", error_msg);
+            panic!("{}", error_msg);
+        }
+
+        Self::builder()
+            .posting(PostingList::<OW>::new(element_type))
+            .element_type(element_type)
+            .need_quantized(need_quantized)
+            .propagate_while_upserting(element_type == EXTENDED_ELEMENT_TYPE && propagate_while_upserting)
+            .finally_sort(finally_sort)
+            .finally_propagate(element_type == EXTENDED_ELEMENT_TYPE && !propagate_while_upserting)
+            ._phantom_tw(PhantomData)
+            .build()
     }
 
-    pub fn with_finally_sort(mut self, sort: bool) -> Self {
-        self.finally_sort = sort;
-        self
-    }
-
-    pub fn with_finally_propagate(mut self, propagate: bool) -> Self {
-        self.finally_propagate = propagate;
-        self
-    }
-
-    pub fn with_propagate_while_upserting(mut self, propagate: bool) -> Self {
-        self.propagate_while_upserting = propagate;
-        self
+    pub fn default() -> Self {
+        Self::new(SIMPLE_ELEMENT_TYPE, false, false)
     }
 }
 
@@ -58,38 +81,55 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
     /// ## return
     /// bool: `ture` means the `insert` operation, `false` means `update`.
     pub fn add(&mut self, row_id: RowId, weight: DimWeight) -> bool {
+        let generic_element: GenericElement<OW> = match self.element_type {
+            SIMPLE_ELEMENT_TYPE => {
+                SimpleElement::<OW>::new(row_id, weight).into()
+            }
+            EXTENDED_ELEMENT_TYPE => {
+                ExtendedElement::<OW>::new(row_id, weight).into()
+            }
+            _ => panic!("Not supported element type, this panic should not happen."),
+        };
+
         if self.propagate_while_upserting {
-            self.posting.upsert_with_propagate(ExtendedElement::new(row_id, weight))
+            self.posting.upsert_with_propagate(generic_element)
         } else {
-            self.posting.upsert(ExtendedElement::new(row_id, weight)).1
+            self.posting.upsert(generic_element).1
         }
     }
 
     /// ## brief
     /// retrun all elements in the posting storage size.
     pub fn memory_usage(&self) -> usize {
-        self.posting.len() * size_of::<ExtendedElement<OW>>()
+        let actual_memory_usage = self.posting.len() * size_of::<GenericElement<OW>>();
+        let inner_memory_usage = match self.element_type {
+            SIMPLE_ELEMENT_TYPE => {
+                self.posting.len() * size_of::<SimpleElement<OW>>()
+            }
+            EXTENDED_ELEMENT_TYPE => {
+                self.posting.len() * size_of::<ExtendedElement<OW>>()
+            }
+            _ => panic!("Not supported element type, this panic should not happen."),
+        };
+        (actual_memory_usage, inner_memory_usage)
     }
 
     pub fn pre_build(
         mut self,
     ) -> (
-        Vec<u8>,                         // row_ids_compressed
-        Vec<CompressedPostingBlock<TW>>, // quantized_blocks may not been quantized.
-        Option<QuantizedParam>,          // quantized_param
+        Vec<u8>,                                // row_ids_compressed
+        Vec<GenericCompressedPostingBlock<TW>>, // quantized_blocks may not been quantized.
+        Option<QuantizedParam>,                 // quantized_param
         RowId,
         Option<RowId>,
     ) {
-        let need_quantized =
-            TW::weight_type() != OW::weight_type() && TW::weight_type() == WeightType::WeightU8;
-
         // sort by row_id.
         if self.finally_sort {
-            self.posting.elements.sort_unstable_by_key(|e| e.row_id);
+            self.posting.elements.sort_unstable_by_key(|e| e.row_id());
         }
         #[cfg(debug_assertions)]
         {
-            if let Some(res) = self.posting.elements.windows(2).find(|e| e[0].row_id >= e[1].row_id)
+            if let Some(res) = self.posting.elements.windows(2).find(|e| e[0].row_id() >= e[1].row_id())
             {
                 let error_msg = format!("Duplicated row_id, or Posting is not sorted by row_id correctly, left: {:?}, right: {:?}.", res[0], res[1]);
                 error!("{}", error_msg);
@@ -100,6 +140,9 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
         // update max_next_weight and quantization_params
         let mut quantized_param: Option<QuantizedParam> = None;
         if self.finally_propagate {
+            // We should ensure that only extended type can execute weight propagate.
+            assert_eq!(self.element_type, EXTENDED_ELEMENT_TYPE);
+
             let mut max_next_weight = OW::from_f32(DEFAULT_MAX_NEXT_WEIGHT);
             let mut min_weight = OW::from_f32(DimWeight::MAX);
             let mut max_weight = OW::from_f32(DimWeight::MIN);

@@ -20,8 +20,6 @@ impl<OW: QuantizedWeight> Default for PostingList<OW> {
     }
 }
 
-
-
 /// PostingList Creater
 impl<OW: QuantizedWeight> PostingList<OW> {
 
