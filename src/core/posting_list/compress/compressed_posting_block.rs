@@ -1,7 +1,7 @@
 use enum_dispatch::enum_dispatch;
 
 use crate::{
-    core::{QuantizedWeight, COMPRESSION_BLOCK_SIZE},
+    core::{ElementType, QuantizedWeight, COMPRESSION_BLOCK_SIZE},
     RowId,
 };
 
@@ -127,6 +127,16 @@ pub enum CompressedBlockType {
     Extended,
 }
 
+impl CompressedBlockType {
+    pub fn bound_by_element(element_type: ElementType) -> Self {
+        match element_type {
+            ElementType::SIMPLE => CompressedBlockType::Simple,
+            ElementType::EXTENDED => CompressedBlockType::Extended,
+        }
+    }
+}
+
+
 
 #[derive(Debug, Clone, PartialEq)]
 #[enum_dispatch(CompressedPostingBlockTrait<TW>)]
@@ -140,6 +150,13 @@ impl<TW: QuantizedWeight> GenericCompressedPostingBlock<TW> {
         match self {
             GenericCompressedPostingBlock::Simple(_) => CompressedBlockType::Simple,
             GenericCompressedPostingBlock::Extended(_) => CompressedBlockType::Extended,
+        }
+    }
+
+    pub fn block_type_by_element(element_type: ElementType) {
+        match element_type {
+            ElementType::SIMPLE => CompressedBlockType::Simple,
+            ElementType::EXTENDED => CompressedBlockType::Extended,
         }
     }
 }

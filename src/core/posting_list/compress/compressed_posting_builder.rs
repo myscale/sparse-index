@@ -1,12 +1,12 @@
-use super::{CompressedPostingList, GenericCompressedPostingBlock};
+use super::{CompressedBlockType, CompressedPostingList, ExtendedCompressedPostingBlock, GenericCompressedPostingBlock, SimpleCompressedPostingBlock};
 use crate::{
     core::{
-        posting_list::encoder::VIntEncoder, BlockEncoder, DimWeight, Element, ExtendedElement, GenericElement, PostingList, QuantizedParam, QuantizedWeight, SimpleElement, WeightType, COMPRESSION_BLOCK_SIZE, DEFAULT_MAX_NEXT_WEIGHT, EXTENDED_ELEMENT_TYPE, SIMPLE_ELEMENT_TYPE
+        posting_list::encoder::VIntEncoder, BlockEncoder, DimWeight, Element, ElementType, ExtendedElement, GenericElement, PostingList, QuantizedParam, QuantizedWeight, SimpleElement, WeightType, COMPRESSION_BLOCK_SIZE, DEFAULT_MAX_NEXT_WEIGHT
     },
     RowId,
 };
 use itertools::Itertools;
-use log::{error, info, warn};
+use log::error;
 use typed_builder::TypedBuilder;
 use std::{cmp::max, marker::PhantomData, mem::size_of};
 
@@ -14,18 +14,18 @@ use std::{cmp::max, marker::PhantomData, mem::size_of};
 #[derive(TypedBuilder)]
 pub struct CompressedPostingBuilder<OW: QuantizedWeight, TW: QuantizedWeight> {
     /// [`CompressedPostingBuilder`] will operate inner [`PostingList`]
-    #[builder(default=PostingList::<OW>::new(SIMPLE_ELEMENT_TYPE))]
+    #[builder(default=PostingList::<OW>::new(ElementType::SIMPLE))]
     posting: PostingList<OW>,
 
     /// Element type in [`PostingList`]
-    #[builder(default = SIMPLE_ELEMENT_TYPE)]
-    element_type: u8,
+    #[builder(default = ElementType::SIMPLE)]
+    element_type: ElementType,
 
     /// Whether need quantize weight in [`PostingList`]
     #[builder(default = false)]
     need_quantized: bool,
 
-    /// This switch is supported when the element type is [`EXTENDED_ELEMENT_TYPE`].
+    /// This switch is supported when the element type is [`ElementType::EXTENDED`].
     #[builder(default=false)]
     propagate_while_upserting: bool,
 
@@ -33,7 +33,7 @@ pub struct CompressedPostingBuilder<OW: QuantizedWeight, TW: QuantizedWeight> {
     #[builder(default=false)]
     finally_sort: bool,
 
-    /// This switch is supported when the element type is [`EXTENDED_ELEMENT_TYPE`].
+    /// This switch is supported when the element type is [`ElementType::EXTENDED`].
     /// It is conflict with switcher [`propagate_while_upserting`]
     #[builder(default=false)]
     finally_propagate: bool,
@@ -44,7 +44,7 @@ pub struct CompressedPostingBuilder<OW: QuantizedWeight, TW: QuantizedWeight> {
 // TODO: Find some third-party dependency to simplify the builder pattern.
 // Builder pattern
 impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> {
-    pub fn new(element_type: u8, finally_sort: bool, propagate_while_upserting: bool) -> Self {
+    pub fn new(element_type: ElementType, finally_sort: bool, propagate_while_upserting: bool) -> Self {
         // If we need quantize weight.
         let need_quantized = TW::weight_type() != OW::weight_type() && TW::weight_type() == WeightType::WeightU8;
         if !need_quantized {
@@ -53,7 +53,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
 
         // only simple element support quantized.
         // quantize extended element will lead max_next_weight nonsense.
-        if need_quantized && element_type==EXTENDED_ELEMENT_TYPE {
+        if need_quantized && element_type==ElementType::EXTENDED {
             let error_msg = format!("extended element not supported be quantized.");
             error!("{}", error_msg);
             panic!("{}", error_msg);
@@ -63,15 +63,15 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
             .posting(PostingList::<OW>::new(element_type))
             .element_type(element_type)
             .need_quantized(need_quantized)
-            .propagate_while_upserting(element_type == EXTENDED_ELEMENT_TYPE && propagate_while_upserting)
+            .propagate_while_upserting(element_type == ElementType::EXTENDED && propagate_while_upserting)
             .finally_sort(finally_sort)
-            .finally_propagate(element_type == EXTENDED_ELEMENT_TYPE && !propagate_while_upserting)
+            .finally_propagate(element_type == ElementType::EXTENDED && !propagate_while_upserting)
             ._phantom_tw(PhantomData)
             .build()
     }
 
     pub fn default() -> Self {
-        Self::new(SIMPLE_ELEMENT_TYPE, false, false)
+        Self::new(ElementType::SIMPLE, false, false)
     }
 }
 
@@ -82,10 +82,10 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
     /// bool: `ture` means the `insert` operation, `false` means `update`.
     pub fn add(&mut self, row_id: RowId, weight: DimWeight) -> bool {
         let generic_element: GenericElement<OW> = match self.element_type {
-            SIMPLE_ELEMENT_TYPE => {
+            ElementType::SIMPLE => {
                 SimpleElement::<OW>::new(row_id, weight).into()
             }
-            EXTENDED_ELEMENT_TYPE => {
+            ElementType::EXTENDED => {
                 ExtendedElement::<OW>::new(row_id, weight).into()
             }
             _ => panic!("Not supported element type, this panic should not happen."),
@@ -103,16 +103,43 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
     pub fn memory_usage(&self) -> usize {
         let actual_memory_usage = self.posting.len() * size_of::<GenericElement<OW>>();
         let inner_memory_usage = match self.element_type {
-            SIMPLE_ELEMENT_TYPE => {
+            ElementType::SIMPLE => {
                 self.posting.len() * size_of::<SimpleElement<OW>>()
             }
-            EXTENDED_ELEMENT_TYPE => {
+            ElementType::EXTENDED => {
                 self.posting.len() * size_of::<ExtendedElement<OW>>()
             }
             _ => panic!("Not supported element type, this panic should not happen."),
         };
         (actual_memory_usage, inner_memory_usage)
     }
+
+    fn execute_finally_propagate(&mut self) -> Option<QuantizedParam> {
+        // boundary
+        assert!(self.element_type==ElementType::EXTENDED);
+
+        if self.posting.elements.len()==0 && self.need_quantized {
+            return Some(QuantizedParam::default());
+        }
+
+        let mut max_next_weight: OW = OW::from_f32(DEFAULT_MAX_NEXT_WEIGHT);
+        let mut min_weight = self.posting.elements.last().unwrap().weight();
+        let mut max_weight = min_weight.clone();
+
+        // reverse iter, update max_next_weight for element_ex.
+        for element in self.posting.elements.iter_mut().rev() {
+            element.update_max_next_weight(max_next_weight);
+            max_next_weight = max_next_weight.max(element.weight());
+
+            if self.need_quantized {
+                min_weight = OW::min(min_weight, element.weight());
+                max_weight = OW::max(max_weight, element.weight());
+            }
+        }
+        if self.need_quantized {Some(OW::gen_quantized_param(min_weight, max_weight))} else {None}
+    }
+
+    // TODO 将这个 sort、propagate、quantized 的逻辑抽取出来
 
     pub fn pre_build(
         mut self,
@@ -123,6 +150,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
         RowId,
         Option<RowId>,
     ) {
+        // 从这里开始 REFINE
         // sort by row_id.
         if self.finally_sort {
             self.posting.elements.sort_unstable_by_key(|e| e.row_id());
@@ -137,29 +165,17 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
             }
         }
 
+        // TODO：从这里开始继续 refine, 并修改 index mmap、compressed index mmap
         // update max_next_weight and quantization_params
         let mut quantized_param: Option<QuantizedParam> = None;
         if self.finally_propagate {
             // We should ensure that only extended type can execute weight propagate.
-            assert_eq!(self.element_type, EXTENDED_ELEMENT_TYPE);
+            assert_eq!(self.element_type, ElementType::EXTENDED);
 
-            let mut max_next_weight = OW::from_f32(DEFAULT_MAX_NEXT_WEIGHT);
-            let mut min_weight = OW::from_f32(DimWeight::MAX);
-            let mut max_weight = OW::from_f32(DimWeight::MIN);
+            quantized_param = self.execute_finally_propagate();
 
-            for element in self.posting.elements.iter_mut().rev() {
-                element.max_next_weight = max_next_weight;
-                max_next_weight = OW::max(max_next_weight, element.weight);
-
-                min_weight = OW::min(min_weight, element.weight);
-                max_weight = OW::max(max_weight, element.weight);
-            }
-            if need_quantized {
-                quantized_param = Some(OW::gen_quantized_param(min_weight, max_weight));
-            }
         } else {
-            warn!("Skip propagating the Posting finally, please make sure it has already been propagated.");
-            if need_quantized {
+            if self.need_quantized {
                 // Only execute iteration when using quantized.
                 let elements_iter = self.posting.elements.iter().map(|e| e.weight);
                 let (min, max) = match elements_iter.minmax() {
@@ -170,24 +186,24 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
                 quantized_param = Some(OW::gen_quantized_param(min, max));
             }
         }
+        // 到这里结束：之前的这段代码，可以考虑和 posting list builder 统一起来，使用一份代码
 
         let mut max_row_id: Option<RowId> = None;
         let mut total_row_ids_count: RowId = 0;
 
         let mut encoder = BlockEncoder::new();
 
-        let mut row_ids_compressed_in_posting: Vec<u8> =
-            Vec::with_capacity(self.posting.len() / COMPRESSION_BLOCK_SIZE);
+        // 初始分配一定的 capacity，并不是一个最大上限
+        let mut row_ids_compressed_in_posting: Vec<u8> = Vec::with_capacity(self.posting.len() / COMPRESSION_BLOCK_SIZE);
 
         // Record all blocks data in posting
-        let mut target_posting_blocks: Vec<CompressedPostingBlock<TW>> =
-            Vec::with_capacity(self.posting.len() / COMPRESSION_BLOCK_SIZE + 1);
+        let mut target_posting_blocks: Vec<GenericCompressedPostingBlock<TW>> = Vec::with_capacity(self.posting.len() / COMPRESSION_BLOCK_SIZE + 1);
 
         let mut block_offsets: u64 = 0;
         for current_block in self.posting.elements.chunks(COMPRESSION_BLOCK_SIZE) {
             // Get current block's uncompressed u32 type row_ids.
             let row_ids_uncompressed_in_block: Vec<RowId> =
-                current_block.iter().map(|e| e.row_id).collect::<Vec<RowId>>();
+                current_block.iter().map(|e| e.row_id()).collect::<Vec<RowId>>();
             let row_id_start_in_block: u32 = row_ids_uncompressed_in_block[0];
 
             let offset = row_id_start_in_block.checked_sub(1).unwrap_or(0);
@@ -206,47 +222,63 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
             // TODO: Refine code, although code execute here can make sure Posting not empty, but we should make code logic more clearly.
             max_row_id = Some(max(
                 max_row_id.unwrap_or(0),
-                current_block.last().map(|w| w.row_id).unwrap_or_default(),
+                current_block.last().map(|w| w.row_id()).unwrap_or(0)
             ));
 
-            if need_quantized {
-                let quantized_weights: [TW; COMPRESSION_BLOCK_SIZE] =
-                    quantized_weights_for_block::<OW, TW, _>(current_block, quantized_param, |w| {
-                        w.weight
-                    });
-                let quantized_max_next_weights: [TW; COMPRESSION_BLOCK_SIZE] =
-                    quantized_weights_for_block::<OW, TW, _>(current_block, quantized_param, |w| {
-                        w.max_next_weight
-                    });
-
-                let block: CompressedPostingBlock<TW> = CompressedPostingBlock {
-                    row_id_start: row_id_start_in_block,
-                    block_offset: block_offsets,
-                    row_ids_compressed_size: row_ids_compressed_in_block.len() as u16, // We can ensure that the block row_ids compressed size won't exceed 512.
-                    row_ids_count: current_block.len() as u8, // We can ensure that the block size won't exceed `COMPRESSION_BLOCK_SIZE`.
-                    num_bits,
-                    weights: quantized_weights,
-                    max_next_weights: quantized_max_next_weights,
-                };
-                target_posting_blocks.push(block);
+            if self.need_quantized {
+                match CompressedBlockType::bound_by_element(self.element_type) {
+                    CompressedBlockType::Simple => {
+                        let block: GenericCompressedPostingBlock<TW> = GenericCompressedPostingBlock::Simple(SimpleCompressedPostingBlock {
+                            row_id_start: row_id_start_in_block,
+                            block_offset: block_offsets,
+                            row_ids_compressed_size: row_ids_compressed_in_block.len() as u16, // We can ensure that the block row_ids compressed size won't exceed 512.
+                            row_ids_count: current_block.len() as u8, // We can ensure that the block size won't exceed `COMPRESSION_BLOCK_SIZE`.
+                            num_bits,
+                            weights:  quantized_weights_for_block::<OW, TW, _>(current_block, quantized_param, |w| {w.weight}),
+                        });
+                        target_posting_blocks.push(block);
+                    },
+                    CompressedBlockType::Extended => {
+                        let block: GenericCompressedPostingBlock<TW> = GenericCompressedPostingBlock::Extended(ExtendedCompressedPostingBlock {
+                            row_id_start: row_id_start_in_block,
+                            block_offset: block_offsets,
+                            row_ids_compressed_size: row_ids_compressed_in_block.len() as u16, // We can ensure that the block row_ids compressed size won't exceed 512.
+                            row_ids_count: current_block.len() as u8, // We can ensure that the block size won't exceed `COMPRESSION_BLOCK_SIZE`.
+                            num_bits,
+                            weights:  quantized_weights_for_block::<OW, TW, _>(current_block, quantized_param, |w| {w.weight()}),
+                            max_next_weights: quantized_weights_for_block::<OW, TW, _>(current_block, quantized_param, |w| {w.max_next_weight()}),
+                        });
+                        target_posting_blocks.push(block);
+                    },
+                }
             } else {
                 assert_eq!(OW::weight_type(), TW::weight_type());
-                let weights_converted: [TW; COMPRESSION_BLOCK_SIZE] =
-                    convert_weights_type_for_block::<OW, TW, _>(current_block, |w| w.weight);
-                let max_next_weights_converted: [TW; COMPRESSION_BLOCK_SIZE] =
-                    convert_weights_type_for_block::<OW, TW, _>(current_block, |w| {
-                        w.max_next_weight
-                    });
-                let block: CompressedPostingBlock<TW> = CompressedPostingBlock::<TW> {
-                    row_id_start: row_id_start_in_block,
-                    block_offset: block_offsets,
-                    row_ids_compressed_size: row_ids_compressed_in_block.len() as u16, // We can ensure that the block row_ids compressed size won't exceed 512.
-                    row_ids_count: current_block.len() as u8, // We can ensure that the block size won't exceed `COMPRESSION_BLOCK_SIZE`.
-                    num_bits,
-                    weights: weights_converted,
-                    max_next_weights: max_next_weights_converted,
-                };
-                target_posting_blocks.push(block);
+
+                match CompressedBlockType::bound_by_element(self.element_type) {
+                    CompressedBlockType::Simple => {
+                        let block: GenericCompressedPostingBlock<TW> = GenericCompressedPostingBlock::Simple(SimpleCompressedPostingBlock {
+                            row_id_start: row_id_start_in_block,
+                            block_offset: block_offsets,
+                            row_ids_compressed_size: row_ids_compressed_in_block.len() as u16, // We can ensure that the block row_ids compressed size won't exceed 512.
+                            row_ids_count: current_block.len() as u8, // We can ensure that the block size won't exceed `COMPRESSION_BLOCK_SIZE`.
+                            num_bits,
+                            weights:  convert_weights_type_for_block::<OW, TW, _>(current_block, |w| w.weight()),
+                        });
+                        target_posting_blocks.push(block);
+                    },
+                    CompressedBlockType::Extended => {
+                        let block: GenericCompressedPostingBlock<TW> = GenericCompressedPostingBlock::Extended(ExtendedCompressedPostingBlock {
+                            row_id_start: row_id_start_in_block,
+                            block_offset: block_offsets,
+                            row_ids_compressed_size: row_ids_compressed_in_block.len() as u16, // We can ensure that the block row_ids compressed size won't exceed 512.
+                            row_ids_count: current_block.len() as u8, // We can ensure that the block size won't exceed `COMPRESSION_BLOCK_SIZE`.
+                            num_bits,
+                            weights:  convert_weights_type_for_block::<OW, TW, _>(current_block, |w| w.weight()),
+                            max_next_weights: convert_weights_type_for_block::<OW, TW, _>(current_block, |w| w.max_next_weight()),
+                        });
+                        target_posting_blocks.push(block);
+                    },
+                }
             }
             block_offsets += row_ids_compressed_in_block.len() as u64;
         }
@@ -271,7 +303,8 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
 
         let compressed_posting: CompressedPostingList<TW> = CompressedPostingList::<TW> {
             row_ids_compressed: row_ids_compressed_in_posting,
-            blocks: posting_blocks,
+            generic_blocks: posting_blocks,
+            compressed_block_type: CompressedBlockType::bound_by_element(self.element_type),
             quantization_params: quantized_param,
             row_ids_count: total_row_ids_count,
             max_row_id,
@@ -284,9 +317,9 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
 fn quantized_weights_for_block<
     OW: QuantizedWeight,
     TW: QuantizedWeight,
-    F: Fn(&ExtendedElement<OW>) -> OW,
+    F: Fn(&GenericElement<OW>) -> OW,
 >(
-    block: &[ExtendedElement<OW>],
+    block: &[GenericElement<OW>],
     quantization_params: Option<QuantizedParam>,
     weight_selector: F,
 ) -> [TW; COMPRESSION_BLOCK_SIZE] {
@@ -313,14 +346,16 @@ fn quantized_weights_for_block<
 fn convert_weights_type_for_block<
     OW: QuantizedWeight,
     TW: QuantizedWeight,
-    F: Fn(&ExtendedElement<OW>) -> OW,
+    F: Fn(&GenericElement<OW>) -> OW,
 >(
-    block: &[ExtendedElement<OW>],
+    block: &[GenericElement<OW>],
     weight_selector: F,
 ) -> [TW; COMPRESSION_BLOCK_SIZE] {
     let weights: Vec<TW> = block
         .iter()
-        .map(|e: &ExtendedElement<OW>| TW::from_f32(OW::to_f32(weight_selector(e))))
+        .map(|e: &GenericElement<OW>| {
+            TW::from_f32(OW::to_f32(weight_selector(e)))
+        })
         .collect::<Vec<TW>>();
     if weights.len() > COMPRESSION_BLOCK_SIZE {
         panic!(

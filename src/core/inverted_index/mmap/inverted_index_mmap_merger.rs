@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     core::{
-        atomic_save_json, madvise, transmute_to_u8, transmute_to_u8_slice, DimId, ExtendedElement, InvertedIndexMeta, InvertedIndexMmapAccess, PostingListHeader, PostingListMerger, QuantizedParam, QuantizedWeight, Revision, Version, WeightType, POSTING_HEADER_SIZE, SIMPLE_ELEMENT_TYPE
+        atomic_save_json, inverted_index::common::{InvertedIndexMeta, Revision, Version}, madvise, transmute_to_u8, transmute_to_u8_slice, DimId, ElementType, ExtendedElement, InvertedIndexMmapAccess, PostingListHeader, PostingListMerger, QuantizedParam, QuantizedWeight, WeightType, POSTING_HEADER_SIZE
     },
     RowId,
 };
@@ -18,6 +18,7 @@ use super::{MmapInvertedIndexMeta, MmapManager};
 
 pub struct InvertedIndexMmapMerger<'a, OW: QuantizedWeight, TW: QuantizedWeight> {
     inverted_index_mmaps: &'a Vec<&'a InvertedIndexMmap<OW, TW>>,
+    element_type: ElementType,
 }
 
 fn unquantized_posting<OW: QuantizedWeight, TW: QuantizedWeight>(
@@ -58,8 +59,8 @@ fn unquantized_posting<OW: QuantizedWeight, TW: QuantizedWeight>(
 }
 
 impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, OW, TW> {
-    pub fn new(inverted_index_mmaps: &'a Vec<&'a InvertedIndexMmap<OW, TW>>) -> Self {
-        Self { inverted_index_mmaps }
+    pub fn new(inverted_index_mmaps: &'a Vec<&'a InvertedIndexMmap<OW, TW>>, element_type: ElementType) -> Self {
+        Self { inverted_index_mmaps, element_type}
     }
 
     fn get_unquantized_postings_with_dim(&self, dim_id: DimId) -> Vec<Vec<ExtendedElement<OW>>> {

@@ -1,6 +1,6 @@
 use log::error;
 use crate::{
-    core::{posting_list::errors::PostingListError, Element, GenericElement, QuantizedParam, QuantizedWeight, WeightType, EXTENDED_ELEMENT_TYPE, SIMPLE_ELEMENT_TYPE},
+    core::{posting_list::errors::PostingListError, Element, ElementType, GenericElement, QuantizedParam, QuantizedWeight, WeightType},
     RowId,
 };
 use super::PostingList;
@@ -32,7 +32,7 @@ impl PostingListMerger {
                 elements: merged.elements.into_iter()
                     .map(|e| e.quantized_with_param::<TW>(quantized_param.unwrap()))
                     .collect(),
-                element_type: SIMPLE_ELEMENT_TYPE,
+                element_type: ElementType::SIMPLE,
             }
         } else {
             unsafe { std::mem::transmute(merged) }
@@ -47,12 +47,12 @@ impl PostingListMerger {
         // Boundary.
         let use_quantized = OW::weight_type() != TW::weight_type() && TW::weight_type() == WeightType::WeightU8;
         if !use_quantized && OW::weight_type()!=TW::weight_type() {
-            let error_msg = "Merging for `SIMPLE_ELEMENT_TYPE` without quantized, weight_type should keep same.";
+            let error_msg = "Merging for `ElementType::SIMPLE` without quantized, weight_type should keep same.";
             error!("{}", error_msg);
             return Err(PostingListError::MergeError(error_msg.to_string()));
         }
 
-        let mut merged: PostingList<OW> = PostingList::<OW>::new(SIMPLE_ELEMENT_TYPE);
+        let mut merged: PostingList<OW> = PostingList::<OW>::new(ElementType::SIMPLE);
         // quantized variables
         let mut min_weight: Option<OW> = None;
         let mut max_weight: Option<OW> = None;
@@ -74,8 +74,8 @@ impl PostingListMerger {
             if let Some(posting_idx) = min_row_id_posting_idx {
                 let mut element = lists[posting_idx][cursors[posting_idx]].clone();
                 // Boundary
-                if element.element_type() != SIMPLE_ELEMENT_TYPE {
-                    let error_msg = "During merging process, the PostingElement type can only be `SIMPLE_ELEMENT_TYPE`";
+                if element.element_type() != ElementType::SIMPLE {
+                    let error_msg = "During merging process, the PostingElement type can only be `ElementType::SIMPLE`";
                     error!("{}", error_msg);
                     return Err(PostingListError::MergeError(error_msg.to_string()));
                 }
@@ -111,18 +111,18 @@ impl PostingListMerger {
         // Boundary.
         let use_quantized = OW::weight_type() != TW::weight_type() && TW::weight_type() == WeightType::WeightU8;
         if use_quantized {
-            let error_msg = "`EXTENDED_ELEMENT_TYPE` not support quantized! Can't execute merge.";
+            let error_msg = "`ElementType::EXTENDED` not support quantized! Can't execute merge.";
             error!("{}", error_msg);
             return Err(PostingListError::MergeError(error_msg.to_string()));
         }
         if OW::weight_type()!=TW::weight_type() {
-            let error_msg = "Quantized not supported for `EXTENDED_ELEMENT_TYPE`, weight_type should keep same.";
+            let error_msg = "Quantized not supported for `ElementType::EXTENDED`, weight_type should keep same.";
             error!("{}", error_msg);
             return Err(PostingListError::MergeError(error_msg.to_string()));
         }
 
-        let mut merged: PostingList<OW> = PostingList::<OW>::new(EXTENDED_ELEMENT_TYPE);
-        let mut cursors_rev: Vec<usize> = lists.iter().map(|list| list.len()).collect::<Vec<_>>();
+        let mut merged: PostingList<OW> = PostingList::<OW>::new(ElementType::EXTENDED);
+        let mut cursors_rev: Vec<usize> = lists.iter().map(|list: &Vec<GenericElement<OW>>| list.len()).collect::<Vec<_>>();
         let mut max_next_weight: OW = OW::MINIMUM();
 
         // When all PostingList indices become ZERO, it means that all PostingList pending to merge has been finished.
@@ -149,8 +149,8 @@ impl PostingListMerger {
                 // TODO enum 可以直接使用原始类型进行注解？这里的注解是 Generic，改成 Extended 可以吗？
                 let mut element: GenericElement<OW> = lists[posting_idx][cursors_rev[posting_idx] - 1].clone();
                 // Boundary
-                if element.element_type() != EXTENDED_ELEMENT_TYPE {
-                    let error_msg = "During merging process, the PostingElement type can only be `EXTENDED_ELEMENT_TYPE`";
+                if element.element_type() != ElementType::EXTENDED {
+                    let error_msg = "During merging process, the PostingElement type can only be `ElementType::EXTENDED`";
                     error!("{}", error_msg);
                     return Err(PostingListError::MergeError(error_msg.to_string()));
                 }
@@ -175,13 +175,13 @@ impl PostingListMerger {
     /// input a group of postings, they are in the same dim-id.
     /// 这里执行的 merge 是对同一个 dim 下面对应的所有 posting list 执行的 merge，所以说 merge 操作并不会遇到相同的 row_id
     pub fn merge_posting_lists<OW: QuantizedWeight, TW: QuantizedWeight>(
-        lists: &Vec<Vec<GenericElement<OW>>>, element_type: u8
+        lists: &Vec<Vec<GenericElement<OW>>>, element_type: ElementType
     ) -> (PostingList<TW>, Option<QuantizedParam>) {
         match element_type {
-            SIMPLE_ELEMENT_TYPE => {
+            ElementType::SIMPLE => {
                 Self::merge_simple_postings(lists)
             },
-            EXTENDED_ELEMENT_TYPE => {
+            ElementType::EXTENDED => {
                 Self::merge_extended_postings(lists)
             },
             _ => panic!("Not supported element type for merge!")
@@ -193,7 +193,7 @@ impl PostingListMerger {
 mod tests {
     use core::f32;
 
-    use crate::core::{ExtendedElement, PostingList, EXTENDED_ELEMENT_TYPE};
+    use crate::core::{ElementType, ExtendedElement, PostingList};
 
     use super::PostingListMerger;
 
@@ -279,14 +279,14 @@ mod tests {
                 ExtendedElement { row_id: 26, weight: 1.2, max_next_weight: 4.1 },
                 ExtendedElement { row_id: 30, weight: 4.1, max_next_weight: f32::NEG_INFINITY },
             ],
-            element_type: EXTENDED_ELEMENT_TYPE,
+            element_type: ElementType::EXTENDED,
         };
         return (lists, merged);
     }
     #[test]
     fn test_merge_posting_lists() {
         let postings = get_mocked_postings();
-        let result = PostingListMerger::merge_posting_lists::<f32, f32>(&postings.0, EXTENDED_ELEMENT_TYPE);
+        let result = PostingListMerger::merge_posting_lists::<f32, f32>(&postings.0, ElementType::EXTENDED);
         assert_eq!(result.0, postings.1);
     }
 }

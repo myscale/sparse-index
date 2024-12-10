@@ -1,13 +1,13 @@
 use super::PostingListBuilder;
 use crate::core::common::types::DimWeight;
-use crate::core::{Element, GenericElement, QuantizedWeight, DEFAULT_MAX_NEXT_WEIGHT, SIMPLE_ELEMENT_TYPE};
+use crate::core::{Element, ElementType, GenericElement, QuantizedWeight, DEFAULT_MAX_NEXT_WEIGHT};
 use crate::RowId;
 use log::{debug, error, warn};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PostingList<OW: QuantizedWeight> {
     pub elements: Vec<GenericElement<OW>>,
-    pub element_type: u8
+    pub element_type: ElementType
 }
 
 
@@ -15,7 +15,7 @@ impl<OW: QuantizedWeight> Default for PostingList<OW> {
     fn default() -> Self {
         Self {
             elements: vec![],
-            element_type: SIMPLE_ELEMENT_TYPE,
+            element_type: ElementType::SIMPLE,
         }
     }
 }
@@ -23,8 +23,7 @@ impl<OW: QuantizedWeight> Default for PostingList<OW> {
 /// PostingList Creater
 impl<OW: QuantizedWeight> PostingList<OW> {
 
-    pub fn new(element_type: u8) -> Self {
-        GenericElement::<OW>::check_valid(element_type);
+    pub fn new(element_type: ElementType) -> Self {
         Self {
             elements: vec![],
             element_type,
@@ -203,13 +202,13 @@ impl<OW: QuantizedWeight> PostingList<OW> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core::{Element, ExtendedElement, EXTENDED_ELEMENT_TYPE};
+    use crate::core::{Element, ElementType, ExtendedElement};
 
     use super::PostingList;
 
     #[test]
     fn test_delete() {
-        let mut posting = PostingList::<f32>::from(vec![(1, 10.0), (2, 20.0), (3, 30.0)], EXTENDED_ELEMENT_TYPE);
+        let mut posting = PostingList::<f32>::from(vec![(1, 10.0), (2, 20.0), (3, 30.0)], ElementType::EXTENDED);
 
         assert_eq!(posting.delete(2), (1, true)); // Delete middle element
         assert_eq!(posting.len(), 2);
@@ -229,7 +228,7 @@ mod tests {
 
     #[test]
     fn test_delete_with_propagate() {
-        let mut posting = PostingList::<f32>::from(vec![(1, 10.0), (2, 20.0), (3, 30.0)], EXTENDED_ELEMENT_TYPE);
+        let mut posting = PostingList::<f32>::from(vec![(1, 10.0), (2, 20.0), (3, 30.0)], ElementType::EXTENDED);
         posting.delete_with_propagate(2);
         assert_eq!(posting.len(), 2);
         assert!(posting.get_ref(0).max_next_weight() == 30.0);
@@ -238,7 +237,7 @@ mod tests {
 
     #[test]
     fn test_upsert() {
-        let mut posting = PostingList::<f32>::from(vec![], EXTENDED_ELEMENT_TYPE);
+        let mut posting = PostingList::<f32>::from(vec![], ElementType::EXTENDED);
         assert_eq!(posting.upsert(ExtendedElement::new(1, 10.0).into()), (0, true)); // Insert first element
         assert_eq!(posting.upsert(ExtendedElement::new(2, 20.0).into()), (1, true)); // Insert second element
 
@@ -249,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_upsert_with_propagate() {
-        let mut list = PostingList::<f32>::from(vec![], EXTENDED_ELEMENT_TYPE);
+        let mut list = PostingList::<f32>::from(vec![], ElementType::EXTENDED);
         assert_eq!(list.upsert_with_propagate(ExtendedElement::new(0, 10.0).into()), true);
         assert_eq!(list.upsert_with_propagate(ExtendedElement::new(1, 20.0).into()), true);
         assert_eq!(list.upsert_with_propagate(ExtendedElement::new(2, 50.0).into()), true);

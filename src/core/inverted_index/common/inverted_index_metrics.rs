@@ -1,7 +1,6 @@
-use crate::core::DimId;
-use crate::RowId;
 use std::cmp::{max, min};
-use std::fmt::Debug;
+
+use crate::{core::DimId, RowId};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct InvertedIndexMetrics {
@@ -38,13 +37,5 @@ impl InvertedIndexMetrics {
 
     pub fn increase_vector_count(&mut self) {
         self.vector_count += 1;
-    }
-}
-
-pub trait InvertedIndexRamAccess: Sized + Debug {
-    fn metrics(&self) -> InvertedIndexMetrics;
-    fn size(&self) -> usize;
-    fn empty(&self) -> bool {
-        self.size() == 0
     }
 }

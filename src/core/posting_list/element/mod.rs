@@ -6,14 +6,22 @@ mod simple_element;
 mod extended_element;
 
 pub const DEFAULT_MAX_NEXT_WEIGHT: f32 = f32::NEG_INFINITY;
-pub const SIMPLE_ELEMENT_TYPE: u8 = 0;
-pub const EXTENDED_ELEMENT_TYPE: u8 = 1;
+// pub const SIMPLE_ELEMENT_TYPE: u8 = 0;
+// pub const EXTENDED_ELEMENT_TYPE: u8 = 1;
 
 use enum_dispatch::enum_dispatch;
 use log::error;
+use serde::{Deserialize, Serialize};
 pub use simple_element::SimpleElement;
 pub use extended_element::ExtendedElement;
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
+pub enum ElementType {
+    #[serde(rename = "simple")]
+    SIMPLE,
+    #[serde(rename = "extended")]
+    EXTENDED,
+}
 
 /// macro `enum_dispatch` doesn't support associated type in trait.
 /// we need use generic type instead of associated type.
@@ -55,17 +63,26 @@ impl<W: QuantizedWeight> GenericElement<W> {
         }
     }
 
-    pub fn element_type(&self) -> u8 {
+    pub fn element_type(&self) -> ElementType {
         match self {
-            GenericElement::SimpleElement(_) => SIMPLE_ELEMENT_TYPE,
-            GenericElement::ExtendedElement(_) => EXTENDED_ELEMENT_TYPE,
+            GenericElement::SimpleElement(_) => ElementType::SIMPLE,
+            GenericElement::ExtendedElement(_) => ElementType::EXTENDED,
         }
     }
 
-    pub fn check_valid(element_type: u8) {
-        let valid: bool = element_type==SIMPLE_ELEMENT_TYPE || element_type==EXTENDED_ELEMENT_TYPE;
-        if !valid {
-            panic!("element_type should be SIMPLE or EXTENDED");
+    pub fn as_simple(&self) -> &SimpleElement<W> {
+        if let GenericElement::SimpleElement(simple) = self {
+            simple
+        } else {
+            panic!("Failed call Generic `as_simple`");
+        }
+    }
+
+    pub fn as_extended(&self) -> &ExtendedElement<W> {
+        if let GenericElement::ExtendedElement(extended) = self {
+            extended
+        } else {
+            panic!("Failed call Generic `as_extended`");
         }
     }
 

@@ -1,11 +1,12 @@
 use crate::core::common::ops::*;
 use crate::core::common::types::{DimId, DimOffset};
+use crate::core::inverted_index::common::{InvertedIndexMeta, InvertedIndexMetrics, Revision, Version};
 use crate::core::posting_list::{ExtendedElement, PostingListIterator};
 use crate::core::{
-    InvertedIndexMeta, InvertedIndexMetrics, InvertedIndexMmapAccess, InvertedIndexRam,
-    InvertedIndexRamAccess, QuantizedParam, QuantizedWeight, Revision, Version, WeightType,
+    InvertedIndexMmapAccess, InvertedIndexRam,
+    InvertedIndexRamAccess, QuantizedParam, QuantizedWeight, WeightType,
 };
-use log::warn;
+use log::{error, warn};
 use memmap2::Mmap;
 use std::borrow::Cow;
 use std::marker::PhantomData;
@@ -35,7 +36,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
     for InvertedIndexMmap<OW, TW>
 {
     // Pay attention to these weight type order.
-    type Iter<'a> = PostingListIterator<'a, TW, OW>;
+    type Iter<'a> = PostingListIterator<'a, OW, TW>;
 
     fn size(&self) -> usize {
         self.meta.inverted_index_meta.posting_count
@@ -54,32 +55,18 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
         Self::load_under_segment(path.to_path_buf(), segment_id)
     }
 
-    fn check_exists(&self, path: &Path, segment_id: Option<&str>) -> std::io::Result<()> {
-        debug_assert_eq!(path, self.path);
-        for file in self.files(segment_id) {
-            debug_assert!(file.exists());
-        }
-        Ok(())
-    }
-
     fn iter(&self, dim_id: &DimOffset) -> Option<Self::Iter<'_>> {
-        let res_opt = self.posting_with_param(dim_id);
-        if res_opt.is_none() {
-            return None;
-        }
-        let (posting_list, quantized_param) = res_opt.unwrap();
-        let iterator: PostingListIterator<'_, TW, OW> =
-            PostingListIterator::new(posting_list, quantized_param);
-        Some(iterator)
+        self.posting_with_param(dim_id).map(
+            |(posting_list, quantized_param)|
+            {
+                PostingListIterator::new(posting_list, quantized_param)
+            })
     }
 
     fn posting_len(&self, dim_id: &DimId) -> Option<usize> {
-        let res_opt = self.posting_with_param(dim_id);
-        if res_opt.is_none() {
-            return None;
-        }
-        let (posting_list, _) = res_opt.unwrap();
-        Some(posting_list.len())
+        self.posting_with_param(dim_id).map(|(posting_list, _)| {
+            posting_list.len()
+        })
     }
 
     fn files(&self, segment_id: Option<&str>) -> Vec<PathBuf> {
@@ -105,7 +92,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
     ) -> Option<(&[ExtendedElement<TW>], Option<QuantizedParam>)> {
         // check that the id is not out of bounds (posting_count includes the empty zeroth entry)
         if *dim_id >= self.size() as DimId {
-            warn!("dim_id is overflow, dim_id should smaller than {}", self.size());
+            error!("dim_id is overflow, dim_id should smaller than {}", self.size());
             return None;
         }
         // loading header obj with offsets.
@@ -132,7 +119,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
         segment_id: Option<&str>,
     ) -> crate::Result<Self> {
         let (total_headers_storage_size, total_postings_storage_size, headers_mmap, postings_mmap) =
-            MmapManager::write_mmap_files(directory.clone(), segment_id, inverted_index_ram)?;
+            MmapManager::write_mmap_files(&directory, segment_id, inverted_index_ram)?;
 
         let meta_file_path = MmapManager::get_index_meta_file_path(&directory.clone(), segment_id);
 

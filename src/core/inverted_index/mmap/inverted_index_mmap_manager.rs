@@ -9,10 +9,7 @@ use memmap2::{Mmap, MmapMut};
 
 use crate::{
     core::{
-        create_and_ensure_length,
-        madvise::{self, Advice},
-        open_write_mmap, transmute_to_u8, transmute_to_u8_slice, InvertedIndexRam,
-        InvertedIndexRamAccess, ExtendedElement, QuantizedWeight,
+        create_and_ensure_length, madvise::{self, Advice}, open_write_mmap, transmute_to_u8, transmute_to_u8_slice, Element, ElementType, ExtendedElement, GenericElement, InvertedIndexRam, InvertedIndexRamAccess, QuantizedWeight, SimpleElement
     },
     RowId,
 };
@@ -71,24 +68,27 @@ impl MmapManager {
 
     // TODO: Refine path parameter.
     pub fn write_mmap_files<P: AsRef<Path>, TW: QuantizedWeight>(
-        directory: P,
+        directory: &PathBuf,
         segment_id: Option<&str>,
         inv_idx_ram: &InvertedIndexRam<TW>,
     ) -> crate::Result<(usize, usize, Arc<Mmap>, Arc<Mmap>)> {
         // compute posting_offsets and elements size.
         let total_headers_storage_size: usize = inv_idx_ram.size() * POSTING_HEADER_SIZE;
 
-        // TODO: Refactor element structor in PostingList, when enable quantized, max_next_weight is not needed anymore
-        // TODO: and you should consider about changing std::size_of PostingList.
         let total_postings_elements_size: usize = inv_idx_ram
             .postings()
             .iter()
-            .map(|posting| posting.len() * size_of::<ExtendedElement<TW>>())
+            .map(|posting| {
+                match posting.element_type {
+                    ElementType::SIMPLE => posting.len() * size_of::<SimpleElement<TW>>(),
+                    ElementType::EXTENDED => posting.len() * size_of::<ExtendedElement<TW>>(),
+                }
+            })
             .sum();
 
         // Init two mmap file paths.
         let (headers_mmap_file_path, postings_mmap_file_path) =
-            Self::get_all_mmap_files_path(&directory.as_ref().to_path_buf(), segment_id);
+            Self::get_all_mmap_files_path(&directory, segment_id);
 
         let mut headers_mmap = Self::create_mmap_file(
             headers_mmap_file_path.as_ref(),
@@ -132,24 +132,40 @@ impl MmapManager {
             let header_obj = PostingListHeader {
                 start: cur_postings_storage_size,
                 end: cur_postings_storage_size
-                    + (posting.len() * size_of::<ExtendedElement<TW>>()),
+                    + match posting.element_type {
+                        ElementType::SIMPLE => posting.len() * size_of::<SimpleElement<TW>>(),
+                        ElementType::EXTENDED => posting.len() * size_of::<ExtendedElement<TW>>(),
+                    },
                 quantized_params: param.clone(),
                 row_ids_count: posting.len() as RowId,
-                max_row_id: posting.elements.last().map(|e| e.row_id).unwrap_or_default(),
+                max_row_id: posting.elements.last().map(|e| e.row_id()).unwrap_or(0),
             };
 
             // Step 1.2 Save the header obj to mmap.
             let header_bytes = transmute_to_u8(&header_obj);
             let header_offset_left = dim_id * POSTING_HEADER_SIZE;
-            let header_offset_right = (dim_id + 1) * POSTING_HEADER_SIZE;
+            let header_offset_right: usize = (dim_id + 1) * POSTING_HEADER_SIZE;
             headers_mmap[header_offset_left..header_offset_right].copy_from_slice(header_bytes);
 
             // Step 2.1: Store the posting list to mmap
-            let posting_elements_bytes = transmute_to_u8_slice(&posting.elements);
-            postings_mmap[cur_postings_storage_size
-                ..(cur_postings_storage_size + posting_elements_bytes.len())]
-                .copy_from_slice(posting_elements_bytes);
-            cur_postings_storage_size += posting_elements_bytes.len();
+            match posting.element_type {
+                ElementType::SIMPLE => {
+                    let elements: Vec<SimpleElement<TW>> = posting.elements.into_iter().map(|e: GenericElement<TW>|e.as_simple().clone()).collect();
+                    let posting_elements_bytes = transmute_to_u8_slice(&elements);
+                    postings_mmap[cur_postings_storage_size
+                        ..(cur_postings_storage_size + posting_elements_bytes.len())]
+                        .copy_from_slice(posting_elements_bytes);
+                    cur_postings_storage_size += posting_elements_bytes.len();
+                },
+                ElementType::EXTENDED => {
+                    let elements: Vec<ExtendedElement<TW>> = posting.elements.into_iter().map(|e: GenericElement<TW>|e.as_extended().clone()).collect();
+                    let posting_elements_bytes = transmute_to_u8_slice(&elements);
+                    postings_mmap[cur_postings_storage_size
+                        ..(cur_postings_storage_size + posting_elements_bytes.len())]
+                        .copy_from_slice(posting_elements_bytes);
+                    cur_postings_storage_size += posting_elements_bytes.len();
+                },
+            }
         }
     }
 }

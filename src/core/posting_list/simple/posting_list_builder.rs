@@ -5,19 +5,19 @@ use std::{marker::PhantomData, mem::size_of};
 
 use super::PostingList;
 use crate::{
-    core::{DimWeight, Element, ExtendedElement, GenericElement, QuantizedParam, QuantizedWeight, SimpleElement, WeightType, DEFAULT_MAX_NEXT_WEIGHT, EXTENDED_ELEMENT_TYPE, SIMPLE_ELEMENT_TYPE},
+    core::{DimWeight, Element, ElementType, ExtendedElement, GenericElement, QuantizedParam, QuantizedWeight, SimpleElement, WeightType, DEFAULT_MAX_NEXT_WEIGHT},
     RowId,
 };
 
 #[derive(TypedBuilder)]
 pub struct PostingListBuilder<OW: QuantizedWeight, TW: QuantizedWeight> {
     /// [`PostingListBuilder`] will operate inner [`PostingList`]
-    #[builder(default=PostingList::<OW>::new(SIMPLE_ELEMENT_TYPE))]
+    #[builder(default=PostingList::<OW>::new(ElementType::SIMPLE))]
     posting: PostingList<OW>,
 
     /// Element type in [`PostingList`]
-    #[builder(default = SIMPLE_ELEMENT_TYPE)]
-    element_type: u8,
+    #[builder(default = ElementType::SIMPLE)]
+    element_type: ElementType,
 
     /// Whether need quantize weight in [`PostingList`]
     #[builder(default = false)]
@@ -50,7 +50,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
 
         // only simple element support quantized.
         // quantize extended element will lead max_next_weight nonsense.
-        if need_quantized && element_type==EXTENDED_ELEMENT_TYPE {
+        if need_quantized && element_type==ElementType::EXTENDED {
             let error_msg = format!("extended element not supported be quantized.");
             error!("{}", error_msg);
             panic!("{}", error_msg);
@@ -60,15 +60,15 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
             .posting(PostingList::<OW>::new(element_type))
             .element_type(element_type)
             .need_quantized(need_quantized)
-            .propagate_while_upserting(element_type == EXTENDED_ELEMENT_TYPE && propagate_while_upserting)
+            .propagate_while_upserting(element_type == ElementType::EXTENDED && propagate_while_upserting)
             .finally_sort(finally_sort)
-            .finally_propagate(element_type == EXTENDED_ELEMENT_TYPE && !propagate_while_upserting)
+            .finally_propagate(element_type == ElementType::EXTENDED && !propagate_while_upserting)
             ._phantom_tw(PhantomData)
             .build()
     }
 
     pub fn default() -> Self {
-        Self::new(SIMPLE_ELEMENT_TYPE, false, false)
+        Self::new(ElementType::SIMPLE, false, false)
     }
 }
 
@@ -79,10 +79,10 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
     /// bool: `ture` means the `insert` operation, `false` means `update`.
     pub fn add(&mut self, row_id: RowId, weight: DimWeight) -> bool {
         let generic_element: GenericElement<OW> = match self.element_type {
-            SIMPLE_ELEMENT_TYPE => {
+            ElementType::SIMPLE => {
                 SimpleElement::<OW>::new(row_id, weight).into()
             }
-            EXTENDED_ELEMENT_TYPE => {
+            ElementType::EXTENDED => {
                 ExtendedElement::<OW>::new(row_id, weight).into()
             }
             _ => panic!("Not supported element type, this panic should not happen."),
@@ -99,10 +99,10 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
     pub fn memory_usage(&self) -> (usize, usize) {
         let actual_memory_usage = self.posting.len() * size_of::<GenericElement<OW>>();
         let inner_memory_usage = match self.element_type {
-            SIMPLE_ELEMENT_TYPE => {
+            ElementType::SIMPLE => {
                 self.posting.len() * size_of::<SimpleElement<OW>>()
             }
-            EXTENDED_ELEMENT_TYPE => {
+            ElementType::EXTENDED => {
                 self.posting.len() * size_of::<ExtendedElement<OW>>()
             }
             _ => panic!("Not supported element type, this panic should not happen."),
@@ -110,9 +110,13 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
         (actual_memory_usage, inner_memory_usage)
     }
 
-    fn execute_finally_propagate(&mut self, need_quantized:bool) -> Option<QuantizedParam> {
+    fn execute_finally_propagate(&mut self) -> Option<QuantizedParam> {
         // boundary
-        assert!(self.element_type==EXTENDED_ELEMENT_TYPE);
+        assert!(self.element_type==ElementType::EXTENDED);
+        
+        if self.posting.elements.len()==0 && self.need_quantized {
+            return Some(QuantizedParam::default());
+        }
 
         let mut max_next_weight: OW = OW::from_f32(DEFAULT_MAX_NEXT_WEIGHT);
         let mut min_weight = self.posting.elements.last().unwrap().weight();
@@ -123,12 +127,12 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
             element.update_max_next_weight(max_next_weight);
             max_next_weight = max_next_weight.max(element.weight());
 
-            if need_quantized {
+            if self.need_quantized {
                 min_weight = OW::min(min_weight, element.weight());
                 max_weight = OW::max(max_weight, element.weight());
             }
         }
-        if need_quantized {Some(OW::gen_quantized_param(min_weight, max_weight))} else {None}
+        if self.need_quantized {Some(OW::gen_quantized_param(min_weight, max_weight))} else {None}
     }
 
     fn quantize_posting(self, quantized_param: Option<QuantizedParam>) -> PostingList<TW> {
@@ -172,13 +176,10 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
 
         if self.finally_propagate {
             // We should ensure that only extended type can execute weight propagate.
-            assert_eq!(self.element_type, EXTENDED_ELEMENT_TYPE);
+            assert_eq!(self.element_type, ElementType::EXTENDED);
 
-            if self.posting.len()==0 {
-                quantized_param = if self.need_quantized {Some(QuantizedParam::default())} else {None};
-            } else {
-                quantized_param = self.execute_finally_propagate(self.need_quantized);
-            }
+            quantized_param = self.execute_finally_propagate();
+
         } else {
             if self.need_quantized {
                 let elements_iter = self.posting.elements.iter().map(|e| e.weight());

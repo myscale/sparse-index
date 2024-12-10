@@ -1,10 +1,9 @@
+use crate::core::inverted_index::common::InvertedIndexMetrics;
 use crate::core::inverted_index::InvertedIndexRam;
 use crate::core::{DimId, PostingListIter, QuantizedWeight};
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
-
-use super::InvertedIndexMetrics;
 
 // OW: weight type before quantized.
 // TW: weight type after quantized. stored in disk.
@@ -18,7 +17,7 @@ pub trait InvertedIndexMmapAccess<OW: QuantizedWeight, TW: QuantizedWeight>: Siz
 
     fn open(path: &Path, segment_id: Option<&str>) -> std::io::Result<Self>;
 
-    fn check_exists(&self, path: &Path, segment_id: Option<&str>) -> std::io::Result<()>;
+    // fn check_exists(&self, path: &Path, segment_id: Option<&str>) -> std::io::Result<()>;
 
     /// Get posting list for dimension id
     fn iter(&self, dim_id: &DimId) -> Option<Self::Iter<'_>>;

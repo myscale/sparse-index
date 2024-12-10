@@ -1,3 +1,4 @@
+mod common;
 mod compressed_mmap;
 mod compressed_ram;
 mod mmap;

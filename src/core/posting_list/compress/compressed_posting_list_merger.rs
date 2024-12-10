@@ -1,6 +1,6 @@
 use log::{debug, info};
 
-use crate::core::{PostingListIteratorTrait, QuantizedParam, QuantizedWeight};
+use crate::core::{ElementType, PostingListIter, QuantizedParam, QuantizedWeight};
 
 use super::{CompressedPostingBuilder, CompressedPostingList, CompressedPostingListIterator};
 
@@ -10,10 +10,11 @@ impl CompressedPostingListMerger {
     /// input a group of postings, they are in the same dim-id.
     pub fn merge_posting_lists<OW: QuantizedWeight, TW: QuantizedWeight>(
         compressed_posting_iterators: &mut Vec<CompressedPostingListIterator<'_, TW, OW>>,
+        element_type: ElementType
     ) -> (CompressedPostingList<TW>, Option<QuantizedParam>) {
         // TODO: Refine compressed posting merging design, currently we should finally sort the whole posting, it's too slow.
         let mut merged_compressed_posting_builder: CompressedPostingBuilder<OW, TW> =
-            CompressedPostingBuilder::<OW, TW>::new().with_finally_sort(true);
+            CompressedPostingBuilder::<OW, TW>::new(element_type, true, false);
 
         for iterator in compressed_posting_iterators {
             while iterator.remains() != 0 {
@@ -39,7 +40,7 @@ impl CompressedPostingListMerger {
 mod tests {
     use core::f32;
 
-    use crate::core::{ExtendedElement, PostingList};
+    use crate::core::{ElementType, ExtendedElement, PostingList};
 
     /// mock 7 postings for the same dim-id.
     fn get_mocked_postings() -> (Vec<Vec<ExtendedElement<f32>>>, PostingList<f32>) {
@@ -122,6 +123,7 @@ mod tests {
                 ExtendedElement { row_id: 26, weight: 1.2, max_next_weight: 4.1 },
                 ExtendedElement { row_id: 30, weight: 4.1, max_next_weight: f32::NEG_INFINITY },
             ],
+            element_type: ElementType::EXTENDED,
         };
         return (lists, merged);
     }

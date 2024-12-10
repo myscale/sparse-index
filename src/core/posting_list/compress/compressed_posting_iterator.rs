@@ -1,9 +1,8 @@
-use log::{debug, info};
+use log::debug;
 
 use crate::{
     core::{
-        BlockDecoder, ExtendedElement, PostingListIteratorTrait, QuantizedParam, QuantizedWeight,
-        WeightType, COMPRESSION_BLOCK_SIZE,
+        BlockDecoder, ExtendedElement, PostingListIter, QuantizedParam, QuantizedWeight, WeightType, COMPRESSION_BLOCK_SIZE
     },
     RowId,
 };
@@ -15,7 +14,6 @@ use super::CompressedPostingListView;
 /// OW: means the weight type stored in CompressedPostingList, it may has been quantized.
 #[derive(Debug, Clone)]
 pub struct CompressedPostingListIterator<'a, OW: QuantizedWeight, TW: QuantizedWeight> {
-    // posting: &'a CompressedPostingList<OW>,
     posting: CompressedPostingListView<'a, OW>,
     is_uncompressed: bool,
     row_ids_uncompressed_in_block: Vec<RowId>,
@@ -94,7 +92,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingListIterator
     }
 }
 
-impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIteratorTrait<OW, TW>
+impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW>
     for CompressedPostingListIterator<'a, OW, TW>
 {
     fn peek(&mut self) -> Option<ExtendedElement<TW>> {
