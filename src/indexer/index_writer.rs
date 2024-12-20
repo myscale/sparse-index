@@ -23,7 +23,7 @@ use crate::indexer::{MergePolicy, SegmentEntry, SegmentWriter};
 use crate::sparse_index::StorageType;
 use crate::Opstamp;
 
-/// Used to set the boundary size for the memory arena; 
+/// Used to set the boundary size for the memory arena;
 /// when the remaining memory in the memory arena falls below this value (1MB), the segment will be closed.
 pub const MARGIN_IN_BYTES: usize = 1_000_000;
 
@@ -379,7 +379,7 @@ impl IndexWriter {
     /// when no documents are remaining.
     ///
     /// Returns the former segment_ready channel.
-    /// 
+    ///
     /// TODO: Data in the old channel is likely to be lost. This comment may have issues, as the replaced channel is not returned to the user.
     fn recreate_document_channel(&mut self) {
         let (document_sender, document_receiver) =
@@ -564,11 +564,11 @@ impl IndexWriter {
     /// Each operation in the given `user_operations` will receive sequential consecutive u64
     /// operation timestamps. The entire batch itself will also receive a timestamp that is
     /// one greater than the last operation's timestamp. This `batch_opstamp` is the return value of `run`.
-    /// Even an empty `user_operations` group, represented as an empty `Vec<UserOperation>`, 
+    /// Even an empty `user_operations` group, represented as an empty `Vec<UserOperation>`,
     /// will receive a valid timestamp, even if no actual changes are made to the index.
     ///
-    /// Similar to add and delete operations (see `IndexWriter.add_document` and 
-    /// `IndexWriter.delete_term`), changes made by calling `run` will only be visible to 
+    /// Similar to add and delete operations (see `IndexWriter.add_document` and
+    /// `IndexWriter.delete_term`), changes made by calling `run` will only be visible to
     /// readers after `commit()` is called.
     pub fn run<I>(&self, user_operations: I) -> crate::Result<Opstamp>
     where

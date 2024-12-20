@@ -1,10 +1,13 @@
 use crate::core::common::ops::*;
 use crate::core::common::types::{DimId, DimOffset};
-use crate::core::inverted_index::common::{InvertedIndexMeta, InvertedIndexMetrics, Revision, Version};
-use crate::core::posting_list::{ExtendedElement, PostingListIterator};
+use crate::core::inverted_index::common::{
+    InvertedIndexMeta, InvertedIndexMetrics, Revision, Version,
+};
+use crate::core::posting_list::PostingListIterator;
 use crate::core::{
-    InvertedIndexMmapAccess, InvertedIndexRam,
-    InvertedIndexRamAccess, QuantizedParam, QuantizedWeight, WeightType,
+    ElementSlice, GenericElementSlice, InvertedIndexMmapAccess, InvertedIndexMmapInit,
+    InvertedIndexRam, InvertedIndexRamAccess, PostingListIterAccess, QuantizedParam,
+    QuantizedWeight, SimpleElement, WeightType,
 };
 use log::{error, warn};
 use memmap2::Mmap;
@@ -19,9 +22,9 @@ use super::{
 };
 
 /// InvertedIndexMmap
-/// 
+///
 /// OW: weight storage size before quantized.
-/// TW: weight storage size after quantized, 
+/// TW: weight storage size after quantized,
 #[derive(Debug, Clone)]
 pub struct InvertedIndexMmap<OW: QuantizedWeight, TW: QuantizedWeight> {
     pub path: PathBuf,
@@ -32,12 +35,38 @@ pub struct InvertedIndexMmap<OW: QuantizedWeight, TW: QuantizedWeight> {
     pub _phantom_t: PhantomData<TW>,
 }
 
-impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
+impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapInit<OW, TW>
+    for InvertedIndexMmap<OW, TW>
+{
+    fn open(path: &Path, segment_id: Option<&str>) -> std::io::Result<Self> {
+        Self::load_under_segment(path.to_path_buf(), segment_id)
+    }
+
+    fn from_ram_index(
+        ram_index: Cow<InvertedIndexRam<TW>>,
+        path: PathBuf,
+        segment_id: Option<&str>,
+    ) -> crate::Result<Self> {
+        Self::convert_and_save(&ram_index, path, segment_id)
+    }
+}
+
+impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterAccess<OW, TW>
     for InvertedIndexMmap<OW, TW>
 {
     // Pay attention to these weight type order.
     type Iter<'a> = PostingListIterator<'a, OW, TW>;
 
+    fn iter(&self, dim_id: &DimOffset) -> Option<Self::Iter<'_>> {
+        self.posting_with_param(dim_id).map(|(generic_elements_slice, quantized_param)| {
+            PostingListIterator::new(generic_elements_slice, quantized_param)
+        })
+    }
+}
+
+impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
+    for InvertedIndexMmap<OW, TW>
+{
     fn size(&self) -> usize {
         self.meta.inverted_index_meta.posting_count
     }
@@ -51,36 +80,15 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
         }
     }
 
-    fn open(path: &Path, segment_id: Option<&str>) -> std::io::Result<Self> {
-        Self::load_under_segment(path.to_path_buf(), segment_id)
-    }
-
-    fn iter(&self, dim_id: &DimOffset) -> Option<Self::Iter<'_>> {
-        self.posting_with_param(dim_id).map(
-            |(posting_list, quantized_param)|
-            {
-                PostingListIterator::new(posting_list, quantized_param)
-            })
-    }
-
     fn posting_len(&self, dim_id: &DimId) -> Option<usize> {
-        self.posting_with_param(dim_id).map(|(posting_list, _)| {
-            posting_list.len()
-        })
+        self.posting_with_param(dim_id)
+            .map(|(generic_elements_slice, _)| generic_elements_slice.length())
     }
 
     fn files(&self, segment_id: Option<&str>) -> Vec<PathBuf> {
         // Only get relative path.
         let get_all_files = InvertedIndexMmapFileConfig::get_all_files(segment_id);
         get_all_files.iter().map(|p| PathBuf::from(p)).collect()
-    }
-
-    fn from_ram_index(
-        ram_index: Cow<InvertedIndexRam<TW>>,
-        path: PathBuf,
-        segment_id: Option<&str>,
-    ) -> crate::Result<Self> {
-        Self::convert_and_save(&ram_index, path, segment_id)
     }
 }
 
@@ -89,7 +97,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
     pub fn posting_with_param(
         &self,
         dim_id: &DimId,
-    ) -> Option<(&[ExtendedElement<TW>], Option<QuantizedParam>)> {
+    ) -> Option<(GenericElementSlice<'_, TW>, Option<QuantizedParam>)> {
         // check that the id is not out of bounds (posting_count includes the empty zeroth entry)
         if *dim_id >= self.size() as DimId {
             error!("dim_id is overflow, dim_id should smaller than {}", self.size());
@@ -103,12 +111,12 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
         .clone();
 
         // loading posting obj
-        let elements_bytes = &self.postings_mmap[header.start as usize..header.end as usize];
+        let elements_bytes: &[u8] = &self.postings_mmap[header.start as usize..header.end as usize];
 
-        // TODO: Make sure this weight type convert operation is safe.
-        let posting_slice: &[ExtendedElement<TW>] = transmute_from_u8_to_slice(elements_bytes);
-
-        Some((posting_slice, header.quantized_params))
+        Some((
+            GenericElementSlice::from_bytes_and_type(header.element_type, elements_bytes),
+            header.quantized_params,
+        ))
     }
 
     /// Converting inverted-index-ram into mmap files.
@@ -134,6 +142,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
                 quantized: (TW::weight_type() == WeightType::WeightU8)
                     && (OW::weight_type() != TW::weight_type()),
                 version: Version::mmap(Revision::V1),
+                element_type: inverted_index_ram.element_type(),
             },
             headers_storage_size: total_headers_storage_size as u64,
             postings_storage_size: total_postings_storage_size as u64,

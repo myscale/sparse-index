@@ -10,7 +10,7 @@ use log::{info, warn};
 
 use crate::directory::{WatchCallback, WatchCallbackList, WatchHandle};
 
-/// The polling interval for the file monitor. 
+/// The polling interval for the file monitor.
 /// In the testing environment, it is set to 1 ms, while in other environments, it is set to 500 ms.
 const POLLING_INTERVAL: Duration = Duration::from_millis(if cfg!(test) { 1 } else { 500 });
 
@@ -66,7 +66,7 @@ impl FileWatcher {
                             current_checksum_opt = Some(checksum);
                             // We actually ignore callbacks failing here.
                             // We just wait for the end of their execution.
-                            
+
                             // After the file's checksum is updated, call all the callback functions.
                             let _ = callbacks.broadcast().wait();
                         }

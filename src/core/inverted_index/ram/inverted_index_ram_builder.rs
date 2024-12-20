@@ -5,7 +5,7 @@ use crate::core::inverted_index::common::InvertedIndexMetrics;
 use crate::core::sparse_vector::SparseVector;
 use crate::core::{posting_list::PostingListBuilder, QuantizedWeight};
 use crate::core::{
-    DimId, ElementType, InvertedIndexRamBuilderTrait, PostingList, QuantizedParam
+    DimId, ElementType, InvertedIndexRamBuilderTrait, PostingList, QuantizedParam, WeightType,
 };
 use crate::RowId;
 
@@ -17,22 +17,21 @@ pub struct InvertedIndexRamBuilder<OW: QuantizedWeight, TW: QuantizedWeight> {
     #[builder(default=ElementType::SIMPLE)]
     element_type: ElementType,
 
-    #[builder(default=0)]
+    #[builder(default = 0)]
     memory_consumed: usize,
 
     #[builder(default=InvertedIndexMetrics::default())]
     metrics: InvertedIndexMetrics,
 
-    #[builder(default=false)]
+    #[builder(default = false)]
     propagate_while_upserting: bool,
 
-    #[builder(default=false)]
+    #[builder(default = false)]
     finally_sort: bool,
 
-    #[builder(default=false)]
+    #[builder(default = false)]
     finally_propagate: bool,
 }
-
 
 /// Operation
 impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexRamBuilderTrait<TW>
@@ -65,7 +64,11 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexRamBuilderTrait<TW>
             // resize postings.
             if dim_id >= self.posting_builders.len() {
                 self.posting_builders.resize_with(dim_id + 1, || {
-                    PostingListBuilder::<OW, TW>::new(self.element_type, self.finally_sort, self.propagate_while_upserting)
+                    PostingListBuilder::<OW, TW>::new(
+                        self.element_type,
+                        self.finally_sort,
+                        self.propagate_while_upserting,
+                    )
                 });
             }
             // insert new sparse_vector into postings.
@@ -74,7 +77,8 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexRamBuilderTrait<TW>
             is_insert_operation &= operation;
             let memory_after = self.posting_builders[dim_id].memory_usage().0;
 
-            self.memory = self.memory.saturating_add(memory_after - memory_before);
+            self.memory_consumed =
+                self.memory_consumed.saturating_add(memory_after - memory_before);
             self.metrics.compare_and_update_dim_id(dim_id as DimId);
         }
         // update metrics
@@ -92,6 +96,17 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexRamBuilderTrait<TW>
         let (postings, quantized_params): (Vec<PostingList<TW>>, Vec<Option<QuantizedParam>>) =
             self.posting_builders.into_iter().map(|builder| builder.build()).unzip();
 
-        InvertedIndexRam::<TW> { postings, quantized_params, metrics: self.metrics, element_type: self.element_type }
+        let need_quantized =
+            TW::weight_type() != OW::weight_type() && TW::weight_type() == WeightType::WeightU8;
+        if !need_quantized {
+            assert_eq!(TW::weight_type(), OW::weight_type());
+        }
+        InvertedIndexRam::<TW> {
+            postings,
+            quantized_params,
+            metrics: self.metrics,
+            element_type: self.element_type,
+            need_quantized,
+        }
     }
 }

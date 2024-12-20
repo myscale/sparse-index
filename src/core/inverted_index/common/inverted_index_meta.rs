@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{core::{DimId, ElementType}, RowId};
+use crate::{
+    core::{DimId, ElementType},
+    RowId,
+};
 use std::fmt::Debug;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, PartialOrd, Clone)]
@@ -146,7 +149,7 @@ impl InvertedIndexMeta {
     }
 
     pub fn element_type(&self) -> ElementType {
-        return self.element_type;
+        return self.element_type.clone();
     }
 }
 

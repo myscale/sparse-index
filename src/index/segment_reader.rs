@@ -1,6 +1,6 @@
 use super::{Segment, SegmentId};
-use crate::core::index_searcer::IndexSearcher;
-use crate::core::{GenericInvertedIndexMmapType, SparseVector, TopK};
+use crate::core::searcher::Searcher;
+use crate::core::{GenericInvertedIndex, SparseVector, TopK};
 use crate::directory::Directory;
 use crate::sparse_index::StorageType;
 use crate::RowId;
@@ -8,7 +8,7 @@ use std::fmt;
 
 #[derive(Clone)]
 pub struct SegmentReader {
-    index_searcher: IndexSearcher,
+    index_searcher: Searcher,
     segment_id: SegmentId,
     rows_count: RowId,
 }
@@ -24,7 +24,7 @@ impl SegmentReader {
         self.segment_id
     }
 
-    pub fn get_inverted_index(&self) -> &GenericInvertedIndexMmapType {
+    pub fn get_inverted_index(&self) -> &GenericInvertedIndex {
         self.index_searcher.get_inverted_index()
     }
 }
@@ -36,14 +36,14 @@ impl SegmentReader {
 
         assert_ne!(segment.index().index_settings.config.storage_type, StorageType::Ram);
 
-        let inverted_index: GenericInvertedIndexMmapType = GenericInvertedIndexMmapType::open_from(
+        let inverted_index: GenericInvertedIndex = GenericInvertedIndex::open_from(
             &index_path,
             Some(&segment.id().uuid_string()),
             &segment.index().index_settings,
         )?;
 
         Ok(SegmentReader {
-            index_searcher: IndexSearcher::new(inverted_index),
+            index_searcher: Searcher::new(inverted_index),
             segment_id: segment.id(),
             rows_count,
         })

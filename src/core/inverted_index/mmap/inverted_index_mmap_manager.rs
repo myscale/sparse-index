@@ -9,7 +9,10 @@ use memmap2::{Mmap, MmapMut};
 
 use crate::{
     core::{
-        create_and_ensure_length, madvise::{self, Advice}, open_write_mmap, transmute_to_u8, transmute_to_u8_slice, Element, ElementType, ExtendedElement, GenericElement, InvertedIndexRam, InvertedIndexRamAccess, QuantizedWeight, SimpleElement
+        create_and_ensure_length,
+        madvise::{self, Advice},
+        open_write_mmap, transmute_to_u8, transmute_to_u8_slice, ElementRead, ElementType,
+        ExtendedElement, InvertedIndexRam, InvertedIndexRamAccess, QuantizedWeight, SimpleElement,
     },
     RowId,
 };
@@ -67,7 +70,7 @@ impl MmapManager {
     }
 
     // TODO: Refine path parameter.
-    pub fn write_mmap_files<P: AsRef<Path>, TW: QuantizedWeight>(
+    pub fn write_mmap_files<TW: QuantizedWeight>(
         directory: &PathBuf,
         segment_id: Option<&str>,
         inv_idx_ram: &InvertedIndexRam<TW>,
@@ -78,11 +81,9 @@ impl MmapManager {
         let total_postings_elements_size: usize = inv_idx_ram
             .postings()
             .iter()
-            .map(|posting| {
-                match posting.element_type {
-                    ElementType::SIMPLE => posting.len() * size_of::<SimpleElement<TW>>(),
-                    ElementType::EXTENDED => posting.len() * size_of::<ExtendedElement<TW>>(),
-                }
+            .map(|posting| match posting.element_type {
+                ElementType::SIMPLE => posting.len() * size_of::<SimpleElement<TW>>(),
+                ElementType::EXTENDED => posting.len() * size_of::<ExtendedElement<TW>>(),
             })
             .sum();
 
@@ -131,14 +132,11 @@ impl MmapManager {
             // Step 1.1: Generate header
             let header_obj = PostingListHeader {
                 start: cur_postings_storage_size,
-                end: cur_postings_storage_size
-                    + match posting.element_type {
-                        ElementType::SIMPLE => posting.len() * size_of::<SimpleElement<TW>>(),
-                        ElementType::EXTENDED => posting.len() * size_of::<ExtendedElement<TW>>(),
-                    },
+                end: cur_postings_storage_size + posting.storage_size(),
                 quantized_params: param.clone(),
                 row_ids_count: posting.len() as RowId,
                 max_row_id: posting.elements.last().map(|e| e.row_id()).unwrap_or(0),
+                element_type: posting.element_type,
             };
 
             // Step 1.2 Save the header obj to mmap.
@@ -148,23 +146,29 @@ impl MmapManager {
             headers_mmap[header_offset_left..header_offset_right].copy_from_slice(header_bytes);
 
             // Step 2.1: Store the posting list to mmap
+            // TODO 放到一个位置重构一下
             match posting.element_type {
                 ElementType::SIMPLE => {
-                    let elements: Vec<SimpleElement<TW>> = posting.elements.into_iter().map(|e: GenericElement<TW>|e.as_simple().clone()).collect();
-                    let posting_elements_bytes = transmute_to_u8_slice(&elements);
+                    let simple_els =
+                        posting.elements.iter().map(|e| e.as_simple().clone()).collect::<Vec<_>>();
+                    let posting_elements_bytes = transmute_to_u8_slice(&simple_els);
                     postings_mmap[cur_postings_storage_size
                         ..(cur_postings_storage_size + posting_elements_bytes.len())]
                         .copy_from_slice(posting_elements_bytes);
                     cur_postings_storage_size += posting_elements_bytes.len();
-                },
+                }
                 ElementType::EXTENDED => {
-                    let elements: Vec<ExtendedElement<TW>> = posting.elements.into_iter().map(|e: GenericElement<TW>|e.as_extended().clone()).collect();
+                    let elements = posting
+                        .elements
+                        .iter()
+                        .map(|e| e.as_extended().clone())
+                        .collect::<Vec<_>>();
                     let posting_elements_bytes = transmute_to_u8_slice(&elements);
                     postings_mmap[cur_postings_storage_size
                         ..(cur_postings_storage_size + posting_elements_bytes.len())]
                         .copy_from_slice(posting_elements_bytes);
                     cur_postings_storage_size += posting_elements_bytes.len();
-                },
+                }
             }
         }
     }

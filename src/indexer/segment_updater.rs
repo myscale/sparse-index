@@ -226,7 +226,7 @@ impl SegmentUpdater {
         let (scheduled_result, sender) = FutureResult::create(
             "A segment_updater future did not succeed. This should never happen.",
         );
-        // Asynchronously execute the task, placing it in a background thread 
+        // Asynchronously execute the task, placing it in a background thread
         // to allow the main process to continue running without being blocked.
         self.pool.spawn(|| {
             let task_result = task();
@@ -362,16 +362,16 @@ impl SegmentUpdater {
 
     /// Start executing a MergeOperation. The function will block until the MergeOperation actually begins,
     /// but it will not wait for the MergeOperation to finish.
-    /// The calling thread should not be blocked for a long time, as this only involves waiting for the 
+    /// The calling thread should not be blocked for a long time, as this only involves waiting for the
     /// `SegmentUpdater` queue, which contains only lightweight operations.
     ///
     /// The MergeOperation occurs in a different thread.
     ///
-    /// When executed successfully, the function returns a `Future`, representing the actual result of the 
-    /// merge operation, i.e., `Result<SegmentMeta>`. 
+    /// When executed successfully, the function returns a `Future`, representing the actual result of the
+    /// merge operation, i.e., `Result<SegmentMeta>`.
     /// If the merge operation cannot be started, an error will be returned.
     ///
-    /// The error returned by the function does not necessarily indicate a failure; it may also indicate 
+    /// The error returned by the function does not necessarily indicate a failure; it may also indicate
     /// a rollback that occurred between the moment of the merge operation and the actual execution of the merge.
     pub fn start_merge(
         &self,

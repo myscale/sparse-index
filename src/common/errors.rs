@@ -2,6 +2,7 @@ use std::{fmt, io};
 use std::{path::PathBuf, str::Utf8Error, sync::Arc};
 use thiserror::Error;
 
+use crate::core::PostingListError;
 use crate::directory::error;
 use crate::{
     core::FileOperationError,
@@ -202,6 +203,9 @@ pub enum SparseError {
     FileOperationError(#[from] FileOperationError),
     #[error("'{0}'")]
     Error(String),
+
+    #[error("'{0:?}'")]
+    PostingListError(#[from] PostingListError),
 }
 
 impl From<io::Error> for SparseError {

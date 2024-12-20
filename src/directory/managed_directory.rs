@@ -50,7 +50,7 @@ struct MetaInformation {
 
 /// Saves the file containing the list of existing files
 /// that were created by sparse.
-/// 
+///
 /// These files will record in `.managed.json`.
 fn save_managed_paths(
     directory: &dyn Directory,

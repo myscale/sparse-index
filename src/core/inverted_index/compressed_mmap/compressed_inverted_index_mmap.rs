@@ -1,7 +1,13 @@
 use crate::core::common::ops::*;
 use crate::core::common::types::DimId;
+use crate::core::inverted_index::common::{
+    InvertedIndexMeta, InvertedIndexMetrics, Revision, Version,
+};
 use crate::core::{
-    CompressedInvertedIndexRam, CompressedPostingBlock, CompressedPostingListIterator, CompressedPostingListView, InvertedIndexMeta, InvertedIndexMetrics, InvertedIndexMmapAccess, InvertedIndexRam, InvertedIndexRamAccess, PostingListIteratorTrait, QuantizedParam, QuantizedWeight, Revision, Version, WeightType
+    CompressedBlockType, CompressedInvertedIndexRam, CompressedPostingListIterator,
+    CompressedPostingListView, ExtendedCompressedPostingBlock, InvertedIndexMmapAccess,
+    InvertedIndexMmapInit, InvertedIndexRam, InvertedIndexRamAccess, PostingListIter,
+    PostingListIterAccess, QuantizedWeight, SimpleCompressedPostingBlock, WeightType,
 };
 use crate::{thread_name, RowId};
 use log::{debug, warn};
@@ -19,9 +25,9 @@ use super::{
 };
 
 /// CompressedInvertedIndexMmap
-/// 
+///
 /// OW: weight storage size before quantized.
-/// TW: weight storage size after quantized. 
+/// TW: weight storage size after quantized.
 #[derive(Debug, Clone)]
 pub struct CompressedInvertedIndexMmap<OW: QuantizedWeight, TW: QuantizedWeight> {
     pub path: PathBuf,
@@ -33,57 +39,11 @@ pub struct CompressedInvertedIndexMmap<OW: QuantizedWeight, TW: QuantizedWeight>
     pub(crate) _tw: PhantomData<TW>,
 }
 
-impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
+impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapInit<OW, TW>
     for CompressedInvertedIndexMmap<OW, TW>
 {
-    type Iter<'a> = CompressedPostingListIterator<'a, TW, OW>;
-
-    fn size(&self) -> usize {
-        self.meta.inverted_index_meta.posting_count
-    }
-
     fn open(path: &Path, segment_id: Option<&str>) -> std::io::Result<Self> {
         Self::load_under_segment(path.to_path_buf(), segment_id)
-    }
-
-    fn check_exists(&self, path: &Path, segment_id: Option<&str>) -> std::io::Result<()> {
-        debug_assert_eq!(path, self.path);
-        for file in self.files(segment_id) {
-            debug_assert!(file.exists());
-        }
-        Ok(())
-    }
-
-    fn iter(&self, dim_id: &DimId) -> Option<Self::Iter<'_>> {
-        let res_opt: Option<(CompressedPostingListView<'_, TW>, Option<QuantizedParam>)> =
-            self.posting_with_param(dim_id);
-        if res_opt.is_none() {
-            return None;
-        }
-        let (posting_list_view, quantized_param) = res_opt.unwrap();
-
-        // When using iterator peek func, you will get a `OW` type of weight.
-        let iterator: CompressedPostingListIterator<'_, TW, OW> = CompressedPostingListIterator::<TW, OW>::new(&posting_list_view, quantized_param);
-
-        debug!("[{}]-[cmp-mmap]-[iter] TW:{:?}, OW:{:?}, quantize param:{:?}, iter size:{}", thread_name!(), TW::weight_type(), OW::weight_type(), quantized_param, iterator.remains());
-        return Some(iterator);
-    }
-
-    fn posting_len(&self, dim_id: &DimId) -> Option<usize> {
-        let res_opt: Option<(CompressedPostingListView<'_, TW>, Option<QuantizedParam>)> =
-            self.posting_with_param(dim_id);
-        if res_opt.is_none() {
-            return None;
-        }
-        let (posting_list_view, _) = res_opt.unwrap();
-
-        Some(posting_list_view.row_ids_count as usize)
-    }
-
-    fn files(&self, segment_id: Option<&str>) -> Vec<PathBuf> {
-        // relative paths
-        let get_all_files = CompressedInvertedIndexMmapConfig::get_all_files(segment_id);
-        get_all_files.iter().map(|p| PathBuf::from(p)).collect()
     }
 
     fn from_ram_index(
@@ -94,6 +54,66 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
         let compressed_inverted_index_ram: CompressedInvertedIndexRam<TW> =
             CompressedInvertedIndexRam::from_ram_index(ram_index, path.clone(), segment_id)?;
         Self::convert_and_save(&compressed_inverted_index_ram, path, segment_id)
+    }
+}
+
+impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterAccess<OW, TW>
+    for CompressedInvertedIndexMmap<OW, TW>
+{
+    type Iter<'a> = CompressedPostingListIterator<'a, OW, TW>;
+
+    fn iter(&self, dim_id: &DimId) -> Option<Self::Iter<'_>> {
+        let res_opt: Option<CompressedPostingListView<'_, TW>> = self.posting_with_param(dim_id);
+        if res_opt.is_none() {
+            return None;
+        }
+        let view = res_opt.unwrap();
+
+        // When using iterator peek func, you will get a `OW` type of weight.
+        let iterator: CompressedPostingListIterator<'_, OW, TW> =
+            CompressedPostingListIterator::<OW, TW>::new(&view);
+
+        debug!(
+            "[{}]-[cmp-mmap]-[iter] TW:{:?}, OW:{:?}, quantize param:{:?}, iter size:{}",
+            thread_name!(),
+            TW::weight_type(),
+            OW::weight_type(),
+            view.quantization_params,
+            iterator.remains()
+        );
+        return Some(iterator);
+    }
+}
+
+impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
+    for CompressedInvertedIndexMmap<OW, TW>
+{
+    fn size(&self) -> usize {
+        self.meta.inverted_index_meta.posting_count
+    }
+
+    // fn check_exists(&self, path: &Path, segment_id: Option<&str>) -> std::io::Result<()> {
+    //     debug_assert_eq!(path, self.path);
+    //     for file in self.files(segment_id) {
+    //         debug_assert!(file.exists());
+    //     }
+    //     Ok(())
+    // }
+
+    fn posting_len(&self, dim_id: &DimId) -> Option<usize> {
+        let res_opt: Option<CompressedPostingListView<'_, TW>> = self.posting_with_param(dim_id);
+        if res_opt.is_none() {
+            return None;
+        }
+        let posting_list_view = res_opt.unwrap();
+
+        Some(posting_list_view.row_ids_count as usize)
+    }
+
+    fn files(&self, segment_id: Option<&str>) -> Vec<PathBuf> {
+        // relative paths
+        let get_all_files = CompressedInvertedIndexMmapConfig::get_all_files(segment_id);
+        get_all_files.iter().map(|p| PathBuf::from(p)).collect()
     }
 
     fn metrics(&self) -> InvertedIndexMetrics {
@@ -129,10 +149,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
     /// Get `CompressedPostingList` with given dim-id.
     /// Not need consider about quantized.
     /// `TW` means weight storage type in disk.
-    pub fn posting_with_param(
-        &self,
-        dim_id: &DimId,
-    ) -> Option<(CompressedPostingListView<TW>, Option<QuantizedParam>)> {
+    pub fn posting_with_param(&self, dim_id: &DimId) -> Option<CompressedPostingListView<TW>> {
         // check that the id is not out of bounds (posting_count includes the empty zeroth entry)
         if *dim_id >= self.meta.inverted_index_meta.posting_count as DimId {
             warn!(
@@ -152,21 +169,37 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
         // TODO: Figure out about transfer of owner ship.
         let row_ids_compressed = &self.row_ids_mmap
             [header_obj.compressed_row_ids_start..header_obj.compressed_row_ids_end];
-        let blocks =
+        let blocks: &[u8] =
             &self.blocks_mmap[header_obj.compressed_blocks_start..header_obj.compressed_blocks_end];
         // Convert into Blocks type.
-        let blocks_convert: &[CompressedPostingBlock<TW>] = transmute_from_u8_to_slice(blocks);
-
-        let compressed_posting_list: CompressedPostingListView<'_, TW> =
-            CompressedPostingListView {
-                row_ids_compressed,
-                blocks: blocks_convert,
-                quantization_params: header_obj.quantized_params,
-                row_ids_count: header_obj.row_ids_count,
-                max_row_id: header_obj.max_row_id,
-            };
-
-        Some((compressed_posting_list, header_obj.quantized_params))
+        match header_obj.compressed_block_type {
+            CompressedBlockType::Simple => {
+                let raw_simple_blocks: &[SimpleCompressedPostingBlock<TW>] =
+                    transmute_from_u8_to_slice(blocks);
+                Some(CompressedPostingListView {
+                    row_ids_compressed,
+                    simple_blocks: raw_simple_blocks,
+                    extended_blocks: &[],
+                    compressed_block_type: header_obj.compressed_block_type,
+                    quantization_params: header_obj.quantized_params,
+                    row_ids_count: header_obj.row_ids_count,
+                    max_row_id: header_obj.max_row_id,
+                })
+            }
+            CompressedBlockType::Extended => {
+                let raw_extended_blocks: &[ExtendedCompressedPostingBlock<TW>] =
+                    transmute_from_u8_to_slice(blocks);
+                Some(CompressedPostingListView {
+                    row_ids_compressed,
+                    simple_blocks: &[],
+                    extended_blocks: raw_extended_blocks,
+                    compressed_block_type: header_obj.compressed_block_type,
+                    quantization_params: header_obj.quantized_params,
+                    row_ids_count: header_obj.row_ids_count,
+                    max_row_id: header_obj.max_row_id,
+                })
+            }
+        }
     }
 
     /// Store inverted-index-ram into mmap files.
@@ -207,6 +240,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
                 quantized: (TW::weight_type() == WeightType::WeightU8)
                     && (OW::weight_type() != TW::weight_type()),
                 version: Version::compressed_mmap(Revision::V1),
+                element_type: todo!(),
             },
             row_ids_storage_size: total_row_ids_storage_size as u64,
             headers_storage_size: total_headers_storage_size as u64,

@@ -7,17 +7,20 @@ mod element;
 mod errors;
 pub use compress::*;
 pub use encoder::{BlockDecoder, BlockEncoder, COMPRESSION_BLOCK_SIZE};
+use enum_dispatch::enum_dispatch;
 pub use simple::{PostingList, PostingListBuilder, PostingListIterator, PostingListMerger};
 // pub use traits::*;
+use crate::core::dispatch::PostingListIteratorWrapper;
 pub use element::*;
+pub use errors::*;
 
 use crate::RowId;
 
 use super::QuantizedWeight;
 
-
 /// OW: We should restore weight type to `origin type`.
 /// TW: Weight type actually stored in disk.
+#[enum_dispatch]
 pub trait PostingListIter<OW: QuantizedWeight, TW: QuantizedWeight> {
     fn peek(&mut self) -> Option<GenericElement<OW>>;
 

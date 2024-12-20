@@ -5,6 +5,7 @@ mod mmap;
 mod ram;
 mod traits;
 
+pub use common::*;
 pub use compressed_mmap::*;
 pub use compressed_ram::*;
 pub use mmap::*;

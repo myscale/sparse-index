@@ -1,70 +1,54 @@
-use super::PostingListBuilder;
-use crate::core::common::types::DimWeight;
-use crate::core::{Element, ElementType, GenericElement, QuantizedWeight, DEFAULT_MAX_NEXT_WEIGHT};
+use std::mem::size_of;
+
+use crate::core::{
+    ElementRead, ElementType, ElementWrite, ExtendedElement, GenericElement, QuantizedWeight,
+    SimpleElement, DEFAULT_MAX_NEXT_WEIGHT,
+};
 use crate::RowId;
-use log::{debug, error, warn};
+use log::{debug, error};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PostingList<OW: QuantizedWeight> {
     pub elements: Vec<GenericElement<OW>>,
-    pub element_type: ElementType
+    pub element_type: ElementType,
 }
-
 
 impl<OW: QuantizedWeight> Default for PostingList<OW> {
     fn default() -> Self {
-        Self {
-            elements: vec![],
-            element_type: ElementType::SIMPLE,
-        }
+        Self::new(ElementType::SIMPLE)
     }
 }
 
-/// PostingList Creater
 impl<OW: QuantizedWeight> PostingList<OW> {
-
     pub fn new(element_type: ElementType) -> Self {
-        Self {
-            elements: vec![],
-            element_type,
-        }
-    }
-
-    /// TODO 直接放到 PostingListBuilder 里面操作吧，放到这里操作感觉没有完全分离
-    /// ## brief
-    /// create a PostingListBuilder with `sort` or `propagate`
-    pub fn from(records: Vec<(RowId, DimWeight)>, element_type: u8) -> PostingList<OW> {
-        let mut posting_list_builder: PostingListBuilder<OW, OW> =
-            PostingListBuilder::<OW, OW>::new(element_type, true, false);
-        for (row_id, weight) in records {
-            posting_list_builder.add(row_id, weight);
-        }
-
-        posting_list_builder.build().0
+        Self { elements: vec![], element_type }
     }
 }
 
 impl<OW: QuantizedWeight> PostingList<OW> {
     pub fn get_ref(&self, idx: usize) -> &GenericElement<OW> {
-        if idx >= self.len() {
-            let error_msg = format!("idx:{} overflow when `get_ref` of GenericElement, posting length is {}", idx, self.len());
+        self.elements.get(idx).unwrap_or_else(|| {
+            let error_msg = format!(
+                "idx:{} overflow when `get_ref` of GenericElement, posting length is {}",
+                idx,
+                self.len()
+            );
             error!("{}", error_msg);
             panic!("{}", error_msg);
+        })
+    }
+
+    pub fn storage_size(&self) -> usize {
+        match self.element_type {
+            ElementType::SIMPLE => self.len() * size_of::<SimpleElement<OW>>(),
+            ElementType::EXTENDED => self.len() * size_of::<ExtendedElement<OW>>(),
         }
-        return &self.elements[idx];
     }
 
     pub fn len(&self) -> usize {
         self.elements.len()
     }
 
-    /// ## brief
-    /// Deletes an element corresponding to the specified `row_id` from the Posting.
-    ///
-    /// ## return
-    /// func `delete` returns tuple(usize, bool):
-    /// - the first element means the index of deleted element
-    /// - when failed to delete(row_id doesn't exist in posting list), the second element is false.
     pub fn delete(&mut self, row_id: RowId) -> (usize, bool) {
         let search_result = self.elements.binary_search_by_key(&row_id, |e| e.row_id());
 
@@ -73,8 +57,10 @@ impl<OW: QuantizedWeight> PostingList<OW> {
                 self.elements.remove(found_idx);
 
                 // Reset the max_next_weight for the last element to the default.
-                if let Some(last) = self.elements.last_mut() {
-                    last.update_max_next_weight(OW::from_f32(DEFAULT_MAX_NEXT_WEIGHT));
+                if self.element_type == ElementType::EXTENDED {
+                    if let Some(last) = self.elements.last_mut() {
+                        last.update_max_next_weight(OW::from_f32(DEFAULT_MAX_NEXT_WEIGHT));
+                    }
                 }
                 return (found_idx, true);
             }
@@ -86,14 +72,13 @@ impl<OW: QuantizedWeight> PostingList<OW> {
         }
     }
 
-    /// ## brief
-    /// Deletes an element by `row_id` and propagates to maintain `max_next_weight` correctly.
-    /// ## return
-    /// if `row_id` doesn't exist in postingList, it will return `false`.
     pub fn delete_with_propagate(&mut self, row_id: RowId) -> bool {
         let (deleted_idx, success_deleted) = self.delete(row_id);
         if !success_deleted {
             return false;
+        }
+        if self.element_type == ElementType::SIMPLE {
+            return true;
         }
 
         if deleted_idx < self.elements.len() {
@@ -109,12 +94,6 @@ impl<OW: QuantizedWeight> PostingList<OW> {
         return true;
     }
 
-    /// ## brief
-    /// Insert or update an element to the Posting, return the inserted or updated position.
-    /// ## return
-    /// tuple(usize, bool):
-    /// - first element record the position for `insert` or `update`
-    /// - second element means the operation type, for `insert`, it's `true`, otherwise is `false`.
     pub fn upsert(&mut self, element: GenericElement<OW>) -> (usize, bool) {
         // boundary
         if self.elements.is_empty() {
@@ -134,8 +113,9 @@ impl<OW: QuantizedWeight> PostingList<OW> {
             } else if last_element.row_id() == element.row_id() {
                 let last_element: &mut GenericElement<OW> = self.elements.last_mut().unwrap();
                 last_element.update_weight(element.weight());
-                last_element.update_max_next_weight(element.max_next_weight());
-
+                if self.element_type == ElementType::EXTENDED {
+                    last_element.update_max_next_weight(element.max_next_weight());
+                }
                 // record the postion of updated index, and the operation is update.
                 return (self.elements.len() - 1, false);
             }
@@ -148,8 +128,9 @@ impl<OW: QuantizedWeight> PostingList<OW> {
             Ok(found_idx) => {
                 let found_element: &mut GenericElement<OW> = &mut self.elements[found_idx];
                 found_element.update_weight(element.weight());
-                found_element.update_max_next_weight(element.max_next_weight());
-
+                if self.element_type == ElementType::EXTENDED {
+                    found_element.update_max_next_weight(element.max_next_weight());
+                }
                 // rectord the postion of updated element.
                 return (found_idx, false);
             }
@@ -162,12 +143,11 @@ impl<OW: QuantizedWeight> PostingList<OW> {
         }
     }
 
-    /// ## brief
-    /// Insert or update an element and propagates to maintain `max_next_weight` correctly.
-    /// ## return
-    /// bool: means wheather this upsert is `insert`, if it's false, means this `upsert` is `update`.
     pub fn upsert_with_propagate(&mut self, element: GenericElement<OW>) -> bool {
         let (upserted_idx, is_insert_operation) = self.upsert(element);
+        if self.element_type == ElementType::SIMPLE {
+            return is_insert_operation;
+        }
         if upserted_idx == self.elements.len() - 1 {
             self.propagate_max_next_weight(upserted_idx);
         } else {
@@ -177,16 +157,22 @@ impl<OW: QuantizedWeight> PostingList<OW> {
     }
 
     /// Maintain all elements before element in postion `index`
-    fn propagate_max_next_weight(&mut self, mut index: usize) {
+    fn propagate_max_next_weight(&mut self, index: usize) {
         // boundary
-        if index >= self.elements.len() {
-            warn!("wrong index, will propagate from bottom element.");
-            // reset `index`
-            index = self.elements.len() - 1;
+        if self.element_type == ElementType::SIMPLE {
+            return;
         }
 
         // used element at `index` as the starting point
-        let cur_element: &GenericElement<OW> = &self.elements[index];
+        let cur_element = self.elements.get(index).unwrap_or_else(||{
+            let error_msg = format!(
+                "index:{} overflow when executing `propagate_max_next_weight` for [`PostingList`], posting length is {}", 
+                index,
+                self.len()
+            );
+            error!("{}", error_msg);
+            panic!("{}", error_msg);
+        });
         let mut max_next_weight: OW = cur_element.weight().max(cur_element.max_next_weight());
 
         for element in self.elements.iter_mut().take(index).rev() {
@@ -196,19 +182,18 @@ impl<OW: QuantizedWeight> PostingList<OW> {
     }
 }
 
-// impl<'a, W: QuantizedWeight> PostingListTrait<'a, W> for PostingList<OW> {
-
-// }
-
 #[cfg(test)]
 mod tests {
-    use crate::core::{Element, ElementType, ExtendedElement};
-
-    use super::PostingList;
+    use crate::core::{
+        ElementRead, ElementType, ElementWrite, ExtendedElement, PostingListBuilder,
+    };
 
     #[test]
     fn test_delete() {
-        let mut posting = PostingList::<f32>::from(vec![(1, 10.0), (2, 20.0), (3, 30.0)], ElementType::EXTENDED);
+        let mut posting = PostingListBuilder::<f32, f32>::build_from(
+            vec![(1, 10.0), (2, 20.0), (3, 30.0)],
+            ElementType::EXTENDED,
+        );
 
         assert_eq!(posting.delete(2), (1, true)); // Delete middle element
         assert_eq!(posting.len(), 2);
@@ -228,7 +213,10 @@ mod tests {
 
     #[test]
     fn test_delete_with_propagate() {
-        let mut posting = PostingList::<f32>::from(vec![(1, 10.0), (2, 20.0), (3, 30.0)], ElementType::EXTENDED);
+        let mut posting = PostingListBuilder::<f32, f32>::build_from(
+            vec![(1, 10.0), (2, 20.0), (3, 30.0)],
+            ElementType::EXTENDED,
+        );
         posting.delete_with_propagate(2);
         assert_eq!(posting.len(), 2);
         assert!(posting.get_ref(0).max_next_weight() == 30.0);
@@ -237,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_upsert() {
-        let mut posting = PostingList::<f32>::from(vec![], ElementType::EXTENDED);
+        let mut posting = PostingListBuilder::<f32, f32>::build_from(vec![], ElementType::EXTENDED);
         assert_eq!(posting.upsert(ExtendedElement::new(1, 10.0).into()), (0, true)); // Insert first element
         assert_eq!(posting.upsert(ExtendedElement::new(2, 20.0).into()), (1, true)); // Insert second element
 
@@ -248,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_upsert_with_propagate() {
-        let mut list = PostingList::<f32>::from(vec![], ElementType::EXTENDED);
+        let mut list = PostingListBuilder::<f32, f32>::build_from(vec![], ElementType::EXTENDED);
         assert_eq!(list.upsert_with_propagate(ExtendedElement::new(0, 10.0).into()), true);
         assert_eq!(list.upsert_with_propagate(ExtendedElement::new(1, 20.0).into()), true);
         assert_eq!(list.upsert_with_propagate(ExtendedElement::new(2, 50.0).into()), true);

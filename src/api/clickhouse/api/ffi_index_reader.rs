@@ -4,10 +4,7 @@ use crate::api::clickhouse::{
 };
 use crate::core::SparseVector;
 use crate::{
-    api::clickhouse::{
-        converter::CXX_STRING_CONVERTER,
-        utils::ApiUtils,
-    },
+    api::clickhouse::{converter::CXX_STRING_CONVERTER, utils::ApiUtils},
     ffi::{FFIBoolResult, FFIError, FFIScoreResult, TupleElement},
 };
 use cxx::{CxxString, CxxVector};

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::core::InvertedIndexMeta;
+use crate::core::inverted_index::common::InvertedIndexMeta;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub struct CompressedMmapInvertedIndexMeta {

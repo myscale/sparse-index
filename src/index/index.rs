@@ -321,7 +321,7 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::{
-        core::{SparseRowContent, SparseVector},
+        core::{ElementType, SparseRowContent, SparseVector},
         index::{IndexBuilder, IndexSettings},
         indexer::{index_writer, LogMergePolicy, MergePolicy, NoMergePolicy},
         sparse_index::{IndexWeightType, SparseIndexConfig, StorageType},
@@ -374,6 +374,7 @@ mod tests {
                 storage_type: StorageType::CompressedMmap,
                 weight_type: IndexWeightType::UInt8,
                 quantized: false,
+                element_type: ElementType::EXTENDED,
             },
         };
         let index = Index::create_in_dir(index_directory, index_settings)

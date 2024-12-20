@@ -8,6 +8,7 @@ pub struct InvertedIndexRam<TW: QuantizedWeight> {
     pub(super) postings: Vec<PostingList<TW>>,
     pub(super) element_type: ElementType,
     pub(super) quantized_params: Vec<Option<QuantizedParam>>,
+    pub need_quantized: bool,
     pub(super) metrics: InvertedIndexMetrics,
 }
 

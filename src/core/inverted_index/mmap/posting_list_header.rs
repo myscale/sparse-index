@@ -1,4 +1,4 @@
-use crate::core::QuantizedParam;
+use crate::core::{ElementType, QuantizedParam};
 
 #[derive(Debug, Default, Clone)]
 pub struct PostingListHeader {
@@ -8,6 +8,8 @@ pub struct PostingListHeader {
 
     // Fix sized: header for compressed posting
     pub quantized_params: Option<QuantizedParam>,
+
+    pub element_type: ElementType,
 
     // TODO: refine these vars.
     pub row_ids_count: u32,

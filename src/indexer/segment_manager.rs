@@ -167,9 +167,9 @@ impl SegmentManager {
     }
 
     /// Return the consistent status of the segment IDs before merging (committed or uncommitted).
-    /// 
+    ///
     /// Determine whether the segment IDs belong to the committed or uncommitted collection,
-    /// remove this set of segment IDs from the corresponding collection, and finally add the new segments 
+    /// remove this set of segment IDs from the corresponding collection, and finally add the new segments
     /// produced from the merge to the appropriate collection.
     pub(crate) fn end_merge(
         &self,

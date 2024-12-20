@@ -45,13 +45,22 @@ pub struct SparseIndexConfig {
     pub weight_type: IndexWeightType,
 
     #[serde(default)]
+    #[serde(rename = "element_type")]
+    pub element_type: ElementType,
+
+    #[serde(default)]
     #[serde(rename = "quantized")]
     pub quantized: bool,
 }
 
 impl SparseIndexConfig {
-    pub fn new(storage_type: StorageType, weight_type: IndexWeightType, quantized: bool) -> Self {
-        SparseIndexConfig { storage_type, weight_type, quantized }
+    pub fn new(
+        storage_type: StorageType,
+        weight_type: IndexWeightType,
+        quantized: bool,
+        element_type: ElementType,
+    ) -> Self {
+        SparseIndexConfig { storage_type, weight_type, quantized, element_type }
     }
 
     pub fn load(index_path: &Path) -> Result<Self, FileOperationError> {
@@ -65,6 +74,17 @@ impl SparseIndexConfig {
             std::fs::create_dir_all(index_path).map_err(|e| FileOperationError::IoError(e))?;
         }
         Ok(atomic_save_json(&file_path, self)?)
+    }
+
+    pub fn element_type(&self) -> ElementType {
+        match (self.weight_type, self.quantized) {
+            (IndexWeightType::Float32, true) => ElementType::SIMPLE,
+            (IndexWeightType::Float32, false) => self.element_type,
+            (IndexWeightType::Float16, true) => ElementType::SIMPLE,
+            (IndexWeightType::Float16, false) => self.element_type,
+            (IndexWeightType::UInt8, true) => ElementType::SIMPLE,
+            (IndexWeightType::UInt8, false) => self.element_type,
+        }
     }
 }
 

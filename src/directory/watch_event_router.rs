@@ -37,7 +37,7 @@ pub struct WatchCallbackList {
 /// After all the clones of `WatchHandle` are dropped, the associated will not be called when a
 /// file change is detected.
 ///
-/// A handle that controls the lifecycle of callback functions. 
+/// A handle that controls the lifecycle of callback functions.
 /// When all cloned WatchHandle objects are discarded, the associated callback functions will no longer be used.
 #[must_use = "This `WatchHandle` controls the lifetime of the watch and should therefore be used."]
 #[derive(Clone)]

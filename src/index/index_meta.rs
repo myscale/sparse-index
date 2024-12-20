@@ -162,7 +162,7 @@ impl InnerSegmentMeta {
 
 /// Metadata information for the Index
 ///
-/// This metadata is stored in a `meta.json` file on disk and records a set of segment metadata 
+/// This metadata is stored in a `meta.json` file on disk and records a set of segment metadata
 /// that can be used for searching.
 #[derive(Clone, Serialize)]
 pub struct IndexMeta {
@@ -187,7 +187,7 @@ impl fmt::Debug for IndexMeta {
 }
 
 impl IndexMeta {
-    /// Create a brand new IndexMeta, doesn't contain any segment. 
+    /// Create a brand new IndexMeta, doesn't contain any segment.
     pub fn default() -> Self {
         Self { segments: Vec::new(), opstamp: 0u64, payload: None }
     }

@@ -1,4 +1,7 @@
-use std::mem::{align_of, size_of};
+use std::{
+    borrow::Cow,
+    mem::{align_of, size_of},
+};
 
 /// convert `byte slice [u8]` to `T`.
 pub fn transmute_from_u8<T>(v: &[u8]) -> &T {

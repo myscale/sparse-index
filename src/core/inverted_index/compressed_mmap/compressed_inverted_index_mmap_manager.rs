@@ -9,13 +9,13 @@ use memmap2::{Mmap, MmapMut};
 use crate::core::{
     create_and_ensure_length,
     madvise::{self, Advice},
-    open_write_mmap, transmute_to_u8, transmute_to_u8_slice, CompressedInvertedIndexRam,
-    InvertedIndexRamAccess, QuantizedWeight,
+    open_write_mmap, transmute_to_u8, transmute_to_u8_slice, CompressedBlockType,
+    CompressedInvertedIndexRam, ExtendedCompressedPostingBlock, InvertedIndexRamAccess,
+    QuantizedWeight, SimpleCompressedPostingBlock,
 };
 
 use super::{
-    COMPRESSED_POSTING_HEADER_SIZE,
-    CompressedInvertedIndexMmapConfig, CompressedPostingListHeader,
+    CompressedInvertedIndexMmapConfig, CompressedPostingListHeader, COMPRESSED_POSTING_HEADER_SIZE,
 };
 
 pub struct CompressedMmapManager;
@@ -218,6 +218,9 @@ impl CompressedMmapManager {
                 quantized_params: compressed_posting_view.quantization_params,
                 row_ids_count: compressed_posting_view.row_ids_count,
                 max_row_id: compressed_posting_view.max_row_id,
+                compressed_block_type: CompressedBlockType::from(
+                    compressed_inv_index_ram.element_type(),
+                ),
             };
 
             // Step 1.2: Save the offset object to mmap.
@@ -231,10 +234,24 @@ impl CompressedMmapManager {
                 .copy_from_slice(&compressed_posting_view.row_ids_compressed);
 
             // Step 3: Store posting blocks
-            let block_bytes = transmute_to_u8_slice(&compressed_posting_view.blocks);
-            blocks_mmap[cur_blocks_storage_size..header_obj.compressed_blocks_end]
-                .copy_from_slice(block_bytes);
-            total_blocks_count += compressed_posting_view.blocks.len();
+            match compressed_posting_view.compressed_block_type {
+                CompressedBlockType::Simple => {
+                    let blocks: &[SimpleCompressedPostingBlock<TW>] =
+                        compressed_posting_view.simple_blocks;
+                    let block_bytes = transmute_to_u8_slice(blocks);
+                    blocks_mmap[cur_blocks_storage_size..header_obj.compressed_blocks_end]
+                        .copy_from_slice(block_bytes);
+                    total_blocks_count += compressed_posting_view.simple_blocks.len();
+                }
+                CompressedBlockType::Extended => {
+                    let blocks: &[ExtendedCompressedPostingBlock<TW>] =
+                        compressed_posting_view.extended_blocks;
+                    let block_bytes = transmute_to_u8_slice(blocks);
+                    blocks_mmap[cur_blocks_storage_size..header_obj.compressed_blocks_end]
+                        .copy_from_slice(block_bytes);
+                    total_blocks_count += compressed_posting_view.extended_blocks.len();
+                }
+            }
 
             // increase offsets.
             cur_row_ids_storage_size = header_obj.compressed_row_ids_end;

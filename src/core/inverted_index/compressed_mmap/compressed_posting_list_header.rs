@@ -1,4 +1,7 @@
-use crate::{core::QuantizedParam, RowId};
+use crate::{
+    core::{CompressedBlockType, QuantizedParam},
+    RowId,
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct CompressedPostingListHeader {
@@ -12,6 +15,8 @@ pub struct CompressedPostingListHeader {
 
     // Fix sized: header for compressed posting
     pub quantized_params: Option<QuantizedParam>,
+
+    pub compressed_block_type: CompressedBlockType,
 
     pub row_ids_count: RowId,
     pub max_row_id: Option<RowId>,

@@ -1,23 +1,42 @@
-use enum_dispatch::enum_dispatch;
-
 use crate::{
     core::{ElementType, QuantizedWeight, COMPRESSION_BLOCK_SIZE},
     RowId,
 };
 
-#[enum_dispatch]
-pub trait CompressedPostingBlockTrait<TW: QuantizedWeight> {
-    fn row_id_start(&self) -> RowId;
-    fn block_offset(&self) -> u64;
-    fn row_ids_compressed_size(&self) -> u16;
-    fn row_ids_count(&self) -> u8;
-    fn num_bits(&self) -> u8;
-    fn weights(&self) -> [TW; COMPRESSION_BLOCK_SIZE];
-    fn max_next_weights(&self) -> [TW; COMPRESSION_BLOCK_SIZE];
+#[derive(Default, Copy, Debug, Clone, PartialEq)]
+pub enum CompressedBlockType {
+    #[default]
+    Simple,
+    Extended,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct SimpleCompressedPostingBlock<TW: QuantizedWeight> {
+impl From<ElementType> for CompressedBlockType {
+    fn from(element_type: ElementType) -> Self {
+        match element_type {
+            ElementType::SIMPLE => CompressedBlockType::Simple,
+            ElementType::EXTENDED => CompressedBlockType::Extended,
+        }
+    }
+}
+
+impl Into<ElementType> for CompressedBlockType {
+    fn into(self) -> ElementType {
+        match self {
+            CompressedBlockType::Simple => ElementType::SIMPLE,
+            CompressedBlockType::Extended => ElementType::EXTENDED,
+        }
+    }
+}
+
+pub trait CompressedPostingBlock<W: QuantizedWeight> {
+    fn compressed_block_type(&self) -> CompressedBlockType;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SimpleCompressedPostingBlock<TW>
+where
+    TW: QuantizedWeight,
+{
     pub row_id_start: RowId,
 
     /// Block's storage offset within the whole `Posting`.
@@ -36,39 +55,11 @@ pub struct SimpleCompressedPostingBlock<TW: QuantizedWeight> {
     pub weights: [TW; COMPRESSION_BLOCK_SIZE],
 }
 
-impl<TW: QuantizedWeight> CompressedPostingBlockTrait<TW> for SimpleCompressedPostingBlock<TW> {
-    fn row_id_start(&self) -> RowId {
-        self.row_id_start
-    }
-
-    fn block_offset(&self) -> u64 {
-        self.block_offset
-    }
-
-    fn row_ids_compressed_size(&self) -> u16 {
-        self.row_ids_compressed_size
-    }
-
-    fn row_ids_count(&self) -> u8 {
-        self.row_ids_count
-    }
-
-    fn num_bits(&self) -> u8 {
-        self.num_bits
-    }
-
-    fn weights(&self) -> [TW; COMPRESSION_BLOCK_SIZE] {
-        self.weights
-    }
-
-    fn max_next_weights(&self) -> [TW; COMPRESSION_BLOCK_SIZE] {
-        panic!("Not supported!")
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExtendedCompressedPostingBlock<TW: QuantizedWeight> {
-    /// Current block's first `row_id`.
+#[derive(Debug, Clone, Copy)]
+pub struct ExtendedCompressedPostingBlock<TW>
+where
+    TW: QuantizedWeight,
+{
     pub row_id_start: RowId,
 
     /// Block's storage offset within the whole `Posting`.
@@ -90,73 +81,14 @@ pub struct ExtendedCompressedPostingBlock<TW: QuantizedWeight> {
     pub max_next_weights: [TW; COMPRESSION_BLOCK_SIZE],
 }
 
-impl<TW: QuantizedWeight> CompressedPostingBlockTrait<TW> for ExtendedCompressedPostingBlock<TW> {
-    fn row_id_start(&self) -> RowId {
-        self.row_id_start
-    }
-
-    fn block_offset(&self) -> u64 {
-        self.block_offset
-    }
-
-    fn row_ids_compressed_size(&self) -> u16 {
-        self.row_ids_compressed_size
-    }
-
-    fn row_ids_count(&self) -> u8 {
-        self.row_ids_count
-    }
-
-    fn num_bits(&self) -> u8 {
-        self.num_bits
-    }
-
-    fn weights(&self) -> [TW; COMPRESSION_BLOCK_SIZE] {
-        self.weights
-    }
-
-    fn max_next_weights(&self) -> [TW; COMPRESSION_BLOCK_SIZE] {
-        self.max_next_weights
+impl<TW: QuantizedWeight> CompressedPostingBlock<TW> for SimpleCompressedPostingBlock<TW> {
+    fn compressed_block_type(&self) -> CompressedBlockType {
+        CompressedBlockType::Simple
     }
 }
 
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CompressedBlockType {
-    Simple,
-    Extended,
-}
-
-impl CompressedBlockType {
-    pub fn bound_by_element(element_type: ElementType) -> Self {
-        match element_type {
-            ElementType::SIMPLE => CompressedBlockType::Simple,
-            ElementType::EXTENDED => CompressedBlockType::Extended,
-        }
-    }
-}
-
-
-
-#[derive(Debug, Clone, PartialEq)]
-#[enum_dispatch(CompressedPostingBlockTrait<TW>)]
-pub enum GenericCompressedPostingBlock<TW: QuantizedWeight> {
-    Simple(SimpleCompressedPostingBlock<TW>),
-    Extended(ExtendedCompressedPostingBlock<TW>),
-}
-
-impl<TW: QuantizedWeight> GenericCompressedPostingBlock<TW> {
-    pub fn block_type(&self) -> CompressedBlockType {
-        match self {
-            GenericCompressedPostingBlock::Simple(_) => CompressedBlockType::Simple,
-            GenericCompressedPostingBlock::Extended(_) => CompressedBlockType::Extended,
-        }
-    }
-
-    pub fn block_type_by_element(element_type: ElementType) {
-        match element_type {
-            ElementType::SIMPLE => CompressedBlockType::Simple,
-            ElementType::EXTENDED => CompressedBlockType::Extended,
-        }
+impl<TW: QuantizedWeight> CompressedPostingBlock<TW> for ExtendedCompressedPostingBlock<TW> {
+    fn compressed_block_type(&self) -> CompressedBlockType {
+        CompressedBlockType::Extended
     }
 }

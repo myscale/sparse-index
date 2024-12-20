@@ -8,7 +8,12 @@ use std::{
 
 use crate::{
     core::{
-        atomic_save_json, inverted_index::common::{InvertedIndexMeta, Revision, Version}, madvise, transmute_to_u8, transmute_to_u8_slice, DimId, ElementType, ExtendedElement, InvertedIndexMmapAccess, PostingListHeader, PostingListMerger, QuantizedParam, QuantizedWeight, WeightType, POSTING_HEADER_SIZE
+        atomic_save_json,
+        inverted_index::common::{InvertedIndexMeta, Revision, Version},
+        madvise, transmute_to_u8, transmute_to_u8_slice, DimId, ElementRead, ElementSlice,
+        ElementType, ExtendedElement, GenericElement, GenericElementSlice, InvertedIndexMmapAccess,
+        PostingListHeader, PostingListMerger, QuantizedParam, QuantizedWeight, WeightType,
+        POSTING_HEADER_SIZE,
     },
     RowId,
 };
@@ -21,58 +26,43 @@ pub struct InvertedIndexMmapMerger<'a, OW: QuantizedWeight, TW: QuantizedWeight>
     element_type: ElementType,
 }
 
-fn unquantized_posting<OW: QuantizedWeight, TW: QuantizedWeight>(
-    quantized_posting: &[ExtendedElement<TW>],
+fn unquantize_posting<'a, OW: QuantizedWeight, TW: QuantizedWeight>(
+    quantized_posting: GenericElementSlice<'a, TW>,
     param: Option<QuantizedParam>,
-) -> Vec<ExtendedElement<OW>> {
+) -> Vec<GenericElement<OW>> {
+    // Boundary
     if param.is_none() {
-        assert!(OW::weight_type() == TW::weight_type() || quantized_posting.len() == 0);
-
-        let mut converted_posting = vec![];
-        for element in quantized_posting {
-            let converted_element: ExtendedElement<OW> = ExtendedElement {
-                row_id: element.row_id,
-                weight: OW::from_f32(TW::to_f32(element.weight)),
-                max_next_weight: OW::from_f32(TW::to_f32(element.max_next_weight)),
-            };
-            converted_posting.push(converted_element);
-        }
-        return converted_posting;
+        assert!(OW::weight_type() == TW::weight_type());
     } else {
         assert_eq!(TW::weight_type(), WeightType::WeightU8);
-        let param: QuantizedParam = param.unwrap();
-
-        let mut unquantized_posting = vec![];
-        for quantized_element in quantized_posting {
-            let unquantized_element: ExtendedElement<OW> = ExtendedElement::<OW> {
-                row_id: quantized_element.row_id,
-                weight: OW::unquantize_with_param(TW::to_u8(quantized_element.weight), param),
-                max_next_weight: OW::unquantize_with_param(
-                    TW::to_u8(quantized_element.max_next_weight),
-                    param,
-                ),
-            };
-            unquantized_posting.push(unquantized_element);
-        }
-        return unquantized_posting;
+        assert_eq!(OW::weight_type(), TW::weight_type());
     }
+
+    let mut unquantized_posting = vec![];
+    for quantized_element in quantized_posting.generic_iter() {
+        unquantized_posting.push(quantized_element.to_owned().type_convert::<OW>(param));
+    }
+    unquantized_posting
 }
 
 impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, OW, TW> {
-    pub fn new(inverted_index_mmaps: &'a Vec<&'a InvertedIndexMmap<OW, TW>>, element_type: ElementType) -> Self {
-        Self { inverted_index_mmaps, element_type}
+    pub fn new(
+        inverted_index_mmaps: &'a Vec<&'a InvertedIndexMmap<OW, TW>>,
+        element_type: ElementType,
+    ) -> Self {
+        Self { inverted_index_mmaps, element_type }
     }
 
-    fn get_unquantized_postings_with_dim(&self, dim_id: DimId) -> Vec<Vec<ExtendedElement<OW>>> {
-        let mut unquantized_postings: Vec<Vec<ExtendedElement<OW>>> = vec![];
-        let empty_posting: &[ExtendedElement<TW>] = &[];
+    fn get_unquantized_postings_with_dim(&self, dim_id: DimId) -> Vec<Vec<GenericElement<OW>>> {
+        let mut unquantized_postings: Vec<Vec<GenericElement<OW>>> = vec![];
 
         for mmap_index in self.inverted_index_mmaps {
-            let (posting, quantized_param) =
-                mmap_index.posting_with_param(&dim_id).unwrap_or((empty_posting, None));
+            let (posting, quantized_param) = mmap_index.posting_with_param(&dim_id).unwrap_or(
+                (GenericElementSlice::empty_slice(self.element_type), None), // 这里的 None 只起到一个填充的作用，不需要考虑 Default
+            );
 
             // TW means actually storage type, it needs reduction to OW.
-            let unquantized_posting = unquantized_posting::<OW, TW>(posting, quantized_param);
+            let unquantized_posting = unquantize_posting::<OW, TW>(posting, quantized_param);
             unquantized_postings.push(unquantized_posting);
         }
 
@@ -123,11 +113,10 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
         let mut current_element_offset = 0;
         for dim_id in min_dim_id..(max_dim_id + 1) {
             // Merging all postings in current dim-id
-            let postings: Vec<Vec<ExtendedElement<OW>>> =
-                self.get_unquantized_postings_with_dim(dim_id);
+            let postings = self.get_unquantized_postings_with_dim(dim_id);
 
             let (merged_posting, quantized_param) =
-                PostingListMerger::merge_posting_lists::<OW, TW>(&postings, SIMPLE_ELEMENT_TYPE);
+                PostingListMerger::merge_posting_lists::<OW, TW>(&postings, self.element_type)?;
 
             // Step 1: Generate header
             let header_obj = PostingListHeader {
@@ -137,6 +126,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
                 quantized_params: quantized_param,
                 row_ids_count: merged_posting.len() as RowId,
                 max_row_id,
+                element_type: self.element_type,
             };
             let header_bytes = transmute_to_u8(&header_obj);
             let header_obj_start = dim_id as usize * POSTING_HEADER_SIZE;
@@ -144,13 +134,36 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
             headers_mmap[header_obj_start..header_obj_end].copy_from_slice(header_bytes);
 
             // Step 2: Generate posting
+            // TODO 优化这个序列化存储的逻辑
             let merged_posting_elements_bytes = transmute_to_u8_slice(&merged_posting.elements);
-            postings_mmap[current_element_offset
-                ..(current_element_offset + merged_posting_elements_bytes.len())]
-                .copy_from_slice(merged_posting_elements_bytes);
-
-            // increase offsets.
-            current_element_offset += merged_posting_elements_bytes.len();
+            match self.element_type {
+                ElementType::SIMPLE => {
+                    let simple_els = merged_posting
+                        .elements
+                        .iter()
+                        .map(|e| e.as_simple().clone())
+                        .collect::<Vec<_>>();
+                    let posting_elements_bytes = transmute_to_u8_slice(&simple_els);
+                    postings_mmap[current_element_offset
+                        ..(current_element_offset + merged_posting_elements_bytes.len())]
+                        .copy_from_slice(posting_elements_bytes);
+                    // increase offsets.
+                    current_element_offset += posting_elements_bytes.len();
+                }
+                ElementType::EXTENDED => {
+                    let elements = merged_posting
+                        .elements
+                        .iter()
+                        .map(|e| e.as_extended().clone())
+                        .collect::<Vec<_>>();
+                    let posting_elements_bytes = transmute_to_u8_slice(&elements);
+                    postings_mmap[current_element_offset
+                        ..(current_element_offset + merged_posting_elements_bytes.len())]
+                        .copy_from_slice(posting_elements_bytes);
+                    // increase offsets.
+                    current_element_offset += posting_elements_bytes.len();
+                }
+            }
         }
 
         // flushing mmap
@@ -172,6 +185,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
                 quantized: (TW::weight_type() == WeightType::WeightU8)
                     && (OW::weight_type() != TW::weight_type()),
                 version: Version::mmap(Revision::V1),
+                element_type: self.element_type,
             },
             headers_storage_size: total_headers_storage_size,
             postings_storage_size: total_postings_storage_size,

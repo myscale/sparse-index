@@ -14,7 +14,6 @@ pub enum SegmentComponent {
     CompressedInvertedIndexHeaders,
     CompressedInvertedIndexRowIds,
     CompressedInvertedIndexBlocks,
-
     // TODO: temp files for merging.
     // TempInvertedIndex,
 
