@@ -1,5 +1,5 @@
 use crate::core::{
-    ElementRead, ElementType, ElementWrite, PostingListIter, QuantizedParam, QuantizedWeight,
+    ElementRead, ElementType, PostingListIter, QuantizedParam, QuantizedWeight,
 };
 
 use super::{CompressedPostingBuilder, CompressedPostingList, CompressedPostingListIterator};

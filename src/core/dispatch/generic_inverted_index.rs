@@ -1,10 +1,9 @@
 use enum_dispatch::enum_dispatch;
-use log::error;
+use log::{debug, error, info};
 use std::path::PathBuf;
 
-use crate::core::InvertedIndexMetrics;
+use crate::core::{IndexWeightType, InvertedIndexMetrics, StorageType};
 use crate::index::IndexSettings;
-use crate::sparse_index::*;
 use crate::{
     common::errors::SparseError,
     core::{
@@ -18,7 +17,7 @@ use crate::{
 use super::{generic_posting_iterator::PostingListIteratorWrapper, GenericPostingListIterator};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum InvertedIndexWrapperType {
+pub enum InvertedIndexWrapperType {
     Simple,
     Compressed,
 }
@@ -92,7 +91,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexWrapper<OW, TW> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum GenericInvertedIndexType {
+pub enum GenericInvertedIndexType {
     F32NoQuantized,
     F32Quantized,
     F16NoQuantized,
@@ -128,9 +127,9 @@ impl GenericInvertedIndex {
         index_settings: &IndexSettings,
     ) -> crate::Result<Self> {
         match (
-            index_settings.config.storage_type,
-            index_settings.config.weight_type,
-            index_settings.config.quantized,
+            index_settings.inverted_index_config.storage_type,
+            index_settings.inverted_index_config.weight_type,
+            index_settings.inverted_index_config.quantized,
         ) {
             (StorageType::Mmap, IndexWeightType::Float32, true) => Ok(Self::F32Quantized(InvertedIndexMmap::<f32, u8>::open(index_path, segment_id)?.into())),
             (StorageType::Mmap, IndexWeightType::Float32, false) => Ok(Self::F32NoQuantized(InvertedIndexMmap::<f32, f32>::open(index_path, segment_id)?.into())),
@@ -145,7 +144,7 @@ impl GenericInvertedIndex {
             _ => {
                 let error_msg = format!(
                     "Not supported! storage_type:{:?}, weight_type:{:?}, quantized:{}",
-                    index_settings.config.storage_type, index_settings.config.weight_type, index_settings.config.quantized
+                    index_settings.inverted_index_config.storage_type, index_settings.inverted_index_config.weight_type, index_settings.inverted_index_config.quantized
                 );
                 error!("{}", error_msg);
                 panic!("{}", error_msg);
@@ -206,6 +205,7 @@ impl GenericInvertedIndex {
 
         // get first index type
         let type_id = generic_inverted_indexes.first().unwrap().type_id();
+        info!(">>>>>>>>>>> type_id:{:?}", type_id);
 
         // collect and merge
         match type_id {
@@ -221,8 +221,11 @@ impl GenericInvertedIndex {
                     })
                     .collect();
 
+                debug!(">>>>>>>>>>> after inverted index mmaps converted, size:{:?}", inverted_index_mmaps.len());
                 let merger = InvertedIndexMmapMerger::new(&inverted_index_mmaps, element_type.unwrap_or(ElementType::EXTENDED));
+                debug!(">>>>>>>>>>> got inverted index mmap merger");
                 let merged_index: InvertedIndexMmap<f32, f32> = merger.merge(&directory, segment_id)?;
+                debug!(">>>>>>>>>>> executed merge");
                 let vector_count = merged_index.meta.inverted_index_meta.vector_count;
                 let related_files = merged_index.files(segment_id);
                 return Ok((vector_count, related_files));
@@ -238,9 +241,11 @@ impl GenericInvertedIndex {
                         _ => panic!("Inconsistent index type, shouldn't happen."),
                     })
                     .collect();
-
+                debug!(">>>>>>>>>>> after inverted index mmaps converted, size:{:?}", inverted_index_mmaps.len());
                 let merger = InvertedIndexMmapMerger::new(&inverted_index_mmaps, element_type.unwrap_or(ElementType::SIMPLE));
+                debug!(">>>>>>>>>>> got inverted index mmap merger");
                 let merged_index: InvertedIndexMmap<f32, u8> = merger.merge(&directory, segment_id)?;
+                debug!(">>>>>>>>>>> executed merge");
                 let vector_count = merged_index.meta.inverted_index_meta.vector_count;
                 let related_files = merged_index.files(segment_id);
                 return Ok((vector_count, related_files));

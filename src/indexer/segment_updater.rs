@@ -97,7 +97,7 @@ fn garbage_collect_files(
 /// This function happens in the calling thread and is computationally expensive.
 fn merge(
     index: &Index,
-    mut segment_entries: Vec<SegmentEntry>,
+    segment_entries: Vec<SegmentEntry>,
 ) -> crate::Result<Option<SegmentEntry>> {
     let total_rows_count =
         segment_entries.iter().map(|segment| segment.meta().rows_count() as u64).sum::<u64>();
@@ -118,8 +118,9 @@ fn merge(
 
     let merger = IndexMerger::open(&segments[..]);
     if merger.is_err() {
-        error!("IndexMerger is error: {}", merger.err().unwrap());
-        panic!("...")
+        let error_msg = format!("Can't create IndexMerger with given segments:{:?}", segments);
+        error!("{}", error_msg);
+        panic!("{}", error_msg);
     }
     info!(
         "[start_merge][merge] collect old segments, size: {:?}, will call IndexMerger -> merge",
@@ -127,7 +128,7 @@ fn merge(
     );
 
     let (rows_count, index_files) =
-        merger.unwrap().merge(merged_segment.index().directory().get_path(), Some(&segment_id))?;
+        merger.unwrap().merge(merged_segment.index().directory().get_path().unwrap(), Some(&segment_id))?;
 
     let merged_segment = merged_segment.clone().with_rows_count(rows_count as RowId);
 

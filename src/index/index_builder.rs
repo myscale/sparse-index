@@ -7,11 +7,10 @@ use crate::common::errors::SparseError;
 use crate::common::executor::Executor;
 use crate::directory::managed_directory::ManagedDirectory;
 use crate::directory::mmap_directory::MmapDirectory;
-use crate::directory::ram_directory::RamDirectory;
 use crate::directory::Directory;
 use crate::indexer::segment_updater::save_metas;
 // use crate::indexer::single_segment_index_writer::SingleSegmentIndexWriter;
-use crate::sparse_index::StorageType;
+use crate::core::StorageType;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -36,15 +35,16 @@ impl IndexBuilder {
 
     /// not fully tested.
     pub fn create_in_ram(self) -> Result<Index, SparseError> {
-        debug_assert_eq!(self.index_settings.config.storage_type, StorageType::Ram);
+        return Err(SparseError::Error("Currently ram mode is not supported!".to_string()));
+        // debug_assert_eq!(self.index_settings.inverted_index_config.storage_type, StorageType::Ram);
 
-        let ram_directory = RamDirectory::create();
-        self.create(ram_directory)
+        // let ram_directory = RamDirectory::create();
+        // self.create(ram_directory)
     }
 
     /// Create mmap index in given directory.
     pub fn create_in_dir<P: AsRef<Path>>(self, directory_path: P) -> crate::Result<Index> {
-        debug_assert_ne!(self.index_settings.config.storage_type, StorageType::Ram);
+        debug_assert_ne!(self.index_settings.inverted_index_config.storage_type, StorageType::Ram);
 
         let mmap_directory: Box<dyn Directory> = Box::new(MmapDirectory::open(directory_path)?);
         if Index::exists(&*mmap_directory)? {
@@ -69,7 +69,7 @@ impl IndexBuilder {
 
     /// When [`Index`] is destroyed, the `tempdir` will be removed.
     pub fn create_from_tempdir(self) -> crate::Result<Index> {
-        debug_assert_eq!(self.index_settings.config.storage_type, StorageType::Mmap);
+        debug_assert_eq!(self.index_settings.inverted_index_config.storage_type, StorageType::Mmap);
         let mmap_directory: Box<dyn Directory> = Box::new(MmapDirectory::create_from_tempdir()?);
         self.create(mmap_directory)
     }
@@ -78,7 +78,9 @@ impl IndexBuilder {
     pub(super) fn create<T: Into<Box<dyn Directory>>>(self, dir: T) -> crate::Result<Index> {
         let directory: Box<dyn Directory> = dir.into();
         let managed_directory: ManagedDirectory = ManagedDirectory::wrap(directory)?;
-
+        // persist index settings.
+        let _ = self.index_settings.save(&managed_directory.get_path().unwrap())?;
+        // save index metas.
         save_metas(&IndexMeta::default(), &managed_directory)?;
         managed_directory.sync_directory()?;
 

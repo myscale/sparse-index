@@ -10,7 +10,7 @@ use super::cxx_converter_strategy::{
 pub static CXX_STRING_CONVERTER: Lazy<Converter<CxxString, String, CxxElementStrategy>> =
     Lazy::new(|| Converter::new(CxxElementStrategy));
 
-/// Convert 'CxxVector<CxxString>' to 'Vec<String>'
+// Convert 'CxxVector<CxxString>' to 'Vec<String>'
 pub static CXX_VECTOR_STRING_CONVERTER: Lazy<
     Converter<CxxVector<CxxString>, Vec<String>, CxxVectorStringStrategy>,
 > = Lazy::new(|| Converter::new(CxxVectorStringStrategy));

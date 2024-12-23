@@ -2,18 +2,13 @@ use std::{fmt, io};
 use std::{path::PathBuf, str::Utf8Error, sync::Arc};
 use thiserror::Error;
 
-use crate::core::PostingListError;
-use crate::directory::error;
+use crate::core::{InvertedIndexError, PostingListError};
 use crate::{
     core::FileOperationError,
     directory::error::{
         Incompatibility, LockError, OpenDirectoryError, OpenReadError, OpenWriteError,
     },
 };
-
-use super::version::Version;
-
-pub const PROCESS_CANCELLED_BY_SERVICE_MESSAGE: &str = "process cancelled by service";
 
 #[derive(Debug, Error)]
 pub enum SparseIndexLibError {
@@ -206,6 +201,9 @@ pub enum SparseError {
 
     #[error("'{0:?}'")]
     PostingListError(#[from] PostingListError),
+
+    #[error("'{0:?}'")]
+    InvertedIndexError(#[from] InvertedIndexError),
 }
 
 impl From<io::Error> for SparseError {

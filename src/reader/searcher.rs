@@ -5,7 +5,7 @@ use std::{fmt, io};
 use census::TrackedObject;
 
 use crate::common::executor::Executor;
-use crate::core::{SparseRowContent, SparseVector, TopK};
+use crate::core::{SparseBitmap, SparseRowContent, SparseVector, TopK};
 use crate::ffi::ScoredPointOffset;
 use crate::index::{Index, SegmentId, SegmentReader};
 use crate::{Opstamp, RowId};
@@ -70,22 +70,23 @@ pub struct Searcher {
 }
 
 impl Searcher {
-    /// 返回 Searcher 使用的 index
+    /// Current [`Searcher`] bounded InvertedIndex.
     pub fn index(&self) -> &Index {
         &self.inner.index
     }
 
-    /// 返回当前 [`Searcher`] 对 [`SearcherGeneration`] 的引用, 即标识当前 Searcher 持有的快照 snapshot 版本
+    /// The current [`Searcher`] references a [`SearcherGeneration`], meaning that the
+    /// [`Searcher`] holds a snapshot of the current version.
     pub fn generation(&self) -> &SearcherGeneration {
         self.inner.generation.as_ref()
     }
 
-    /// TODO 从索引中获取 row_id 对应的 RowContent 内容
+    /// TODO: Get row content from sparse index.
     pub fn row_content(&self, row_id: RowId) -> crate::Result<SparseRowContent> {
-        todo!()
+        Err(crate::common::errors::SparseError::Error(format!("Not supported yet. Can't load:{}", row_id)))
     }
 
-    /// 返回 Index 存储数据的行数
+    /// Return rows count in current sparse index.
     pub fn num_rows(&self) -> u64 {
         self.inner
             .segment_readers
@@ -94,42 +95,44 @@ impl Searcher {
             .sum::<u64>()
     }
 
-    /// 返回当前 `Searcher` 使用的所有 [`SegmentReader`]
+    /// Return all [`SegmentReader`] hold by current [`Searcher`]
     pub fn segment_readers(&self) -> &[SegmentReader] {
         &self.inner.segment_readers
     }
 
-    /// 提供 segment idx, 返回对应的 `SegmentReader`
+    /// Get [`SegmentReader`] with given `segment idx`.
     pub fn segment_reader(&self, segment_ord: u32) -> &SegmentReader {
         &self.inner.segment_readers[segment_ord as usize]
     }
 
-    /// 执行暴力搜索
+    /// brute force search.
     ///
-    /// - `sparse_vector`: 提供的用来 query 的 sparse_vector
-    /// - `limits`: 搜索结果候选数量
+    /// - `sparse_vector`: sparse_vector used to search.
+    /// - `limits`: search results count limit.
     ///
-    /// TODO 后续可以考虑将返回值和 ffi 内部的数据结构进行分离，减少依赖
+    /// TODO: Refine return value type, split with definition in lib.rs.
     pub fn plain_search(
         &self,
-        sparse_vector: SparseVector,
+        sparse_vector: &SparseVector,
+        sparse_bitmap: &Option<SparseBitmap>,
         limits: u32,
     ) -> crate::Result<Vec<ScoredPointOffset>> {
         let executor = self.inner.index.search_executor();
-        self.search_with_executor(sparse_vector, limits, executor, true)
+        self.search_with_executor(sparse_vector, sparse_bitmap, limits, executor, true)
     }
 
-    /// 执行优化的搜索
+    /// search with cutting.
     ///
-    /// - `sparse_vector`: 提供的用来 query 的 sparse_vector
-    /// - `limits`: 搜索结果候选数量
+    /// - `sparse_vector`: sparse_vector used to search.
+    /// - `limits`: search results count limit.
     pub fn search(
         &self,
-        sparse_vector: SparseVector,
+        sparse_vector: &SparseVector,
+        sparse_bitmap: &Option<SparseBitmap>,
         limits: u32,
     ) -> crate::Result<Vec<ScoredPointOffset>> {
         let executor = self.inner.index.search_executor();
-        self.search_with_executor(sparse_vector, limits, executor, false)
+        self.search_with_executor(sparse_vector, sparse_bitmap, limits, executor, false)
     }
 
     /// Same as [`search(...)`](Searcher::search) but multithreaded.
@@ -146,7 +149,8 @@ impl Searcher {
     /// hurt it. It will however, decrease the average response time.
     pub fn search_with_executor(
         &self,
-        sparse_vector: SparseVector,
+        sparse_vector: &SparseVector,
+        sparse_bitmap: &Option<SparseBitmap>,
         limits: u32,
         executor: &Executor,
         brute_force: bool,
@@ -155,9 +159,9 @@ impl Searcher {
         let results: Vec<TopK> = executor.map(
             |seg_reader| {
                 if brute_force {
-                    seg_reader.brute_force_search(sparse_vector.clone(), limits)
+                    seg_reader.brute_force_search(sparse_vector, sparse_bitmap, limits)
                 } else {
-                    seg_reader.search(sparse_vector.clone(), limits)
+                    seg_reader.search(sparse_vector, sparse_bitmap, limits)
                 }
             },
             self.segment_readers().iter(),
@@ -180,7 +184,6 @@ impl From<Arc<SearcherInner>> for Searcher {
 ///
 /// It guarantees that the `Segment` will not be removed before
 /// the destruction of the `Searcher`.
-/// TODO SegmentReader 可以考虑将生命周期这些声明给丢弃掉
 pub(crate) struct SearcherInner {
     index: Index,
     segment_readers: Vec<SegmentReader>,

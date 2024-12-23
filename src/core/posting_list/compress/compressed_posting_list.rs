@@ -4,7 +4,7 @@ use crate::{
 };
 
 use super::{
-    CompressedBlockType, CompressedPostingBlock, CompressedPostingListView,
+    CompressedBlockType, CompressedPostingListView,
     ExtendedCompressedPostingBlock, SimpleCompressedPostingBlock,
 };
 
@@ -17,7 +17,6 @@ where
     pub row_ids_compressed: Vec<u8>,
 
     /// Fixed-size chunks.
-    /// 序列化的时候需要考虑到 size 的 overhead，不能够单独的以整个 Enum 去序列化
     pub simple_blocks: Vec<SimpleCompressedPostingBlock<TW>>,
     pub extended_blocks: Vec<ExtendedCompressedPostingBlock<TW>>,
 

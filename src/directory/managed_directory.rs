@@ -286,7 +286,7 @@ impl ManagedDirectory {
 }
 
 impl Directory for ManagedDirectory {
-    fn get_path(&self) -> PathBuf {
+    fn get_path(&self) -> Option<PathBuf> {
         self.directory.get_path()
     }
 

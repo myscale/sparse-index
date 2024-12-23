@@ -1,15 +1,17 @@
 use std::path::PathBuf;
 
+use log::{debug, info};
+
 use crate::{
     common::errors::SparseError,
     core::GenericInvertedIndex,
     index::{Segment, SegmentReader},
-    sparse_index::SparseIndexConfig,
+    core::InvertedIndexConfig,
 };
 
 pub struct IndexMerger {
     pub(crate) readers: Vec<SegmentReader>,
-    pub(crate) cfg: SparseIndexConfig,
+    pub(crate) index_config: InvertedIndexConfig,
 }
 
 impl IndexMerger {
@@ -33,8 +35,8 @@ impl IndexMerger {
                 "index_settings should be same in IndexMerger".to_string(),
             ));
         } else {
-            let cfg = segments[0].index().index_settings().config;
-            Ok(Self { readers: segment_readers, cfg })
+            let index_config = segments[0].index().index_settings().inverted_index_config;
+            Ok(Self { readers: segment_readers, index_config })
         }
     }
 
@@ -53,12 +55,12 @@ impl IndexMerger {
             .map(|segment_reader| segment_reader.get_inverted_index())
             .collect::<Vec<&GenericInvertedIndex>>();
 
-        // TODO 在 config 里面写入 element type
+        info!(">> try call generic_inverted_index merge, indexes size:{}", generic_inverted_indexes.len());
         GenericInvertedIndex::merge(
             generic_inverted_indexes,
             directory,
             segment_id,
-            Some(self.cfg.element_type()),
+            Some(self.index_config.element_type),
         )
     }
 }

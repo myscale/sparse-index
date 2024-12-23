@@ -166,8 +166,8 @@ impl RamDirectory {
 }
 
 impl Directory for RamDirectory {
-    fn get_path(&self) -> PathBuf {
-        PathBuf::default()
+    fn get_path(&self) -> Option<PathBuf> {
+        None
     }
 
     fn get_file_handle(&self, path: &Path) -> Result<Arc<dyn FileHandle>, OpenReadError> {

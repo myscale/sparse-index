@@ -124,8 +124,8 @@ impl CompressedMmapManager {
         return Ok(mmap);
     }
 
-    pub fn write_mmap_files<P: AsRef<Path>, TW: QuantizedWeight>(
-        directory: P,
+    pub fn write_mmap_files<TW: QuantizedWeight>(
+        directory: &PathBuf,
         segment_id: Option<&str>,
         compressed_inv_index_ram: &CompressedInvertedIndexRam<TW>,
     ) -> crate::Result<(usize, usize, usize, usize, Arc<Mmap>, Arc<Mmap>, Arc<Mmap>)> {
@@ -147,7 +147,7 @@ impl CompressedMmapManager {
 
         // 初始化 3 个文件路径.
         let (headers_mmap_file_path, row_ids_mmap_file_path, blocks_mmap_file_path) =
-            Self::get_all_files(&directory.as_ref().to_path_buf(), segment_id);
+            Self::get_all_files(directory, segment_id);
 
         // 创建 3 个 mmap 文件.
         let mut headers_mmap = Self::create_mmap_file(

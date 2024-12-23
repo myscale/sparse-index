@@ -1,8 +1,7 @@
 use super::{Segment, SegmentId};
 use crate::core::searcher::Searcher;
-use crate::core::{GenericInvertedIndex, SparseVector, TopK};
+use crate::core::{GenericInvertedIndex, SparseBitmap, SparseVector, TopK, StorageType};
 use crate::directory::Directory;
-use crate::sparse_index::StorageType;
 use crate::RowId;
 use std::fmt;
 
@@ -32,9 +31,9 @@ impl SegmentReader {
 impl SegmentReader {
     pub fn open(segment: &Segment) -> crate::Result<SegmentReader> {
         let rows_count: RowId = segment.meta().rows_count();
-        let index_path = segment.index().directory().get_path();
+        let index_path = segment.index().directory().get_path().unwrap();
 
-        assert_ne!(segment.index().index_settings.config.storage_type, StorageType::Ram);
+        assert_ne!(segment.index().index_settings.inverted_index_config.storage_type, StorageType::Ram);
 
         let inverted_index: GenericInvertedIndex = GenericInvertedIndex::open_from(
             &index_path,
@@ -49,12 +48,12 @@ impl SegmentReader {
         })
     }
 
-    pub fn search(&self, query: SparseVector, limits: u32) -> crate::Result<TopK> {
-        Ok(self.index_searcher.search(query, limits))
+    pub fn search(&self, query: &SparseVector, sparse_bitmap: &Option<SparseBitmap>, limits: u32) -> crate::Result<TopK> {
+        Ok(self.index_searcher.search(query, sparse_bitmap, limits))
     }
 
-    pub fn brute_force_search(&self, query: SparseVector, limits: u32) -> crate::Result<TopK> {
-        Ok(self.index_searcher.plain_search(query, limits))
+    pub fn brute_force_search(&self, query: &SparseVector, sparse_bitmap: &Option<SparseBitmap>, limits: u32) -> crate::Result<TopK> {
+        Ok(self.index_searcher.plain_search(query, sparse_bitmap, limits))
     }
 }
 

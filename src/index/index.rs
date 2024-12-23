@@ -6,7 +6,6 @@ use crate::directory::mmap_directory::MmapDirectory;
 use crate::directory::INDEX_WRITER_LOCK;
 use crate::indexer::index_writer::{MAX_NUM_THREAD, MEMORY_BUDGET_NUM_BYTES_MIN};
 use log::{error, info};
-use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -14,9 +13,8 @@ use std::sync::Arc;
 
 use crate::indexer::IndexWriter;
 use crate::reader::{IndexReader, IndexReaderBuilder};
-use crate::sparse_index::SparseIndexConfig;
 use crate::{directory::Directory, META_FILEPATH};
-use crate::{RowId, INDEX_CONFIG_FILEPATH};
+use crate::RowId;
 
 use super::index_meta::{IndexMeta, SegmentMetaInventory};
 use super::{IndexBuilder, IndexSettings, Segment, SegmentId, SegmentMeta};
@@ -111,7 +109,7 @@ impl Index {
     /// As long as the `SegmentMeta` exists, the files associated with it are guaranteed
     /// not to be garbage collected, regardless of whether the segment is recorded as part of the index.
     pub fn new_segment_meta(&self, segment_id: SegmentId, rows_count: RowId) -> SegmentMeta {
-        self.inventory.new_segment_meta(self.directory().get_path(), segment_id, rows_count)
+        self.inventory.new_segment_meta(self.directory().get_path().unwrap(), segment_id, rows_count)
     }
 
     /// Open a new index writer and attempt to acquire a lock file.
@@ -176,7 +174,7 @@ impl Index {
     /// Creates a new segment.
     pub fn new_segment(&self) -> Segment {
         let segment_meta = self.inventory.new_segment_meta(
-            self.directory().get_path(),
+            self.directory().get_path().unwrap(),
             SegmentId::generate_random(),
             0,
         );
@@ -269,11 +267,8 @@ impl Index {
         let inventory: SegmentMetaInventory = SegmentMetaInventory::default();
         let _metas: IndexMeta = load_metas(&directory, &inventory)?;
 
-        // Loading index configuration from disk file.
-        let _data: Vec<u8> = directory.atomic_read(&INDEX_CONFIG_FILEPATH)?;
-        let _index_config_str: Cow<'_, str> = String::from_utf8_lossy(&_data);
-        let index_config: SparseIndexConfig = serde_json::from_str(&_index_config_str)?;
-        let index_settings = IndexSettings { config: index_config };
+        // Loading index settings from disk file.
+        let index_settings = IndexSettings::load(&directory.get_path().unwrap())?;
 
         Ok(Index {
             directory,
@@ -300,7 +295,7 @@ impl Index {
         IndexReaderBuilder::new(self.clone())
     }
 
-    /// 使用 mmap 方式打开 index
+    /// Open `InvertedIndex` with mmap mode.
     pub fn open_in_dir<P: AsRef<Path>>(directory_path: P) -> crate::Result<Index> {
         let mmap_directory = MmapDirectory::open(directory_path)?;
         Index::open(mmap_directory)
@@ -318,13 +313,11 @@ mod tests {
     use std::{path::Path, time::Instant};
 
     use log::info;
-    use tempfile::TempDir;
 
     use crate::{
-        core::{ElementType, SparseRowContent, SparseVector},
-        index::{IndexBuilder, IndexSettings},
-        indexer::{index_writer, LogMergePolicy, MergePolicy, NoMergePolicy},
-        sparse_index::{IndexWeightType, SparseIndexConfig, StorageType},
+        core::{ElementType, SparseRowContent, SparseVector, IndexWeightType, InvertedIndexConfig, StorageType},
+        index:: IndexSettings,
+        indexer::LogMergePolicy,
     };
 
     use super::Index;
@@ -348,7 +341,7 @@ mod tests {
         (base * rows..base * rows + rows).map(|i| {
             // max_dim 1024 维
             let indices = (0..384).map(|j| (i + j) % 2048).collect();
-            let values = (0..384).map(|j| 0.1 + ((i + j) / 16) as f32).collect();
+            let values = (0..384).map(|j| 0.1 + ((i + j) as f32 * 0.001 / 16.0) as f32).collect();
 
             SparseRowContent { row_id: i, sparse_vector: SparseVector { indices, values } }
         })
@@ -370,25 +363,25 @@ mod tests {
         // let dir = TempDir::new().expect("error create temp dir");
         let index_directory = Path::new("/home/mochix/test/sparse_index_files/temp");
         let index_settings = IndexSettings {
-            config: SparseIndexConfig {
+            inverted_index_config: InvertedIndexConfig {
                 storage_type: StorageType::CompressedMmap,
-                weight_type: IndexWeightType::UInt8,
+                weight_type: IndexWeightType::Float16,
                 quantized: false,
-                element_type: ElementType::EXTENDED,
+                element_type: ElementType::SIMPLE,
             },
         };
         let index = Index::create_in_dir(index_directory, index_settings)
             .expect("error create index in dir");
         let mut index_writer = index.writer(1024 * 1024 * 128).expect("error create index writer");
 
-        let mut log_merge_policy = LogMergePolicy::default();
+        let log_merge_policy = LogMergePolicy::default();
         // log_merge_policy.set_max_docs_before_merge(5);
         index_writer.set_merge_policy(Box::new(log_merge_policy));
         // index_writer.set_merge_policy(Box::new(NoMergePolicy::default()));
 
         let time_begin = Instant::now();
         for base in 0..1 {
-            for row in mock_row_content(base, 1000000) {
+            for row in mock_row_content(base, 500000) {
                 let res = index_writer.add_document(row);
             }
             let commit_res = index_writer.commit();
@@ -405,7 +398,7 @@ mod tests {
 
         let searcher = index.reader().expect("error index reader").searcher();
         for row in mock_row_content(5, 100) {
-            let res = searcher.search(row.sparse_vector, 4).expect("error search");
+            let res = searcher.search(&row.sparse_vector, &None, 4).expect("error search");
             info!("RES: {:?}", res);
         }
     }

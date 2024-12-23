@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::api::clickhouse::cache::{
+use crate::api::cxx_ffi::cache::{
     IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE,
 };
 use crate::common::errors::SparseError;
@@ -9,7 +9,6 @@ use crate::error_ck;
 use crate::index::Index;
 use crate::indexer::LogMergePolicy;
 use crate::reader::{IndexReader, ReloadPolicy};
-use crate::sparse_index::SparseIndexConfig;
 
 const MEMORY_64MB: usize = 1024 * 1024 * 64;
 const BUILD_THREADS: usize = 4;
@@ -49,15 +48,6 @@ impl IndexManager {
         Ok(())
     }
 
-    pub(crate) fn persist_index_params(
-        index_path: &str,
-        index_json_parameter: &str,
-    ) -> crate::Result<SparseIndexConfig> {
-        let config: SparseIndexConfig = serde_json::from_str(&index_json_parameter)?;
-        let _ = config.save(Path::new(&index_path))?;
-        Ok(config)
-    }
-
     pub(crate) fn create_writer(
         index: &Index,
         index_path: &str,
@@ -68,7 +58,7 @@ impl IndexManager {
             SparseError::Error(error_info)
         })?;
 
-        let mut merge_policy = LogMergePolicy::default();
+        let merge_policy = LogMergePolicy::default();
         // merge_policy.set_min_num_segments(5);
         writer.set_merge_policy(Box::new(merge_policy));
 

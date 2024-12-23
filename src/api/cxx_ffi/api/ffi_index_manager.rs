@@ -1,6 +1,6 @@
-use crate::api::clickhouse::converter::CXX_STRING_CONVERTER;
-use crate::api::clickhouse::utils::{ApiUtils, IndexManager};
-use crate::api::clickhouse::{
+use crate::api::cxx_ffi::converter::CXX_STRING_CONVERTER;
+use crate::api::cxx_ffi::utils::{ApiUtils, IndexManager};
+use crate::api::cxx_ffi::{
     ffi_commit_index_impl, ffi_create_index_with_parameter_impl, ffi_free_index_writer_impl,
     ffi_insert_sparse_vector_impl,
 };

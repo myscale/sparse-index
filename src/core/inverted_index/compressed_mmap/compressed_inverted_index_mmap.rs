@@ -53,7 +53,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapInit<OW, TW>
     ) -> crate::Result<Self> {
         let compressed_inverted_index_ram: CompressedInvertedIndexRam<TW> =
             CompressedInvertedIndexRam::from_ram_index(ram_index, path.clone(), segment_id)?;
-        Self::convert_and_save(&compressed_inverted_index_ram, path, segment_id)
+        Self::convert_and_save(&compressed_inverted_index_ram, &path, segment_id)
     }
 }
 
@@ -205,7 +205,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
     /// Store inverted-index-ram into mmap files.
     pub fn convert_and_save(
         compressed_inv_index_ram: &CompressedInvertedIndexRam<TW>,
-        directory: PathBuf,
+        directory: &PathBuf,
         segment_id: Option<&str>,
     ) -> crate::Result<Self> {
         let (
@@ -217,7 +217,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
             row_ids_mmap,
             blocks_mmap,
         ) = CompressedMmapManager::write_mmap_files(
-            directory.clone(),
+            directory,
             segment_id,
             compressed_inv_index_ram,
         )?;
@@ -230,18 +230,17 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
         );
 
         let meta: CompressedMmapInvertedIndexMeta = CompressedMmapInvertedIndexMeta {
-            inverted_index_meta: InvertedIndexMeta {
-                posting_count: compressed_inv_index_ram.size(),
-                vector_count: compressed_inv_index_ram.metrics().vector_count,
-                min_row_id: compressed_inv_index_ram.metrics().min_row_id,
-                max_row_id: compressed_inv_index_ram.metrics().max_row_id,
-                min_dim_id: compressed_inv_index_ram.metrics().min_dim_id,
-                max_dim_id: compressed_inv_index_ram.metrics().max_dim_id,
-                quantized: (TW::weight_type() == WeightType::WeightU8)
-                    && (OW::weight_type() != TW::weight_type()),
-                version: Version::compressed_mmap(Revision::V1),
-                element_type: todo!(),
-            },
+            inverted_index_meta: InvertedIndexMeta::new(
+                compressed_inv_index_ram.size(),
+                compressed_inv_index_ram.metrics().vector_count,
+                compressed_inv_index_ram.metrics().min_row_id,
+                compressed_inv_index_ram.metrics().max_row_id,
+                compressed_inv_index_ram.metrics().min_dim_id,
+                compressed_inv_index_ram.metrics().max_dim_id,
+                (TW::weight_type() == WeightType::WeightU8) && (OW::weight_type() != TW::weight_type()),
+                compressed_inv_index_ram.element_type(),
+                Version::compressed_mmap(Revision::V1),
+            ),
             row_ids_storage_size: total_row_ids_storage_size as u64,
             headers_storage_size: total_headers_storage_size as u64,
             blocks_storage_size: total_blocks_storage_size as u64,

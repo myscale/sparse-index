@@ -7,9 +7,9 @@ use crate::core::posting_list::PostingListIterator;
 use crate::core::{
     ElementSlice, GenericElementSlice, InvertedIndexMmapAccess, InvertedIndexMmapInit,
     InvertedIndexRam, InvertedIndexRamAccess, PostingListIterAccess, QuantizedParam,
-    QuantizedWeight, SimpleElement, WeightType,
+    QuantizedWeight, WeightType,
 };
-use log::{error, warn};
+use log::error;
 use memmap2::Mmap;
 use std::borrow::Cow;
 use std::marker::PhantomData;
@@ -100,7 +100,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
     ) -> Option<(GenericElementSlice<'_, TW>, Option<QuantizedParam>)> {
         // check that the id is not out of bounds (posting_count includes the empty zeroth entry)
         if *dim_id >= self.size() as DimId {
-            error!("dim_id is overflow, dim_id should smaller than {}", self.size());
+            error!("dim_id is overflow, dim_id should smaller than {}, but given: {}", self.size(), dim_id);
             return None;
         }
         // loading header obj with offsets.
@@ -132,18 +132,17 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
         let meta_file_path = MmapManager::get_index_meta_file_path(&directory.clone(), segment_id);
 
         let meta = MmapInvertedIndexMeta {
-            inverted_index_meta: InvertedIndexMeta {
-                posting_count: inverted_index_ram.size(),
-                vector_count: inverted_index_ram.metrics().vector_count,
-                min_row_id: inverted_index_ram.metrics().min_row_id,
-                max_row_id: inverted_index_ram.metrics().max_row_id,
-                min_dim_id: inverted_index_ram.metrics().min_dim_id,
-                max_dim_id: inverted_index_ram.metrics().max_dim_id,
-                quantized: (TW::weight_type() == WeightType::WeightU8)
-                    && (OW::weight_type() != TW::weight_type()),
-                version: Version::mmap(Revision::V1),
-                element_type: inverted_index_ram.element_type(),
-            },
+            inverted_index_meta: InvertedIndexMeta::new(
+                inverted_index_ram.size(),
+                inverted_index_ram.metrics().vector_count,
+                inverted_index_ram.metrics().min_row_id,
+                inverted_index_ram.metrics().max_row_id,
+                inverted_index_ram.metrics().min_dim_id,
+                inverted_index_ram.metrics().max_dim_id,
+                (TW::weight_type() == WeightType::WeightU8) && (OW::weight_type() != TW::weight_type()),
+                inverted_index_ram.element_type(),
+                Version::mmap(Revision::V1),
+            ),
             headers_storage_size: total_headers_storage_size as u64,
             postings_storage_size: total_postings_storage_size as u64,
         };

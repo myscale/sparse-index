@@ -2,12 +2,9 @@ use std::{borrow::Cow, path::PathBuf};
 
 use log::error;
 
-use crate::{
-    core::{
-        CompressedInvertedIndexMmap, InvertedIndexMmap, InvertedIndexMmapAccess,
-        InvertedIndexMmapInit, InvertedIndexRam,
-    },
-    sparse_index::{IndexWeightType, StorageType},
+use crate::core::{
+    CompressedInvertedIndexMmap, InvertedIndexMmap, InvertedIndexMmapAccess,
+    InvertedIndexMmapInit, InvertedIndexRam,IndexWeightType, StorageType
 };
 
 pub enum GenericInvertedIndexRam {

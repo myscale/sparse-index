@@ -1,5 +1,5 @@
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
@@ -20,7 +20,7 @@ use crate::indexer::index_writer_status::IndexWriterStatus;
 use crate::indexer::stamper::Stamper;
 use crate::indexer::{MergePolicy, SegmentEntry, SegmentWriter};
 
-use crate::sparse_index::StorageType;
+use crate::core::StorageType;
 use crate::Opstamp;
 
 /// Used to set the boundary size for the memory arena;
@@ -88,7 +88,7 @@ fn index_documents(
     segment_updater: &SegmentUpdater,
 ) -> crate::Result<()> {
     debug!("{} [index documents] enter", thread::current().name().unwrap_or_default());
-    let mmap_type: StorageType = index_settings.config.storage_type;
+    let mmap_type: StorageType = index_settings.inverted_index_config.storage_type;
     assert_ne!(mmap_type, StorageType::Ram);
 
     let mut segment_writer = SegmentWriter::for_segment(memory_budget, segment.clone())?;

@@ -1,1 +1,1 @@
-pub mod clickhouse;
+pub mod cxx_ffi;

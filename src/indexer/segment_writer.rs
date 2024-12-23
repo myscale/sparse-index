@@ -5,7 +5,7 @@ use super::operation::AddOperation;
 use crate::core::GenericInvertedIndexRamBuilder;
 use crate::directory::Directory;
 use crate::index::Segment;
-use crate::sparse_index::SparseIndexConfig;
+use crate::core::InvertedIndexConfig;
 use crate::RowId;
 use log::debug;
 
@@ -14,19 +14,19 @@ pub struct SegmentWriter {
     pub(crate) memory_budget_in_bytes: usize,
     pub(crate) segment: Segment,
     pub(crate) index_ram_builder: GenericInvertedIndexRamBuilder,
-    pub(crate) cfg: SparseIndexConfig,
+    pub(crate) index_config: InvertedIndexConfig,
 }
 
 impl SegmentWriter {
     pub fn for_segment(memory_budget_in_bytes: usize, segment: Segment) -> crate::Result<Self> {
-        let cfg = &segment.index().index_settings().config;
-        let index_ram_builder = GenericInvertedIndexRamBuilder::new(cfg.weight_type, cfg.quantized);
+        let index_config = &segment.index().index_settings().inverted_index_config;
+        let index_ram_builder = GenericInvertedIndexRamBuilder::new(index_config.weight_type, index_config.quantized, index_config.element_type());
         Ok(Self {
             num_rows_count: 0,
             memory_budget_in_bytes,
             segment,
             index_ram_builder,
-            cfg: *cfg,
+            index_config: *index_config,
         })
     }
 
@@ -38,12 +38,12 @@ impl SegmentWriter {
             self.num_rows_count
         );
 
-        let directory = self.segment.index().directory().get_path();
+        let directory = self.segment.index().directory().get_path().unwrap();
         let segment_id = self.segment.id().uuid_string();
         self.index_ram_builder.build_and_flush(
-            self.cfg.storage_type,
-            self.cfg.weight_type,
-            self.cfg.quantized,
+            self.index_config.storage_type,
+            self.index_config.weight_type,
+            self.index_config.quantized,
             &directory,
             Some(&segment_id),
         )

@@ -354,8 +354,8 @@ pub(crate) fn atomic_write(path: &Path, content: &[u8]) -> io::Result<()> {
 }
 
 impl Directory for MmapDirectory {
-    fn get_path(&self) -> PathBuf {
-        self.inner.root_path.clone()
+    fn get_path(&self) -> Option<PathBuf> {
+        Some(self.inner.root_path.clone())
     }
 
     /// Obtain the memory mapping for the specified path from the mmap cache.

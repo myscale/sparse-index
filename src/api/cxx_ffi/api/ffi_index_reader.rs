@@ -1,10 +1,10 @@
-use crate::api::clickhouse::converter::cxx_vector_converter;
-use crate::api::clickhouse::{
+use crate::api::cxx_ffi::converter::cxx_vector_converter;
+use crate::api::cxx_ffi::{
     ffi_free_index_reader_impl, ffi_load_index_reader_impl, ffi_sparse_search_impl,
 };
-use crate::core::SparseVector;
+use crate::core::{SparseBitmap, SparseVector};
 use crate::{
-    api::clickhouse::{converter::CXX_STRING_CONVERTER, utils::ApiUtils},
+    api::cxx_ffi::{converter::CXX_STRING_CONVERTER, utils::ApiUtils},
     ffi::{FFIBoolResult, FFIError, FFIScoreResult, TupleElement},
 };
 use cxx::{CxxString, CxxVector};
@@ -48,6 +48,7 @@ pub fn ffi_sparse_search(
     index_path: &CxxString,
     sparse_vector: &Vec<TupleElement>,
     filter: &CxxVector<u8>,
+    enable_filter: bool,
     top_k: u32,
 ) -> FFIScoreResult {
     static FUNC_NAME: &str = "ffi_sparse_search";
@@ -71,10 +72,15 @@ pub fn ffi_sparse_search(
         }
     };
 
+    let sparse_bitmap = match enable_filter {
+        true => Some(SparseBitmap::from(u8_alive_bitmap)),
+        false => None,
+    };
+
     // convert `sparse_vector`
     let sparse_vector: SparseVector = sparse_vector.clone().try_into().unwrap();
 
-    let scores = match ffi_sparse_search_impl(&index_path, &sparse_vector, &u8_alive_bitmap, top_k)
+    let scores = match ffi_sparse_search_impl(&index_path, &sparse_vector, &sparse_bitmap, top_k)
     {
         Ok(res) => res,
         Err(error) => {

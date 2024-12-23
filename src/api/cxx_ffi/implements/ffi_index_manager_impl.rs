@@ -1,7 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use crate::{
-    api::clickhouse::{cache::FFI_INDEX_WRITER_CACHE, utils::IndexManager},
+    api::cxx_ffi::{cache::FFI_INDEX_WRITER_CACHE, utils::IndexManager},
     core::{SparseRowContent, SparseVector},
     index::{Index, IndexSettings},
     RowId,
@@ -14,12 +14,12 @@ pub fn ffi_create_index_with_parameter_impl(
 ) -> crate::Result<bool> {
     let _ = IndexManager::prepare_directory(&index_path)?;
 
-    // TODO: Put into SparseIndex's inner logic.
-    let sparse_index_config =
-        IndexManager::persist_index_params(&index_path, &index_json_parameter)?;
-
-    // TODO: parse json_parameter and generate IndexSettings.
-    let index = Index::create_in_dir(Path::new(index_path), IndexSettings::default())?;
+    // Parse json_parameter into `IndexSettings` and check it's valid.
+    let index_settings: IndexSettings = serde_json::from_str(&index_json_parameter)?;
+    let _ = index_settings.inverted_index_config.is_valid()?;
+    
+    // Create Index.
+    let index = Index::create_in_dir(Path::new(index_path), index_settings)?;
 
     let bridge = IndexManager::create_writer(&index, &index_path)?;
 

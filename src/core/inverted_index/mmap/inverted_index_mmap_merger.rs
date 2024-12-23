@@ -6,11 +6,13 @@ use std::{
     sync::Arc,
 };
 
+use log::debug;
+
 use crate::{
     core::{
         atomic_save_json,
         inverted_index::common::{InvertedIndexMeta, Revision, Version},
-        madvise, transmute_to_u8, transmute_to_u8_slice, DimId, ElementRead, ElementSlice,
+        madvise, transmute_to_u8, transmute_to_u8_slice, DimId, ElementSlice,
         ElementType, ExtendedElement, GenericElement, GenericElementSlice, InvertedIndexMmapAccess,
         PostingListHeader, PostingListMerger, QuantizedParam, QuantizedWeight, WeightType,
         POSTING_HEADER_SIZE,
@@ -35,8 +37,9 @@ fn unquantize_posting<'a, OW: QuantizedWeight, TW: QuantizedWeight>(
         assert!(OW::weight_type() == TW::weight_type());
     } else {
         assert_eq!(TW::weight_type(), WeightType::WeightU8);
-        assert_eq!(OW::weight_type(), TW::weight_type());
+        assert_ne!(OW::weight_type(), TW::weight_type());
     }
+    debug!(">>>>>>>>>>>|| after boundary");
 
     let mut unquantized_posting = vec![];
     for quantized_element in quantized_posting.generic_iter() {
@@ -57,12 +60,16 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
         let mut unquantized_postings: Vec<Vec<GenericElement<OW>>> = vec![];
 
         for mmap_index in self.inverted_index_mmaps {
+            debug!(">>>>>>>>>>>|| try call `posting_with_param` with dim:{}", dim_id);
             let (posting, quantized_param) = mmap_index.posting_with_param(&dim_id).unwrap_or(
                 (GenericElementSlice::empty_slice(self.element_type), None), // 这里的 None 只起到一个填充的作用，不需要考虑 Default
             );
+            debug!(">>>>>>>>>>>|| execute unquantize for dim:{} with param:{:?}", dim_id, quantized_param.clone());
 
             // TW means actually storage type, it needs reduction to OW.
             let unquantized_posting = unquantize_posting::<OW, TW>(posting, quantized_param);
+            debug!(">>>>>>>>>>>|| finish execute unquantize for dim:{} with param:{:?}", dim_id, quantized_param.clone());
+
             unquantized_postings.push(unquantized_posting);
         }
 
@@ -92,6 +99,9 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
             total_postings_storage_size += inverted_index.meta.postings_storage_size;
             total_vector_counts += metrics.vector_count;
         }
+
+        debug!(">>>>>>>>>>> prepare merge");
+
         let total_headers_storage_size =
             (max_dim_id - min_dim_id + 1) as u64 * POSTING_HEADER_SIZE as u64;
 
@@ -113,10 +123,13 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
         let mut current_element_offset = 0;
         for dim_id in min_dim_id..(max_dim_id + 1) {
             // Merging all postings in current dim-id
+            debug!(">>>>>>>>>>> try get unquantized postings with dim:{}", dim_id);
             let postings = self.get_unquantized_postings_with_dim(dim_id);
 
+            debug!(">>>>>>>>>>> before merged for dim:{}", dim_id);
             let (merged_posting, quantized_param) =
                 PostingListMerger::merge_posting_lists::<OW, TW>(&postings, self.element_type)?;
+            debug!(">>>>>>>>>>> after merged for dim:{}, param:{:?}", dim_id, quantized_param.clone());
 
             // Step 1: Generate header
             let header_obj = PostingListHeader {
@@ -135,7 +148,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
 
             // Step 2: Generate posting
             // TODO 优化这个序列化存储的逻辑
-            let merged_posting_elements_bytes = transmute_to_u8_slice(&merged_posting.elements);
+            // let merged_posting_elements_bytes = transmute_to_u8_slice(&merged_posting.elements);
             match self.element_type {
                 ElementType::SIMPLE => {
                     let simple_els = merged_posting
@@ -145,7 +158,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
                         .collect::<Vec<_>>();
                     let posting_elements_bytes = transmute_to_u8_slice(&simple_els);
                     postings_mmap[current_element_offset
-                        ..(current_element_offset + merged_posting_elements_bytes.len())]
+                        ..(current_element_offset + posting_elements_bytes.len())]
                         .copy_from_slice(posting_elements_bytes);
                     // increase offsets.
                     current_element_offset += posting_elements_bytes.len();
@@ -158,7 +171,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
                         .collect::<Vec<_>>();
                     let posting_elements_bytes = transmute_to_u8_slice(&elements);
                     postings_mmap[current_element_offset
-                        ..(current_element_offset + merged_posting_elements_bytes.len())]
+                        ..(current_element_offset + posting_elements_bytes.len())]
                         .copy_from_slice(posting_elements_bytes);
                     // increase offsets.
                     current_element_offset += posting_elements_bytes.len();

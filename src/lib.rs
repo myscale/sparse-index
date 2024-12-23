@@ -7,7 +7,6 @@ mod index;
 mod indexer;
 mod macros;
 mod reader;
-mod sparse_index;
 
 use common::errors::SparseError;
 use once_cell::sync::Lazy;
@@ -15,7 +14,7 @@ use ordered_float::OrderedFloat;
 use std::cmp::Ordering;
 use std::path::Path;
 
-use crate::api::clickhouse::*;
+use crate::api::cxx_ffi::*;
 use crate::ffi::ScoredPointOffset;
 
 pub type SparseVectorId = u32;
@@ -27,9 +26,6 @@ pub type Result<T> = std::result::Result<T, SparseError>;
 /// The meta file contains all the information about the list of segments and the schema
 /// of the index.
 pub static META_FILEPATH: Lazy<&'static Path> = Lazy::new(|| Path::new("meta.json"));
-
-pub static INDEX_CONFIG_FILEPATH: Lazy<&'static Path> =
-    Lazy::new(|| Path::new("sparse_index_config.json"));
 
 /// The managed file contains a list of files that were created by the tantivy
 /// and will therefore be garbage collected when they are deemed useless by tantivy.
@@ -43,7 +39,7 @@ pub const INDEX_FORMAT_VERSION: u32 = 6;
 pub const INDEX_FORMAT_OLDEST_SUPPORTED_VERSION: u32 = 4;
 
 // re-export log ffi function.
-pub use api::clickhouse::{
+pub use api::cxx_ffi::{
     sparse_index_log4rs_initialize, sparse_index_log4rs_initialize_with_callback,
 };
 
@@ -122,6 +118,7 @@ pub mod ffi {
             index_path: &CxxString,
             sparse_vector: &Vec<TupleElement>,
             filter: &CxxVector<u8>,
+            enable_filter: bool,
             top_k: u32,
         ) -> FFIScoreResult;
     }

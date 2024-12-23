@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use crate::{
-    api::clickhouse::{
+    api::cxx_ffi::{
         cache::{IndexReaderBridge, FFI_INDEX_SEARCHER_CACHE},
         utils::IndexManager,
     },
-    core::SparseVector,
+    core::{SparseBitmap, SparseVector},
     ffi::ScoredPointOffset,
     reader::searcher::Searcher,
 };
@@ -24,7 +24,7 @@ pub fn ffi_free_index_reader_impl(index_path: &str) -> crate::Result<()> {
 pub fn ffi_sparse_search_impl(
     index_path: &str,
     sparse_vector: &SparseVector,
-    filter: &Vec<u8>,
+    sparse_bitmap: &Option<SparseBitmap>,
     top_k: u32,
 ) -> crate::Result<Vec<ScoredPointOffset>> {
     let reader_bridge: Arc<IndexReaderBridge> =
@@ -32,6 +32,6 @@ pub fn ffi_sparse_search_impl(
     let searcher: Searcher = reader_bridge.reader.searcher();
 
     let res: Vec<ScoredPointOffset> =
-        searcher.search(sparse_vector.clone().try_into().unwrap(), top_k)?;
+        searcher.search(sparse_vector, sparse_bitmap, top_k)?;
     Ok(res)
 }

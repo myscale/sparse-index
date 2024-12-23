@@ -78,7 +78,7 @@ impl PostingListMerger {
 
             // Processing the PostingList (this PostingList contains min_row_id)
             if let Some(posting_idx) = min_row_id_posting_idx {
-                let mut element = lists[posting_idx][cursors[posting_idx]].clone();
+                let element = lists[posting_idx][cursors[posting_idx]].clone();
                 // Boundary
                 if element.element_type() != ElementType::SIMPLE {
                     let error_msg = "During merging process, the PostingElement type can only be `ElementType::SIMPLE`";
@@ -97,7 +97,7 @@ impl PostingListMerger {
                         None => max_weight = Some(element.weight()),
                     }
                 }
-                // 步进 cursor
+                // increase cursor
                 cursors[posting_idx] += 1;
                 merged_count += 1;
             }
@@ -186,7 +186,6 @@ impl PostingListMerger {
         match element_type {
             ElementType::SIMPLE => Self::merge_simple_postings(lists),
             ElementType::EXTENDED => Self::merge_extended_postings(lists),
-            _ => panic!("Not supported element type for merge!"),
         }
     }
 }

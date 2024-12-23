@@ -2,8 +2,7 @@ use enum_dispatch::enum_dispatch;
 use log::error;
 
 use crate::core::{
-    CompressedPostingListIterator, ElementRead, GenericElement, PostingListIter,
-    PostingListIterator, QuantizedWeight, TopK,
+    CompressedPostingListIterator, ElementRead, GenericElement, PostingListIter, PostingListIterator, QuantizedWeight, SparseBitmap, TopK
 };
 use crate::ffi::ScoredPointOffset;
 use crate::RowId;
@@ -56,18 +55,30 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIteratorWrapper<'a
     }
 
     #[rustfmt::skip]
-    fn full_compute(&mut self, end_row_id: RowId, query_dim_weight: f32, top_k: &mut TopK) {
+    fn full_compute(&mut self, end_row_id: RowId, query_dim_weight: f32, alive_bitmap: &Option<SparseBitmap>, top_k: &mut TopK) {
         match self {
             PostingListIteratorWrapper::SimplePostingListIterator(e) => {
                 e.for_each_till_row_id(end_row_id, |generic_element|{
-                    let score: f32 = OW::to_f32(generic_element.weight()) * query_dim_weight;
-                    top_k.push(ScoredPointOffset{ row_id: generic_element.row_id(), score });
+                    let mut is_alive = true;
+                    if let Some(bitmap) = alive_bitmap {
+                        is_alive = bitmap.is_alive(generic_element.row_id());
+                    }
+                    if is_alive {
+                        let score: f32 = OW::to_f32(generic_element.weight()) * query_dim_weight;
+                        top_k.push(ScoredPointOffset{ row_id: generic_element.row_id(), score });
+                    }
                 });
             },
             PostingListIteratorWrapper::CompressedPostingListIterator(e) => {
                 e.for_each_till_row_id(end_row_id, |generic_element|{
-                    let score: f32 = OW::to_f32(generic_element.weight()) * query_dim_weight;
-                    top_k.push(ScoredPointOffset{ row_id: generic_element.row_id(), score });
+                    let mut is_alive = true;
+                    if let Some(bitmap) = alive_bitmap {
+                        is_alive = bitmap.is_alive(generic_element.row_id());
+                    }
+                    if is_alive {
+                        let score: f32 = OW::to_f32(generic_element.weight()) * query_dim_weight;
+                        top_k.push(ScoredPointOffset{ row_id: generic_element.row_id(), score });
+                    }
                 });
             },
         }
@@ -138,13 +149,13 @@ impl<'a> GenericPostingListIterator<'a> {
     }
 
     #[rustfmt::skip]
-    pub fn full_compute(&mut self, end_row_id: RowId, query_dim_weight: f32, top_k: &mut TopK) {
+    pub fn full_compute(&mut self, end_row_id: RowId, query_dim_weight: f32, alive_bitmap: &Option<SparseBitmap>, top_k: &mut TopK) {
         match self {
-            GenericPostingListIterator::F32NoQuantized(e) => e.full_compute(end_row_id, query_dim_weight, top_k),
-            GenericPostingListIterator::F32Quantized(e) => e.full_compute(end_row_id, query_dim_weight, top_k),
-            GenericPostingListIterator::F16NoQuantized(e) => e.full_compute(end_row_id, query_dim_weight, top_k),
-            GenericPostingListIterator::F16Quantized(e) => e.full_compute(end_row_id, query_dim_weight, top_k),
-            GenericPostingListIterator::U8NoQuantized(e) => e.full_compute(end_row_id, query_dim_weight, top_k),
+            GenericPostingListIterator::F32NoQuantized(e) => e.full_compute(end_row_id, query_dim_weight, alive_bitmap, top_k),
+            GenericPostingListIterator::F32Quantized(e) => e.full_compute(end_row_id, query_dim_weight, alive_bitmap, top_k),
+            GenericPostingListIterator::F16NoQuantized(e) => e.full_compute(end_row_id, query_dim_weight, alive_bitmap, top_k),
+            GenericPostingListIterator::F16Quantized(e) => e.full_compute(end_row_id, query_dim_weight, alive_bitmap, top_k),
+            GenericPostingListIterator::U8NoQuantized(e) => e.full_compute(end_row_id, query_dim_weight, alive_bitmap, top_k),
         }
     }
 
@@ -202,17 +213,6 @@ impl<'a> GenericPostingListIterator<'a> {
             GenericPostingListIterator::U8NoQuantized(i) => i.peek().map(|e| e.type_convert::<f32>(None)),
         }
     }
-
-    #[rustfmt::skip]
-    pub fn prune_self_with_others(&mut self, min_score: f32, right_postings: &mut [GenericPostingListIterator<'a>]) -> bool {
-        match self {
-            GenericPostingListIterator::F32NoQuantized(i) => todo!(),
-            GenericPostingListIterator::F32Quantized(i) => todo!(),
-            GenericPostingListIterator::F16NoQuantized(i) => todo!(),
-            GenericPostingListIterator::F16Quantized(i) => todo!(),
-            GenericPostingListIterator::U8NoQuantized(i) => todo!(),
-        }
-    }
 }
 
 #[rustfmt::skip]
@@ -253,14 +253,9 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> From<PostingListIteratorWrapp
 
 #[cfg(test)]
 mod test {
-    use crate::core::PostingListIter;
-
-    use super::GenericPostingListIterator;
 
     #[test]
     fn test_generic() {
-        // 创建这个 Generic PostingListIter 的时候就需要给出来 OW 和 TW 这些泛型参数，否则的话就是会出问题
-        // let xx = GenericPostingListIterator::SimplePostingListIterator();
-        // let el = xx.peek();
+
     }
 }

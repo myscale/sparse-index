@@ -100,7 +100,6 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
         let generic_element: GenericElement<OW> = match self.element_type {
             ElementType::SIMPLE => SimpleElement::<OW>::new(row_id, weight).into(),
             ElementType::EXTENDED => ExtendedElement::<OW>::new(row_id, weight).into(),
-            _ => panic!("Not supported element type, this panic should not happen."),
         };
 
         if self.propagate_while_upserting {
@@ -117,7 +116,6 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
         let inner_memory_usage = match self.element_type {
             ElementType::SIMPLE => self.posting.len() * size_of::<SimpleElement<OW>>(),
             ElementType::EXTENDED => self.posting.len() * size_of::<ExtendedElement<OW>>(),
-            _ => panic!("Not supported element type, this panic should not happen."),
         };
         (actual_memory_usage, inner_memory_usage)
     }
@@ -126,8 +124,12 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingBuilder<OW, TW> 
         // boundary
         assert!(self.element_type == ElementType::EXTENDED);
 
-        if self.posting.elements.len() == 0 && self.need_quantized {
-            return Some(QuantizedParam::default());
+        if self.posting.elements.len() == 0 {
+            if self.need_quantized {
+                return Some(QuantizedParam::default());
+            } else {
+                return None;
+            }
         }
 
         let mut max_next_weight: OW = OW::from_f32(DEFAULT_MAX_NEXT_WEIGHT);

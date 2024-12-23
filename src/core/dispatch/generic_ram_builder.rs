@@ -3,12 +3,11 @@ use std::path::PathBuf;
 use log::error;
 
 use crate::{
-    core::{ElementType, InvertedIndexRamBuilder, InvertedIndexRamBuilderTrait, SparseVector},
-    sparse_index::{IndexWeightType, StorageType},
+    core::{ElementType, InvertedIndexRamBuilder, InvertedIndexRamBuilderTrait, SparseVector, IndexWeightType, StorageType},
     RowId,
 };
 
-use super::generic_ram_index::GenericInvertedIndexRam;
+use super::GenericInvertedIndexRam;
 
 pub enum GenericInvertedIndexRamBuilder {
     F32NoQuantized(InvertedIndexRamBuilder<f32, f32>),
@@ -20,13 +19,13 @@ pub enum GenericInvertedIndexRamBuilder {
 
 impl GenericInvertedIndexRamBuilder {
     #[rustfmt::skip]
-    pub fn new(weight_type: IndexWeightType, need_quantized: bool) -> Self {
+    pub fn new(weight_type: IndexWeightType, need_quantized: bool, element_type: ElementType) -> Self {
         match (weight_type, need_quantized) {
             (IndexWeightType::Float32, true) => Self::F32Quantized(InvertedIndexRamBuilder::<f32, u8>::new(ElementType::SIMPLE)),
-            (IndexWeightType::Float32, false) => Self::F32NoQuantized(InvertedIndexRamBuilder::<f32, f32>::new(ElementType::EXTENDED)),
+            (IndexWeightType::Float32, false) => Self::F32NoQuantized(InvertedIndexRamBuilder::<f32, f32>::new(element_type)),
             (IndexWeightType::Float16, true) => Self::F16Quantized(InvertedIndexRamBuilder::<half::f16, u8>::new(ElementType::SIMPLE)),
-            (IndexWeightType::Float16, false) => Self::F16NoQuantized(InvertedIndexRamBuilder::<half::f16, half::f16>::new(ElementType::EXTENDED)),
-            (IndexWeightType::UInt8, false) => Self::U8NoQuantized(InvertedIndexRamBuilder::<u8, u8>::new(ElementType::EXTENDED)),
+            (IndexWeightType::Float16, false) => Self::F16NoQuantized(InvertedIndexRamBuilder::<half::f16, half::f16>::new(element_type)),
+            (IndexWeightType::UInt8, false) => Self::U8NoQuantized(InvertedIndexRamBuilder::<u8, u8>::new(element_type)),
             (_, _) => {
                 let error_msg = format!("Invalid parameter when create GenericInvertedIndexRamBuilder, weight_type:{:?}, need_quantized:{}", weight_type, need_quantized);
                 error!("{}", error_msg);
