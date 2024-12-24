@@ -83,7 +83,10 @@ impl Searcher {
 
     /// TODO: Get row content from sparse index.
     pub fn row_content(&self, row_id: RowId) -> crate::Result<SparseRowContent> {
-        Err(crate::common::errors::SparseError::Error(format!("Not supported yet. Can't load:{}", row_id)))
+        Err(crate::common::errors::SparseError::Error(format!(
+            "Not supported yet. Can't load:{}",
+            row_id
+        )))
     }
 
     /// Return rows count in current sparse index.

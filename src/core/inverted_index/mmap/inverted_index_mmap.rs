@@ -100,7 +100,11 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
     ) -> Option<(GenericElementSlice<'_, TW>, Option<QuantizedParam>)> {
         // check that the id is not out of bounds (posting_count includes the empty zeroth entry)
         if *dim_id >= self.size() as DimId {
-            error!("dim_id is overflow, dim_id should smaller than {}, but given: {}", self.size(), dim_id);
+            error!(
+                "dim_id is overflow, dim_id should smaller than {}, but given: {}",
+                self.size(),
+                dim_id
+            );
             return None;
         }
         // loading header obj with offsets.
@@ -139,7 +143,8 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
                 inverted_index_ram.metrics().max_row_id,
                 inverted_index_ram.metrics().min_dim_id,
                 inverted_index_ram.metrics().max_dim_id,
-                (TW::weight_type() == WeightType::WeightU8) && (OW::weight_type() != TW::weight_type()),
+                (TW::weight_type() == WeightType::WeightU8)
+                    && (OW::weight_type() != TW::weight_type()),
                 inverted_index_ram.element_type(),
                 Version::mmap(Revision::V1),
             ),

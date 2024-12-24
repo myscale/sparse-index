@@ -35,7 +35,7 @@ impl PostingListMerger {
                 elements: merged
                     .elements
                     .into_iter()
-                    .map(|e| e.quantized_with_param::<TW>(quantized_param.unwrap()))
+                    .map(|e| e.quantize_with_param::<TW>(quantized_param.unwrap()))
                     .collect(),
                 element_type: ElementType::SIMPLE,
             }

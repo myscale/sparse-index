@@ -2,7 +2,7 @@ use crate::RowId;
 
 #[derive(Debug, Clone)]
 pub struct SparseBitmap {
-    alive_row_ids: Vec<u8>
+    alive_row_ids: Vec<u8>,
 }
 
 impl Default for SparseBitmap {
@@ -22,7 +22,6 @@ impl SparseBitmap {
         (byte & (1 << offset)) != 0
     }
 }
-
 
 impl From<Vec<RowId>> for SparseBitmap {
     fn from(value: Vec<RowId>) -> Self {
@@ -44,14 +43,11 @@ impl From<Vec<RowId>> for SparseBitmap {
     }
 }
 
-
-
 impl From<Vec<u8>> for SparseBitmap {
     fn from(value: Vec<u8>) -> Self {
         Self { alive_row_ids: value }
     }
 }
-
 
 impl Into<Vec<RowId>> for SparseBitmap {
     fn into(self) -> Vec<RowId> {

@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::{atomic_save_json, read_json, FileOperationError, InvertedIndexConfig};
 
-
 pub const INDEX_SETTINGS: &str = "index_settings.json";
-
 
 /// Search Index Settings.
 ///
@@ -17,13 +15,11 @@ pub struct IndexSettings {
     pub inverted_index_config: InvertedIndexConfig,
 }
 
-
 impl From<InvertedIndexConfig> for IndexSettings {
     fn from(value: InvertedIndexConfig) -> Self {
         Self { inverted_index_config: value }
     }
 }
-
 
 impl IndexSettings {
     pub fn load(index_path: &Path) -> Result<Self, FileOperationError> {
@@ -39,7 +35,6 @@ impl IndexSettings {
         Ok(atomic_save_json(&file_path, self)?)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

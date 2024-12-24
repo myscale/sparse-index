@@ -13,8 +13,8 @@ use std::sync::Arc;
 
 use crate::indexer::IndexWriter;
 use crate::reader::{IndexReader, IndexReaderBuilder};
-use crate::{directory::Directory, META_FILEPATH};
 use crate::RowId;
+use crate::{directory::Directory, META_FILEPATH};
 
 use super::index_meta::{IndexMeta, SegmentMetaInventory};
 use super::{IndexBuilder, IndexSettings, Segment, SegmentId, SegmentMeta};
@@ -109,7 +109,11 @@ impl Index {
     /// As long as the `SegmentMeta` exists, the files associated with it are guaranteed
     /// not to be garbage collected, regardless of whether the segment is recorded as part of the index.
     pub fn new_segment_meta(&self, segment_id: SegmentId, rows_count: RowId) -> SegmentMeta {
-        self.inventory.new_segment_meta(self.directory().get_path().unwrap(), segment_id, rows_count)
+        self.inventory.new_segment_meta(
+            self.directory().get_path().unwrap(),
+            segment_id,
+            rows_count,
+        )
     }
 
     /// Open a new index writer and attempt to acquire a lock file.
@@ -315,8 +319,11 @@ mod tests {
     use log::info;
 
     use crate::{
-        core::{ElementType, SparseRowContent, SparseVector, IndexWeightType, InvertedIndexConfig, StorageType},
-        index:: IndexSettings,
+        core::{
+            ElementType, IndexWeightType, InvertedIndexConfig, SparseRowContent, SparseVector,
+            StorageType,
+        },
+        index::IndexSettings,
         indexer::LogMergePolicy,
     };
 

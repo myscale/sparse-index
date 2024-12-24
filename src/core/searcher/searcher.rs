@@ -4,7 +4,8 @@ use log::trace;
 
 use crate::{
     core::{
-        dispatch::GenericInvertedIndex, DimId, DimWeight, ElementRead, ScoreType, SparseBitmap, SparseVector, TopK
+        dispatch::GenericInvertedIndex, DimId, DimWeight, ElementRead, ScoreType, SparseBitmap,
+        SparseVector, TopK,
     },
     ffi::ScoredPointOffset,
     RowId,
@@ -33,7 +34,12 @@ impl Searcher {
     }
 
     // Bind SearchEnv inner iterator's lifetime annotation into IndexSearcher Self-Object.
-    fn pre_search<'a>(&'a self, sparse_vector: &SparseVector, sparse_bitmap: &Option<SparseBitmap>, limits: u32) -> SearchEnv<'a> {
+    fn pre_search<'a>(
+        &'a self,
+        sparse_vector: &SparseVector,
+        sparse_bitmap: &Option<SparseBitmap>,
+        limits: u32,
+    ) -> SearchEnv<'a> {
         let mut postings: Vec<SearchPostingIterator<'a>> = Vec::new();
 
         // The min and max row_id indicate the range of row IDs that may be used in this query.
@@ -53,7 +59,7 @@ impl Searcher {
         }
         // TODO: if enable quantized, we will not use `max_next_weight`, that is to say we should not use pruning.
         let use_pruning =
-        sparse_vector.values.iter().all(|v| *v >= 0.0) && self.inverted_index.support_pruning();
+            sparse_vector.values.iter().all(|v| *v >= 0.0) && self.inverted_index.support_pruning();
 
         let top_k = TopK::new(limits as usize);
 
@@ -68,7 +74,12 @@ impl Searcher {
     }
 
     // TODO 应该将 index 中所有的 row_id 给存储起来
-    pub fn plain_search(&self, sparse_vector: &SparseVector, sparse_bitmap: &Option<SparseBitmap>, limits: u32) -> TopK {
+    pub fn plain_search(
+        &self,
+        sparse_vector: &SparseVector,
+        sparse_bitmap: &Option<SparseBitmap>,
+        limits: u32,
+    ) -> TopK {
         let mut search_env: SearchEnv<'_> = self.pre_search(sparse_vector, sparse_bitmap, limits);
 
         let metrics = self.inverted_index.metrics();
@@ -133,7 +144,9 @@ impl Searcher {
                     is_alive = bitmap.is_alive(real_row_id)
                 }
                 if is_alive {
-                    search_env.top_k.push(ScoredPointOffset { row_id: real_row_id as RowId, score });
+                    search_env
+                        .top_k
+                        .push(ScoredPointOffset { row_id: real_row_id as RowId, score });
                 }
             }
         }
@@ -183,7 +196,12 @@ impl Searcher {
         prune_longest_posting(&mut left_iters[0], min_score, right_postings)
     }
 
-    pub fn search(&self, query: &SparseVector, sparse_bitmap: &Option<SparseBitmap>, limits: u32) -> TopK {
+    pub fn search(
+        &self,
+        query: &SparseVector,
+        sparse_bitmap: &Option<SparseBitmap>,
+        limits: u32,
+    ) -> TopK {
         let mut search_env = self.pre_search(query, sparse_bitmap, limits);
 
         if search_env.postings.is_empty() {

@@ -2,7 +2,8 @@ use enum_dispatch::enum_dispatch;
 use log::error;
 
 use crate::core::{
-    CompressedPostingListIterator, ElementRead, GenericElement, PostingListIter, PostingListIterator, QuantizedWeight, SparseBitmap, TopK
+    CompressedPostingListIterator, ElementRead, GenericElement, PostingListIter,
+    PostingListIterator, QuantizedWeight, SparseBitmap, TopK,
 };
 use crate::ffi::ScoredPointOffset;
 use crate::RowId;
@@ -112,19 +113,19 @@ impl<'a> GenericPostingListIterator<'a> {
             },
             GenericPostingListIterator::F16NoQuantized(e) => {
                 match e.skip_to(row_id) {
-                    Some(element) => Some(element.type_convert::<f32>(None)),
+                    Some(element) => Some(element.type_convert::<f32>()),
                     None => None,
                 }
             },
             GenericPostingListIterator::F16Quantized(e) => {
                 match e.skip_to(row_id) {
-                    Some(element) => Some(element.type_convert::<f32>(None)),
+                    Some(element) => Some(element.type_convert::<f32>()),
                     None => None,
                 }
             },
             GenericPostingListIterator::U8NoQuantized(e) => {
                 match e.skip_to(row_id) {
-                    Some(element) => Some(element.type_convert::<f32>(None)),
+                    Some(element) => Some(element.type_convert::<f32>()),
                     None => None,
                 }
             },
@@ -206,11 +207,11 @@ impl<'a> GenericPostingListIterator<'a> {
     #[rustfmt::skip]
     pub fn peek(&mut self) -> Option<GenericElement<f32>> {
         match self {
-            GenericPostingListIterator::F32NoQuantized(i) => i.peek().map(|e| e.type_convert::<f32>(None)),
-            GenericPostingListIterator::F32Quantized(i) => i.peek().map(|e| e.type_convert::<f32>(None)),
-            GenericPostingListIterator::F16NoQuantized(i) => i.peek().map(|e| e.type_convert::<f32>(None)),
-            GenericPostingListIterator::F16Quantized(i) => i.peek().map(|e| e.type_convert::<f32>(None)),
-            GenericPostingListIterator::U8NoQuantized(i) => i.peek().map(|e| e.type_convert::<f32>(None)),
+            GenericPostingListIterator::F32NoQuantized(i) => i.peek(),
+            GenericPostingListIterator::F32Quantized(i) => i.peek(),
+            GenericPostingListIterator::F16NoQuantized(i) => i.peek().map(|e: GenericElement<half::f16>| e.type_convert::<f32>()),
+            GenericPostingListIterator::F16Quantized(i) => i.peek().map(|e: GenericElement<half::f16>| e.type_convert::<f32>()),
+            GenericPostingListIterator::U8NoQuantized(i) => i.peek().map(|e: GenericElement<u8>| e.type_convert::<f32>()),
         }
     }
 }
@@ -255,7 +256,5 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> From<PostingListIteratorWrapp
 mod test {
 
     #[test]
-    fn test_generic() {
-
-    }
+    fn test_generic() {}
 }

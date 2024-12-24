@@ -138,7 +138,10 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW>
                     row_id: self.row_ids_uncompressed_in_block[relative_row_id],
                     weight: block.weights[relative_row_id],
                 });
-                Some(raw_simple_element.type_convert::<OW>(self.posting.quantization_params))
+                Some(
+                    raw_simple_element
+                        .convert_or_unquantize::<OW>(self.posting.quantization_params),
+                )
             }
             super::CompressedBlockType::Extended => {
                 let block: &ExtendedCompressedPostingBlock<TW> =
@@ -149,7 +152,10 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW>
                     weight: block.weights[relative_row_id],
                     max_next_weight: block.max_next_weights[relative_row_id],
                 });
-                Some(raw_extended_element.type_convert::<OW>(self.posting.quantization_params))
+                Some(
+                    raw_extended_element
+                        .convert_or_unquantize::<OW>(self.posting.quantization_params),
+                )
             }
         }
     }

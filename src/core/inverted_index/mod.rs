@@ -1,18 +1,18 @@
 mod common;
 mod compressed_mmap;
 mod compressed_ram;
+mod errors;
 mod mmap;
 mod ram;
 mod traits;
-mod errors;
 
 pub use common::*;
 pub use compressed_mmap::*;
 pub use compressed_ram::*;
+pub use errors::InvertedIndexError;
 pub use mmap::*;
 pub use ram::*;
 pub use traits::*;
-pub use errors::InvertedIndexError;
 
 // COMMON META FILE
 pub const INVERTED_INDEX_META_FILE_SUFFIX: &str = ".meta.json";

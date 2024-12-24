@@ -1,4 +1,7 @@
-use crate::{core::{SparseBitmap, TopK}, RowId};
+use crate::{
+    core::{SparseBitmap, TopK},
+    RowId,
+};
 
 use super::search_posting_iterator::SearchPostingIterator;
 

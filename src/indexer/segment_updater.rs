@@ -95,10 +95,7 @@ fn garbage_collect_files(
 
 /// Merges a list of segments the list of segment givens in the `segment_entries`.
 /// This function happens in the calling thread and is computationally expensive.
-fn merge(
-    index: &Index,
-    segment_entries: Vec<SegmentEntry>,
-) -> crate::Result<Option<SegmentEntry>> {
+fn merge(index: &Index, segment_entries: Vec<SegmentEntry>) -> crate::Result<Option<SegmentEntry>> {
     let total_rows_count =
         segment_entries.iter().map(|segment| segment.meta().rows_count() as u64).sum::<u64>();
     if total_rows_count == 0 {
@@ -127,8 +124,9 @@ fn merge(
         segments.len()
     );
 
-    let (rows_count, index_files) =
-        merger.unwrap().merge(merged_segment.index().directory().get_path().unwrap(), Some(&segment_id))?;
+    let (rows_count, index_files) = merger
+        .unwrap()
+        .merge(merged_segment.index().directory().get_path().unwrap(), Some(&segment_id))?;
 
     let merged_segment = merged_segment.clone().with_rows_count(rows_count as RowId);
 

@@ -237,7 +237,8 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
                 compressed_inv_index_ram.metrics().max_row_id,
                 compressed_inv_index_ram.metrics().min_dim_id,
                 compressed_inv_index_ram.metrics().max_dim_id,
-                (TW::weight_type() == WeightType::WeightU8) && (OW::weight_type() != TW::weight_type()),
+                (TW::weight_type() == WeightType::WeightU8)
+                    && (OW::weight_type() != TW::weight_type()),
                 compressed_inv_index_ram.element_type(),
                 Version::compressed_mmap(Revision::V1),
             ),

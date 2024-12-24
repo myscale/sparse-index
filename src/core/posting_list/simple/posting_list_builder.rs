@@ -169,8 +169,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
             let mut quantized_posting_list: PostingList<TW> =
                 PostingList::<TW>::new(self.element_type);
             for element in self.posting.elements {
-                let quantized_element =
-                    element.quantized_with_param::<TW>(quantized_param.unwrap());
+                let quantized_element = element.quantize_with_param::<TW>(quantized_param.unwrap());
                 quantized_posting_list.elements.push(quantized_element);
             }
             return quantized_posting_list;

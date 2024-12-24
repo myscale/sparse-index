@@ -17,7 +17,7 @@ pub fn ffi_create_index_with_parameter_impl(
     // Parse json_parameter into `IndexSettings` and check it's valid.
     let index_settings: IndexSettings = serde_json::from_str(&index_json_parameter)?;
     let _ = index_settings.inverted_index_config.is_valid()?;
-    
+
     // Create Index.
     let index = Index::create_in_dir(Path::new(index_path), index_settings)?;
 

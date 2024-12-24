@@ -31,7 +31,6 @@ pub fn ffi_sparse_search_impl(
         FFI_INDEX_SEARCHER_CACHE.get_index_reader_bridge(index_path.to_string())?;
     let searcher: Searcher = reader_bridge.reader.searcher();
 
-    let res: Vec<ScoredPointOffset> =
-        searcher.search(sparse_vector, sparse_bitmap, top_k)?;
+    let res: Vec<ScoredPointOffset> = searcher.search(sparse_vector, sparse_bitmap, top_k)?;
     Ok(res)
 }

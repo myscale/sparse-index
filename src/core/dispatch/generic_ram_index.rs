@@ -3,8 +3,8 @@ use std::{borrow::Cow, path::PathBuf};
 use log::error;
 
 use crate::core::{
-    CompressedInvertedIndexMmap, InvertedIndexMmap, InvertedIndexMmapAccess,
-    InvertedIndexMmapInit, InvertedIndexRam,IndexWeightType, StorageType
+    CompressedInvertedIndexMmap, IndexWeightType, InvertedIndexMmap, InvertedIndexMmapAccess,
+    InvertedIndexMmapInit, InvertedIndexRam, StorageType,
 };
 
 pub enum GenericInvertedIndexRam {

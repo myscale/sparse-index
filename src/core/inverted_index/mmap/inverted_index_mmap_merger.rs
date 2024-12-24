@@ -12,8 +12,8 @@ use crate::{
     core::{
         atomic_save_json,
         inverted_index::common::{InvertedIndexMeta, Revision, Version},
-        madvise, transmute_to_u8, transmute_to_u8_slice, DimId, ElementSlice,
-        ElementType, ExtendedElement, GenericElement, GenericElementSlice, InvertedIndexMmapAccess,
+        madvise, transmute_to_u8, transmute_to_u8_slice, DimId, ElementSlice, ElementType,
+        ExtendedElement, GenericElement, GenericElementSlice, InvertedIndexMmapAccess,
         PostingListHeader, PostingListMerger, QuantizedParam, QuantizedWeight, WeightType,
         POSTING_HEADER_SIZE,
     },
@@ -43,7 +43,8 @@ fn unquantize_posting<'a, OW: QuantizedWeight, TW: QuantizedWeight>(
 
     let mut unquantized_posting = vec![];
     for quantized_element in quantized_posting.generic_iter() {
-        unquantized_posting.push(quantized_element.to_owned().type_convert::<OW>(param));
+        let element = quantized_element.to_owned().convert_or_unquantize(param);
+        unquantized_posting.push(element);
     }
     unquantized_posting
 }
@@ -64,11 +65,19 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
             let (posting, quantized_param) = mmap_index.posting_with_param(&dim_id).unwrap_or(
                 (GenericElementSlice::empty_slice(self.element_type), None), // 这里的 None 只起到一个填充的作用，不需要考虑 Default
             );
-            debug!(">>>>>>>>>>>|| execute unquantize for dim:{} with param:{:?}", dim_id, quantized_param.clone());
+            debug!(
+                ">>>>>>>>>>>|| execute unquantize for dim:{} with param:{:?}",
+                dim_id,
+                quantized_param.clone()
+            );
 
             // TW means actually storage type, it needs reduction to OW.
             let unquantized_posting = unquantize_posting::<OW, TW>(posting, quantized_param);
-            debug!(">>>>>>>>>>>|| finish execute unquantize for dim:{} with param:{:?}", dim_id, quantized_param.clone());
+            debug!(
+                ">>>>>>>>>>>|| finish execute unquantize for dim:{} with param:{:?}",
+                dim_id,
+                quantized_param.clone()
+            );
 
             unquantized_postings.push(unquantized_posting);
         }
@@ -129,7 +138,11 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
             debug!(">>>>>>>>>>> before merged for dim:{}", dim_id);
             let (merged_posting, quantized_param) =
                 PostingListMerger::merge_posting_lists::<OW, TW>(&postings, self.element_type)?;
-            debug!(">>>>>>>>>>> after merged for dim:{}, param:{:?}", dim_id, quantized_param.clone());
+            debug!(
+                ">>>>>>>>>>> after merged for dim:{}, param:{:?}",
+                dim_id,
+                quantized_param.clone()
+            );
 
             // Step 1: Generate header
             let header_obj = PostingListHeader {
@@ -154,7 +167,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
                     let simple_els = merged_posting
                         .elements
                         .iter()
-                        .map(|e| e.as_simple().clone())
+                        .map(|e| e.as_simple().unwrap().clone())
                         .collect::<Vec<_>>();
                     let posting_elements_bytes = transmute_to_u8_slice(&simple_els);
                     postings_mmap[current_element_offset
@@ -167,7 +180,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapMerger<'a, O
                     let elements = merged_posting
                         .elements
                         .iter()
-                        .map(|e| e.as_extended().clone())
+                        .map(|e| e.as_extended().unwrap().clone())
                         .collect::<Vec<_>>();
                     let posting_elements_bytes = transmute_to_u8_slice(&elements);
                     postings_mmap[current_element_offset

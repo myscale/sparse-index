@@ -25,7 +25,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterator<'a, OW, T
     }
 
     fn type_convert(&self, raw_element: &GenericElement<TW>) -> GenericElement<OW> {
-        raw_element.type_convert::<OW>(self.quantized_param)
+        raw_element.convert_or_unquantize(self.quantized_param)
     }
 }
 
@@ -55,7 +55,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW>
         // find the first position: row_id ≥ target_row_id
         // let next_element: Result<usize, usize> = self.posting[self.cursor..].binary_search_by(|e| e.row_id().cmp(&row_id));
         let next_element =
-            self.generic_elements_slice.slice(self.cursor..).binary_search_by_row_id(row_id);
+            self.generic_elements_slice.slice_from(self.cursor..).binary_search_by_row_id(row_id);
 
         match next_element {
             Ok(found_offset) => {
@@ -87,7 +87,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW>
     fn for_each_till_row_id(&mut self, row_id: RowId, mut f: impl FnMut(&GenericElement<OW>)) {
         let mut cursor = self.cursor;
 
-        for element in self.generic_elements_slice.slice(cursor..).generic_iter() {
+        for element in self.generic_elements_slice.slice_from(cursor..).generic_iter() {
             if element.row_id() > row_id {
                 break;
             }

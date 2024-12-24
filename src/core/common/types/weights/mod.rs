@@ -26,6 +26,12 @@ pub struct QuantizedParam {
     diff256: f32,
 }
 
+impl QuantizedParam {
+    pub fn from_minmax(min: f32, max: f32) -> Self {
+        Self { min, diff256: (max - min) / 255.0 }
+    }
+}
+
 impl Default for QuantizedParam {
     fn default() -> Self {
         Self { min: 0.0, diff256: (0.0 - 0.0) / 255.0 }

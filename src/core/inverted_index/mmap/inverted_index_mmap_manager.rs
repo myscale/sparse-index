@@ -149,8 +149,11 @@ impl MmapManager {
             // TODO 放到一个位置重构一下
             match posting.element_type {
                 ElementType::SIMPLE => {
-                    let simple_els =
-                        posting.elements.iter().map(|e| e.as_simple().clone()).collect::<Vec<_>>();
+                    let simple_els = posting
+                        .elements
+                        .iter()
+                        .map(|e| e.as_simple().unwrap().clone())
+                        .collect::<Vec<_>>();
                     let posting_elements_bytes = transmute_to_u8_slice(&simple_els);
                     postings_mmap[cur_postings_storage_size
                         ..(cur_postings_storage_size + posting_elements_bytes.len())]
@@ -161,7 +164,7 @@ impl MmapManager {
                     let elements = posting
                         .elements
                         .iter()
-                        .map(|e| e.as_extended().clone())
+                        .map(|e| e.as_extended().unwrap().clone())
                         .collect::<Vec<_>>();
                     let posting_elements_bytes = transmute_to_u8_slice(&elements);
                     postings_mmap[cur_postings_storage_size

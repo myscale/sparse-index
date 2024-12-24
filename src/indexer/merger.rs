@@ -5,8 +5,8 @@ use log::{debug, info};
 use crate::{
     common::errors::SparseError,
     core::GenericInvertedIndex,
-    index::{Segment, SegmentReader},
     core::InvertedIndexConfig,
+    index::{Segment, SegmentReader},
 };
 
 pub struct IndexMerger {
@@ -55,7 +55,10 @@ impl IndexMerger {
             .map(|segment_reader| segment_reader.get_inverted_index())
             .collect::<Vec<&GenericInvertedIndex>>();
 
-        info!(">> try call generic_inverted_index merge, indexes size:{}", generic_inverted_indexes.len());
+        info!(
+            ">> try call generic_inverted_index merge, indexes size:{}",
+            generic_inverted_indexes.len()
+        );
         GenericInvertedIndex::merge(
             generic_inverted_indexes,
             directory,

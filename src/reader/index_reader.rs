@@ -9,9 +9,9 @@ use crate::common::errors::SparseError;
 use crate::directory::{Directory, WatchCallback, WatchHandle, META_LOCK};
 use crate::index::{Index, SegmentReader};
 
-use super::{Searcher, SearcherGeneration, SearcherInner};
 use super::warming::WarmingState;
 use super::Warmer;
+use super::{Searcher, SearcherGeneration, SearcherInner};
 
 /// Used to specify when to reload a new version of the index.
 #[derive(Clone, Copy)]

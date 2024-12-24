@@ -80,8 +80,7 @@ pub fn ffi_sparse_search(
     // convert `sparse_vector`
     let sparse_vector: SparseVector = sparse_vector.clone().try_into().unwrap();
 
-    let scores = match ffi_sparse_search_impl(&index_path, &sparse_vector, &sparse_bitmap, top_k)
-    {
+    let scores = match ffi_sparse_search_impl(&index_path, &sparse_vector, &sparse_bitmap, top_k) {
         Ok(res) => res,
         Err(error) => {
             return ApiUtils::handle_error(FUNC_NAME, "failed execute search", error.to_string());

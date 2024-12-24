@@ -4,8 +4,8 @@ use crate::{
 };
 
 use super::{
-    CompressedBlockType, CompressedPostingListView,
-    ExtendedCompressedPostingBlock, SimpleCompressedPostingBlock,
+    CompressedBlockType, CompressedPostingListView, ExtendedCompressedPostingBlock,
+    SimpleCompressedPostingBlock,
 };
 
 #[derive(Default, Debug, Clone)]

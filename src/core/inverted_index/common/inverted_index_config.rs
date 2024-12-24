@@ -56,17 +56,26 @@ impl InvertedIndexConfig {
         element_type: ElementType,
         enable_quantized: bool,
     ) -> Result<Self, InvertedIndexError> {
-        let config = InvertedIndexConfig { storage_type, weight_type, quantized: enable_quantized, element_type };
+        let config = InvertedIndexConfig {
+            storage_type,
+            weight_type,
+            quantized: enable_quantized,
+            element_type,
+        };
         let _check_valid = config.is_valid()?;
         return Ok(config);
     }
 
     pub fn is_valid(&self) -> Result<bool, InvertedIndexError> {
-        if self.quantized && self.element_type==ElementType::EXTENDED {
-            return Err(InvertedIndexError::InvalidIndexConfig("When quantized is enabled, element type can only be `SIMPLE`.".to_string()));
+        if self.quantized && self.element_type == ElementType::EXTENDED {
+            return Err(InvertedIndexError::InvalidIndexConfig(
+                "When quantized is enabled, element type can only be `SIMPLE`.".to_string(),
+            ));
         }
-        if self.weight_type==IndexWeightType::UInt8 && self.quantized {
-            return Err(InvertedIndexError::InvalidIndexConfig("When IndexWeightType is u8, you can't quantize it.".to_string()));
+        if self.weight_type == IndexWeightType::UInt8 && self.quantized {
+            return Err(InvertedIndexError::InvalidIndexConfig(
+                "When IndexWeightType is u8, you can't quantize it.".to_string(),
+            ));
         }
         Ok(true)
     }

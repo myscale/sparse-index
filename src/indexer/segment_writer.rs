@@ -3,9 +3,9 @@ use std::thread;
 
 use super::operation::AddOperation;
 use crate::core::GenericInvertedIndexRamBuilder;
+use crate::core::InvertedIndexConfig;
 use crate::directory::Directory;
 use crate::index::Segment;
-use crate::core::InvertedIndexConfig;
 use crate::RowId;
 use log::debug;
 
@@ -20,7 +20,11 @@ pub struct SegmentWriter {
 impl SegmentWriter {
     pub fn for_segment(memory_budget_in_bytes: usize, segment: Segment) -> crate::Result<Self> {
         let index_config = &segment.index().index_settings().inverted_index_config;
-        let index_ram_builder = GenericInvertedIndexRamBuilder::new(index_config.weight_type, index_config.quantized, index_config.element_type());
+        let index_ram_builder = GenericInvertedIndexRamBuilder::new(
+            index_config.weight_type,
+            index_config.quantized,
+            index_config.element_type(),
+        );
         Ok(Self {
             num_rows_count: 0,
             memory_budget_in_bytes,
