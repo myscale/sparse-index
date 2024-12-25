@@ -37,10 +37,7 @@ impl SearcherGeneration {
     ///
     /// `segment_readers`: 多个 SegmentReader
     /// `generation_id`: 当前 SearchGeneration 唯一标识符
-    pub(crate) fn from_segment_readers(
-        segment_readers: &[SegmentReader],
-        generation_id: u64,
-    ) -> Self {
+    pub(crate) fn from_segment_readers(segment_readers: &[SegmentReader], generation_id: u64) -> Self {
         // 存储 segment_id 和 delete opstamp 的映射
         let mut segment_id_to_del_opstamp = BTreeMap::new();
         for segment_reader in segment_readers {
@@ -83,19 +80,12 @@ impl Searcher {
 
     /// TODO: Get row content from sparse index.
     pub fn row_content(&self, row_id: RowId) -> crate::Result<SparseRowContent> {
-        Err(crate::common::errors::SparseError::Error(format!(
-            "Not supported yet. Can't load:{}",
-            row_id
-        )))
+        Err(crate::common::errors::SparseError::Error(format!("Not supported yet. Can't load:{}", row_id)))
     }
 
     /// Return rows count in current sparse index.
     pub fn num_rows(&self) -> u64 {
-        self.inner
-            .segment_readers
-            .iter()
-            .map(|segment_reader| u64::from(segment_reader.rows_count()))
-            .sum::<u64>()
+        self.inner.segment_readers.iter().map(|segment_reader| u64::from(segment_reader.rows_count())).sum::<u64>()
     }
 
     /// Return all [`SegmentReader`] hold by current [`Searcher`]
@@ -114,12 +104,7 @@ impl Searcher {
     /// - `limits`: search results count limit.
     ///
     /// TODO: Refine return value type, split with definition in lib.rs.
-    pub fn plain_search(
-        &self,
-        sparse_vector: &SparseVector,
-        sparse_bitmap: &Option<SparseBitmap>,
-        limits: u32,
-    ) -> crate::Result<Vec<ScoredPointOffset>> {
+    pub fn plain_search(&self, sparse_vector: &SparseVector, sparse_bitmap: &Option<SparseBitmap>, limits: u32) -> crate::Result<Vec<ScoredPointOffset>> {
         let executor = self.inner.index.search_executor();
         self.search_with_executor(sparse_vector, sparse_bitmap, limits, executor, true)
     }
@@ -128,12 +113,7 @@ impl Searcher {
     ///
     /// - `sparse_vector`: sparse_vector used to search.
     /// - `limits`: search results count limit.
-    pub fn search(
-        &self,
-        sparse_vector: &SparseVector,
-        sparse_bitmap: &Option<SparseBitmap>,
-        limits: u32,
-    ) -> crate::Result<Vec<ScoredPointOffset>> {
+    pub fn search(&self, sparse_vector: &SparseVector, sparse_bitmap: &Option<SparseBitmap>, limits: u32) -> crate::Result<Vec<ScoredPointOffset>> {
         let executor = self.inner.index.search_executor();
         self.search_with_executor(sparse_vector, sparse_bitmap, limits, executor, false)
     }
@@ -194,16 +174,9 @@ pub(crate) struct SearcherInner {
 }
 
 impl SearcherInner {
-    pub(crate) fn new(
-        index: Index,
-        segment_readers: Vec<SegmentReader>,
-        generation: TrackedObject<SearcherGeneration>,
-    ) -> io::Result<SearcherInner> {
+    pub(crate) fn new(index: Index, segment_readers: Vec<SegmentReader>, generation: TrackedObject<SearcherGeneration>) -> io::Result<SearcherInner> {
         assert_eq!(
-            &segment_readers
-                .iter()
-                .map(|reader| (reader.segment_id(), None))
-                .collect::<BTreeMap<_, _>>(),
+            &segment_readers.iter().map(|reader| (reader.segment_id(), None)).collect::<BTreeMap<_, _>>(),
             generation.segments(),
             "Set of segments referenced by this Searcher and its SearcherGeneration must match"
         );
@@ -214,8 +187,7 @@ impl SearcherInner {
 
 impl fmt::Debug for Searcher {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let segment_ids =
-            self.segment_readers().iter().map(SegmentReader::segment_id).collect::<Vec<_>>();
+        let segment_ids = self.segment_readers().iter().map(SegmentReader::segment_id).collect::<Vec<_>>();
         write!(f, "Searcher({segment_ids:?})")
     }
 }

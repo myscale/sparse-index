@@ -107,10 +107,7 @@ pub enum Incompatibility {
 impl fmt::Debug for Incompatibility {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            Incompatibility::CompressionMismatch {
-                library_compression_format,
-                index_compression_format,
-            } => {
+            Incompatibility::CompressionMismatch { library_compression_format, index_compression_format } => {
                 let err = format!(
                     "Library was compiled with {library_compression_format:?} compression, index \
                      was compressed with {index_compression_format:?}"
@@ -122,10 +119,7 @@ impl fmt::Debug for Incompatibility {
                 write!(f, "{err}. {advice}")?;
             }
             Incompatibility::IndexMismatch { library_version, index_version } => {
-                let err = format!(
-                    "Library version: {}, index version: {}",
-                    library_version.index_format_version, index_version.index_format_version
-                );
+                let err = format!("Library version: {}, index version: {}", library_version.index_format_version, index_version.index_format_version);
                 // TODO make a more useful error message
                 // include the version range that supports this index_format_version
                 let advice = format!(
@@ -148,9 +142,7 @@ pub enum OpenReadError {
     #[error("Files does not exist: {0:?}")]
     FileDoesNotExist(PathBuf),
     /// Any kind of io::Error.
-    #[error(
-        "IoError: '{io_error:?}' happened while opening the following file for Read: {filepath}."
-    )]
+    #[error("IoError: '{io_error:?}' happened while opening the following file for Read: {filepath}.")]
     IoError {
         /// The underlying `io::Error`.
         io_error: Arc<io::Error>,

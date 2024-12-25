@@ -100,17 +100,7 @@ impl InvertedIndexMeta {
         element_type: ElementType,
         version: Version,
     ) -> Self {
-        Self {
-            posting_count,
-            vector_count,
-            min_row_id,
-            max_row_id,
-            min_dim_id,
-            max_dim_id,
-            quantized,
-            element_type,
-            version,
-        }
+        Self { posting_count, vector_count, min_row_id, max_row_id, min_dim_id, max_dim_id, quantized, element_type, version }
     }
 
     /// get inverted index total postings count.

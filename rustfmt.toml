@@ -6,7 +6,7 @@ edition = "2021"
 # style_edition = "2021"
 # Line endings will be converted to \n.
 newline_style = "Unix"
-max_width = 100
+max_width = 180
 # wrap_comments = true
 # The "Default" setting has a heuristic which splits lines too aggresively.
 # We are willing to revisit this setting in future versions of rustfmt.
@@ -15,6 +15,6 @@ max_width = 100
 # * https://github.com/rust-lang/rustfmt/issues/3120
 use_small_heuristics = "Max"
 # Third party code is formatted upstream.
-ignore = [
-  "src/core/mod.rs"
-]
+# ignore = [
+#   "src/core/mod.rs"
+# ]

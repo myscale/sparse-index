@@ -50,10 +50,7 @@ pub mod tests {
 
     impl MergePolicy for MergeWheneverPossible {
         fn compute_merge_candidates(&self, segment_metas: &[SegmentMeta]) -> Vec<MergeCandidate> {
-            let segment_ids = segment_metas
-                .iter()
-                .map(|segment_meta| segment_meta.id())
-                .collect::<Vec<SegmentId>>();
+            let segment_ids = segment_metas.iter().map(|segment_meta| segment_meta.id()).collect::<Vec<SegmentId>>();
             if segment_ids.len() > 1 {
                 vec![MergeCandidate(segment_ids)]
             } else {

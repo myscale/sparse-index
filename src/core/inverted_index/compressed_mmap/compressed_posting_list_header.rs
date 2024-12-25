@@ -22,5 +22,4 @@ pub struct CompressedPostingListHeader {
     pub max_row_id: Option<RowId>,
 }
 
-pub const COMPRESSED_POSTING_HEADER_SIZE: usize =
-    std::mem::size_of::<CompressedPostingListHeader>();
+pub const COMPRESSED_POSTING_HEADER_SIZE: usize = std::mem::size_of::<CompressedPostingListHeader>();

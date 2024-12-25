@@ -40,9 +40,7 @@ pub const MAX_NUM_THREAD: usize = 8;
 const PIPELINE_MAX_SIZE_IN_DOCS: usize = 10_000;
 
 fn error_in_index_worker_thread(context: &str) -> SparseError {
-    SparseError::ErrorInThread(format!(
-        "{context}. A worker thread encountered an error (io::Error most likely) or panicked."
-    ))
+    SparseError::ErrorInThread(format!("{context}. A worker thread encountered an error (io::Error most likely) or panicked."))
 }
 
 /// `IndexWriter` is used to insert data into an Index.
@@ -106,12 +104,7 @@ fn index_documents(
             segment_writer.index_row_content(sv)?;
         }
         let mem_usage = segment_writer.mem_usage();
-        trace!(
-            "{} [index_documents] mem_usage {}, true budget {}",
-            thread::current().name().unwrap_or_default(),
-            mem_usage,
-            memory_budget - MARGIN_IN_BYTES
-        );
+        trace!("{} [index_documents] mem_usage {}, true budget {}", thread::current().name().unwrap_or_default(), mem_usage, memory_budget - MARGIN_IN_BYTES);
         // If reach memory limit, we should serialize this segment.
         if mem_usage >= memory_budget - MARGIN_IN_BYTES {
             info!(
@@ -129,11 +122,7 @@ fn index_documents(
     }
 
     let rows_count = segment_writer.rows_count();
-    info!(
-        "{} [index documents] rows_count: {}",
-        thread::current().name().unwrap_or_default(),
-        rows_count
-    );
+    info!("{} [index documents] rows_count: {}", thread::current().name().unwrap_or_default(), rows_count);
     // this is ensured by the call to peek before starting the worker thread.
     assert!(rows_count > 0);
 
@@ -155,12 +144,7 @@ fn index_documents(
 }
 
 impl IndexWriter {
-    pub(crate) fn new(
-        index: &Index,
-        num_threads: usize,
-        memory_budget_in_bytes_per_thread: usize,
-        directory_lock: DirectoryLock,
-    ) -> crate::Result<Self> {
+    pub(crate) fn new(index: &Index, num_threads: usize, memory_budget_in_bytes_per_thread: usize, directory_lock: DirectoryLock) -> crate::Result<Self> {
         if memory_budget_in_bytes_per_thread < MEMORY_BUDGET_NUM_BYTES_MIN {
             let err_msg = format!(
                 "The memory arena in bytes per thread needs to be at least \
@@ -169,13 +153,10 @@ impl IndexWriter {
             return Err(SparseError::InvalidArgument(err_msg));
         }
         if memory_budget_in_bytes_per_thread >= MEMORY_BUDGET_NUM_BYTES_MAX {
-            let err_msg = format!(
-                "The memory arena in bytes per thread cannot exceed {MEMORY_BUDGET_NUM_BYTES_MAX}"
-            );
+            let err_msg = format!("The memory arena in bytes per thread cannot exceed {MEMORY_BUDGET_NUM_BYTES_MAX}");
             return Err(SparseError::InvalidArgument(err_msg));
         }
-        let (document_sender, document_receiver) =
-            crossbeam_channel::bounded(PIPELINE_MAX_SIZE_IN_DOCS);
+        let (document_sender, document_receiver) = crossbeam_channel::bounded(PIPELINE_MAX_SIZE_IN_DOCS);
 
         let current_opstamp = index.load_metas()?.opstamp;
 
@@ -228,17 +209,11 @@ impl IndexWriter {
         let former_workers_handles = std::mem::take(&mut self.workers_join_handle);
         for join_handle in former_workers_handles {
             // Block the current thread until the corresponding worker thread completes and returns a Result.
-            join_handle
-                .join()
-                .map_err(|_| error_in_index_worker_thread("Worker thread panicked."))?
-                .map_err(|_| error_in_index_worker_thread("Worker thread failed."))?;
+            join_handle.join().map_err(|_| error_in_index_worker_thread("Worker thread panicked."))?.map_err(|_| error_in_index_worker_thread("Worker thread failed."))?;
         }
 
         // Stop the merge threads in the segment updater.
-        let result = self
-            .segment_updater
-            .wait_merging_thread()
-            .map_err(|_| error_in_index_worker_thread("Failed to join merging thread."));
+        let result = self.segment_updater.wait_merging_thread().map_err(|_| error_in_index_worker_thread("Failed to join merging thread."));
 
         if let Err(ref e) = result {
             error!("Some merging thread failed {:?}", e);
@@ -291,40 +266,28 @@ impl IndexWriter {
 
         let index = self.index.clone();
 
-        let join_handle: JoinHandle<crate::Result<()>> = thread::Builder::new()
-            .name(format!("thrd-sparse-index{}", self.worker_id))
-            .spawn(move || {
-                loop {
-                    let mut document_iterator = document_receiver_clone
-                        .clone()
-                        .into_iter()
-                        .filter(|batch| !batch.is_empty())
-                        .peekable();
+        let join_handle: JoinHandle<crate::Result<()>> = thread::Builder::new().name(format!("thrd-sparse-index{}", self.worker_id)).spawn(move || {
+            loop {
+                let mut document_iterator = document_receiver_clone.clone().into_iter().filter(|batch| !batch.is_empty()).peekable();
 
-                    // The peeking here is to avoid creating a new segment's files
-                    // if no document are available.
-                    //
-                    // This is a valid guarantee as the peeked document now belongs to
-                    // our local iterator.
-                    if let Some(batch) = document_iterator.peek() {
-                        assert!(!batch.is_empty());
-                    } else {
-                        // No more documents.
-                        // It happens when there is a commit, or if the `IndexWriter`
-                        // was dropped.
-                        index_writer_bomb.defuse();
-                        return Ok(());
-                    }
-
-                    index_documents(
-                        &index.index_settings(),
-                        mem_budget,
-                        index.new_segment(),
-                        &mut document_iterator,
-                        &segment_updater,
-                    )?;
+                // The peeking here is to avoid creating a new segment's files
+                // if no document are available.
+                //
+                // This is a valid guarantee as the peeked document now belongs to
+                // our local iterator.
+                if let Some(batch) = document_iterator.peek() {
+                    assert!(!batch.is_empty());
+                } else {
+                    // No more documents.
+                    // It happens when there is a commit, or if the `IndexWriter`
+                    // was dropped.
+                    index_writer_bomb.defuse();
+                    return Ok(());
                 }
-            })?;
+
+                index_documents(&index.index_settings(), mem_budget, index.new_segment(), &mut document_iterator, &segment_updater)?;
+            }
+        })?;
         self.worker_id += 1;
         self.workers_join_handle.push(join_handle);
         Ok(())
@@ -382,8 +345,7 @@ impl IndexWriter {
     ///
     /// TODO: Data in the old channel is likely to be lost. This comment may have issues, as the replaced channel is not returned to the user.
     fn recreate_document_channel(&mut self) {
-        let (document_sender, document_receiver) =
-            crossbeam_channel::bounded(PIPELINE_MAX_SIZE_IN_DOCS);
+        let (document_sender, document_receiver) = crossbeam_channel::bounded(PIPELINE_MAX_SIZE_IN_DOCS);
         self.operation_sender = document_sender;
         self.index_writer_status = IndexWriterStatus::from(document_receiver);
     }
@@ -404,17 +366,9 @@ impl IndexWriter {
         let document_receiver_res = self.operation_receiver();
 
         // take the directory lock to create a new index_writer.
-        let directory_lock = self
-            ._directory_lock
-            .take()
-            .expect("The IndexWriter does not have any lock. This is a bug, please report.");
+        let directory_lock = self._directory_lock.take().expect("The IndexWriter does not have any lock. This is a bug, please report.");
 
-        let new_index_writer = IndexWriter::new(
-            &self.index,
-            self.num_threads,
-            self.memory_budget_in_bytes_per_thread,
-            directory_lock,
-        )?;
+        let new_index_writer = IndexWriter::new(&self.index, self.num_threads, self.memory_budget_in_bytes_per_thread, directory_lock)?;
 
         // the current `self` is dropped right away because of this call.
         //
@@ -466,10 +420,7 @@ impl IndexWriter {
         //
         // This will move uncommitted segments to the state of
         // committed segments.
-        info!(
-            "[{}] [prepare_commit] tring prepare commit",
-            thread::current().name().unwrap_or_default()
-        );
+        info!("[{}] [prepare_commit] tring prepare commit", thread::current().name().unwrap_or_default());
 
         // this will drop the current document channel
         // and recreate a new one.
@@ -479,8 +430,7 @@ impl IndexWriter {
 
         // Block and wait for the old index threads to finish.
         for worker_handle in former_workers_join_handle {
-            let indexing_worker_result =
-                worker_handle.join().map_err(|e| SparseError::ErrorInThread(format!("{e:?}")))?;
+            let indexing_worker_result = worker_handle.join().map_err(|e| SparseError::ErrorInThread(format!("{e:?}")))?;
             indexing_worker_result?;
             // After ending an index thread, create a new one.
             self.add_indexing_worker()?;
@@ -488,11 +438,7 @@ impl IndexWriter {
 
         let commit_opstamp = self.stamper.stamp();
         let prepared_commit = PreparedCommit::new(self, commit_opstamp);
-        info!(
-            "[{}] [prepare_commit] commit has been finished, opstamp: {}",
-            thread::current().name().unwrap_or_default(),
-            commit_opstamp
-        );
+        info!("[{}] [prepare_commit] commit has been finished, opstamp: {}", thread::current().name().unwrap_or_default(), commit_opstamp);
 
         Ok(prepared_commit)
     }

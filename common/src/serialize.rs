@@ -100,9 +100,7 @@ impl<Left: BinarySerializable, Right: BinarySerializable> BinarySerializable for
         Ok((Left::deserialize(reader)?, Right::deserialize(reader)?))
     }
 }
-impl<Left: BinarySerializable + FixedSize, Right: BinarySerializable + FixedSize> FixedSize
-    for (Left, Right)
-{
+impl<Left: BinarySerializable + FixedSize, Right: BinarySerializable + FixedSize> FixedSize for (Left, Right) {
     const SIZE_IN_BYTES: usize = Left::SIZE_IN_BYTES + Right::SIZE_IN_BYTES;
 }
 
@@ -221,10 +219,7 @@ impl BinarySerializable for bool {
         match val {
             0 => Ok(false),
             1 => Ok(true),
-            _ => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "invalid bool value on deserialization, data corrupted",
-            )),
+            _ => Err(io::Error::new(io::ErrorKind::InvalidData, "invalid bool value on deserialization, data corrupted")),
         }
     }
 }

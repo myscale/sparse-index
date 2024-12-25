@@ -11,6 +11,12 @@ pub struct SimpleElement<W: QuantizedWeight> {
     pub weight: W,
 }
 
+impl<W: QuantizedWeight> std::fmt::Display for SimpleElement<W> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(row_id: {}, weight: {:?})", self.row_id, self.weight)
+    }
+}
+
 impl<W: QuantizedWeight> ElementWrite<W> for SimpleElement<W> {
     fn update_weight(&mut self, value: W) {
         self.weight = value;

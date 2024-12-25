@@ -11,8 +11,8 @@ use crate::{
     core::{
         create_and_ensure_length,
         madvise::{self, Advice},
-        open_write_mmap, transmute_to_u8, transmute_to_u8_slice, ElementRead, ElementType,
-        ExtendedElement, InvertedIndexRam, InvertedIndexRamAccess, QuantizedWeight, SimpleElement,
+        open_write_mmap, transmute_to_u8, transmute_to_u8_slice, ElementRead, ElementType, ExtendedElement, InvertedIndexRam, InvertedIndexRamAccess, QuantizedWeight,
+        SimpleElement,
     },
     RowId,
 };
@@ -29,40 +29,18 @@ impl MmapManager {
         directory.join(f(segment_id))
     }
 
-    pub(super) fn get_all_mmap_files_path(
-        directory: &PathBuf,
-        segment_id: Option<&str>,
-    ) -> (PathBuf, PathBuf) {
-        let headers_mmap_file_path = Self::get_file_path(
-            directory,
-            segment_id,
-            InvertedIndexMmapFileConfig::headers_file_name,
-        );
-        let postings_mmap_file_path = Self::get_file_path(
-            directory,
-            segment_id,
-            InvertedIndexMmapFileConfig::postings_file_name,
-        );
+    pub(super) fn get_all_mmap_files_path(directory: &PathBuf, segment_id: Option<&str>) -> (PathBuf, PathBuf) {
+        let headers_mmap_file_path = Self::get_file_path(directory, segment_id, InvertedIndexMmapFileConfig::headers_file_name);
+        let postings_mmap_file_path = Self::get_file_path(directory, segment_id, InvertedIndexMmapFileConfig::postings_file_name);
         (headers_mmap_file_path, postings_mmap_file_path)
     }
 
-    pub(super) fn get_index_meta_file_path(
-        directory: &PathBuf,
-        segment_id: Option<&str>,
-    ) -> PathBuf {
-        let inverted_index_meta_file_path = Self::get_file_path(
-            directory,
-            segment_id,
-            InvertedIndexMmapFileConfig::inverted_meta_file_name,
-        );
+    pub(super) fn get_index_meta_file_path(directory: &PathBuf, segment_id: Option<&str>) -> PathBuf {
+        let inverted_index_meta_file_path = Self::get_file_path(directory, segment_id, InvertedIndexMmapFileConfig::inverted_meta_file_name);
         inverted_index_meta_file_path
     }
 
-    pub(super) fn create_mmap_file(
-        mmap_file_path: &Path,
-        mmap_file_size: u64,
-        advice: Advice,
-    ) -> Result<MmapMut, io::Error> {
+    pub(super) fn create_mmap_file(mmap_file_path: &Path, mmap_file_size: u64, advice: Advice) -> Result<MmapMut, io::Error> {
         create_and_ensure_length(mmap_file_path, mmap_file_size)?;
         let mmap: MmapMut = open_write_mmap(mmap_file_path)?;
         madvise::madvise(&mmap, advice)?;
@@ -88,19 +66,10 @@ impl MmapManager {
             .sum();
 
         // Init two mmap file paths.
-        let (headers_mmap_file_path, postings_mmap_file_path) =
-            Self::get_all_mmap_files_path(&directory, segment_id);
+        let (headers_mmap_file_path, postings_mmap_file_path) = Self::get_all_mmap_files_path(&directory, segment_id);
 
-        let mut headers_mmap = Self::create_mmap_file(
-            headers_mmap_file_path.as_ref(),
-            total_headers_storage_size as u64,
-            madvise::Advice::Normal,
-        )?;
-        let mut postings_mmap = Self::create_mmap_file(
-            postings_mmap_file_path.as_ref(),
-            total_postings_elements_size as u64,
-            madvise::Advice::Normal,
-        )?;
+        let mut headers_mmap = Self::create_mmap_file(headers_mmap_file_path.as_ref(), total_headers_storage_size as u64, madvise::Advice::Normal)?;
+        let mut postings_mmap = Self::create_mmap_file(postings_mmap_file_path.as_ref(), total_postings_elements_size as u64, madvise::Advice::Normal)?;
 
         Self::save_data_to_mmap::<TW>(&mut headers_mmap, &mut postings_mmap, inv_idx_ram);
 
@@ -111,24 +80,13 @@ impl MmapManager {
             postings_mmap.flush()?;
         }
 
-        return Ok((
-            total_headers_storage_size,
-            total_postings_elements_size,
-            Arc::new(headers_mmap.make_read_only()?),
-            Arc::new(postings_mmap.make_read_only()?),
-        ));
+        return Ok((total_headers_storage_size, total_postings_elements_size, Arc::new(headers_mmap.make_read_only()?), Arc::new(postings_mmap.make_read_only()?)));
     }
 
-    fn save_data_to_mmap<TW: QuantizedWeight>(
-        headers_mmap: &mut MmapMut,
-        postings_mmap: &mut MmapMut,
-        inv_idx_ram: &InvertedIndexRam<TW>,
-    ) {
+    fn save_data_to_mmap<TW: QuantizedWeight>(headers_mmap: &mut MmapMut, postings_mmap: &mut MmapMut, inv_idx_ram: &InvertedIndexRam<TW>) {
         let mut cur_postings_storage_size = 0;
 
-        for (dim_id, (posting, param)) in
-            inv_idx_ram.postings().iter().zip(inv_idx_ram.quantized_params().iter()).enumerate()
-        {
+        for (dim_id, (posting, param)) in inv_idx_ram.postings().iter().zip(inv_idx_ram.quantized_params().iter()).enumerate() {
             // Step 1.1: Generate header
             let header_obj = PostingListHeader {
                 start: cur_postings_storage_size,
@@ -149,27 +107,15 @@ impl MmapManager {
             // TODO 放到一个位置重构一下
             match posting.element_type {
                 ElementType::SIMPLE => {
-                    let simple_els = posting
-                        .elements
-                        .iter()
-                        .map(|e| e.as_simple().unwrap().clone())
-                        .collect::<Vec<_>>();
+                    let simple_els = posting.elements.iter().map(|e| e.as_simple().unwrap().clone()).collect::<Vec<_>>();
                     let posting_elements_bytes = transmute_to_u8_slice(&simple_els);
-                    postings_mmap[cur_postings_storage_size
-                        ..(cur_postings_storage_size + posting_elements_bytes.len())]
-                        .copy_from_slice(posting_elements_bytes);
+                    postings_mmap[cur_postings_storage_size..(cur_postings_storage_size + posting_elements_bytes.len())].copy_from_slice(posting_elements_bytes);
                     cur_postings_storage_size += posting_elements_bytes.len();
                 }
                 ElementType::EXTENDED => {
-                    let elements = posting
-                        .elements
-                        .iter()
-                        .map(|e| e.as_extended().unwrap().clone())
-                        .collect::<Vec<_>>();
+                    let elements = posting.elements.iter().map(|e| e.as_extended().unwrap().clone()).collect::<Vec<_>>();
                     let posting_elements_bytes = transmute_to_u8_slice(&elements);
-                    postings_mmap[cur_postings_storage_size
-                        ..(cur_postings_storage_size + posting_elements_bytes.len())]
-                        .copy_from_slice(posting_elements_bytes);
+                    postings_mmap[cur_postings_storage_size..(cur_postings_storage_size + posting_elements_bytes.len())].copy_from_slice(posting_elements_bytes);
                     cur_postings_storage_size += posting_elements_bytes.len();
                 }
             }

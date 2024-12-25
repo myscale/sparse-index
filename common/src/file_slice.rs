@@ -224,26 +224,14 @@ impl FileSlice {
     ///
     /// This is equivalent to running `file_slice.slice(from, to).read_bytes()`.
     pub fn read_bytes_slice(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
-        assert!(
-            range.end <= self.len(),
-            "end of requested range exceeds the fileslice length ({} > {})",
-            range.end,
-            self.len()
-        );
+        assert!(range.end <= self.len(), "end of requested range exceeds the fileslice length ({} > {})", range.end, self.len());
         self.data.read_bytes(self.range.start + range.start..self.range.start + range.end)
     }
 
     #[doc(hidden)]
     pub async fn read_bytes_slice_async(&self, byte_range: Range<usize>) -> io::Result<OwnedBytes> {
-        assert!(
-            self.range.start + byte_range.end <= self.range.end,
-            "`to` exceeds the fileslice length"
-        );
-        self.data
-            .read_bytes_async(
-                self.range.start + byte_range.start..self.range.start + byte_range.end,
-            )
-            .await
+        assert!(self.range.start + byte_range.end <= self.range.end, "`to` exceeds the fileslice length");
+        self.data.read_bytes_async(self.range.start + byte_range.start..self.range.start + byte_range.end).await
     }
 
     /// Splits the FileSlice at the given offset and return two file slices.

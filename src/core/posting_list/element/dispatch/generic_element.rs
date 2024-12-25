@@ -6,11 +6,29 @@ use crate::core::{QuantizedParam, QuantizedWeight, WeightType};
 #[allow(unused_imports)]
 use super::super::{ElementRead, ElementType, ElementWrite, ExtendedElement, SimpleElement};
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Clone, PartialEq, PartialOrd)]
 #[enum_dispatch(ElementWrite<W>, ElementRead<W>)]
 pub enum GenericElement<W: QuantizedWeight> {
     SimpleElement(SimpleElement<W>),
     ExtendedElement(ExtendedElement<W>),
+}
+
+impl<W: QuantizedWeight> std::fmt::Display for GenericElement<W> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GenericElement::SimpleElement(simple_element) => write!(f, "{}", simple_element),
+            GenericElement::ExtendedElement(extended_element) => write!(f, "{}", extended_element),
+        }
+    }
+}
+
+impl<W: QuantizedWeight> std::fmt::Debug for GenericElement<W> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GenericElement::SimpleElement(simple_element) => write!(f, "{}", simple_element),
+            GenericElement::ExtendedElement(extended_element) => write!(f, "{}", extended_element),
+        }
+    }
 }
 
 impl<W: QuantizedWeight> GenericElement<W> {
@@ -41,10 +59,7 @@ impl<W: QuantizedWeight> GenericElement<W> {
         }
     }
 
-    pub fn quantize_with_param<TW: QuantizedWeight>(
-        &self,
-        quantized_param: QuantizedParam,
-    ) -> GenericElement<TW> {
+    pub fn quantize_with_param<TW: QuantizedWeight>(&self, quantized_param: QuantizedParam) -> GenericElement<TW> {
         // Boundary
         #[cfg(debug_assertions)]
         {
@@ -55,15 +70,10 @@ impl<W: QuantizedWeight> GenericElement<W> {
             }
         }
         match self {
-            GenericElement::SimpleElement(simple_element) => {
-                GenericElement::SimpleElement(SimpleElement::<TW> {
-                    row_id: simple_element.row_id(),
-                    weight: TW::from_u8(W::quantize_with_param(
-                        simple_element.weight,
-                        quantized_param,
-                    )),
-                })
-            }
+            GenericElement::SimpleElement(simple_element) => GenericElement::SimpleElement(SimpleElement::<TW> {
+                row_id: simple_element.row_id(),
+                weight: TW::from_u8(W::quantize_with_param(simple_element.weight, quantized_param)),
+            }),
             GenericElement::ExtendedElement(_) => {
                 let error_msg = "Not supported! `ExtendedElement` can't be quantized.";
                 error!("{}", error_msg);
@@ -72,10 +82,7 @@ impl<W: QuantizedWeight> GenericElement<W> {
         }
     }
 
-    pub fn unquantize_with_param<OW: QuantizedWeight>(
-        &self,
-        quantized_param: QuantizedParam,
-    ) -> GenericElement<OW> {
+    pub fn unquantize_with_param<OW: QuantizedWeight>(&self, quantized_param: QuantizedParam) -> GenericElement<OW> {
         // Boundary
         #[cfg(debug_assertions)]
         {
@@ -86,15 +93,10 @@ impl<W: QuantizedWeight> GenericElement<W> {
             }
         }
         match self {
-            GenericElement::SimpleElement(simple_element) => {
-                GenericElement::SimpleElement(SimpleElement::<OW> {
-                    row_id: simple_element.row_id(),
-                    weight: OW::unquantize_with_param(
-                        W::to_u8(simple_element.weight()),
-                        quantized_param,
-                    ),
-                })
-            }
+            GenericElement::SimpleElement(simple_element) => GenericElement::SimpleElement(SimpleElement::<OW> {
+                row_id: simple_element.row_id(),
+                weight: OW::unquantize_with_param(W::to_u8(simple_element.weight()), quantized_param),
+            }),
             GenericElement::ExtendedElement(_) => {
                 let error_msg = "Not supported! `ExtendedElement` can't be unquantized.";
                 error!("{}", error_msg);
@@ -110,25 +112,17 @@ impl<W: QuantizedWeight> GenericElement<W> {
         }
         match self {
             GenericElement::SimpleElement(simple_element) => {
-                GenericElement::SimpleElement(SimpleElement::<T> {
-                    row_id: simple_element.row_id(),
-                    weight: T::from_f32(W::to_f32(simple_element.weight())),
-                })
+                GenericElement::SimpleElement(SimpleElement::<T> { row_id: simple_element.row_id(), weight: T::from_f32(W::to_f32(simple_element.weight())) })
             }
-            GenericElement::ExtendedElement(extended_element) => {
-                GenericElement::ExtendedElement(ExtendedElement::<T> {
-                    row_id: extended_element.row_id(),
-                    weight: T::from_f32(W::to_f32(extended_element.weight())),
-                    max_next_weight: T::from_f32(W::to_f32(extended_element.max_next_weight())),
-                })
-            }
+            GenericElement::ExtendedElement(extended_element) => GenericElement::ExtendedElement(ExtendedElement::<T> {
+                row_id: extended_element.row_id(),
+                weight: T::from_f32(W::to_f32(extended_element.weight())),
+                max_next_weight: T::from_f32(W::to_f32(extended_element.max_next_weight())),
+            }),
         }
     }
 
-    pub fn convert_or_unquantize<T: QuantizedWeight>(
-        &self,
-        quantized_param: Option<QuantizedParam>,
-    ) -> GenericElement<T> {
+    pub fn convert_or_unquantize<T: QuantizedWeight>(&self, quantized_param: Option<QuantizedParam>) -> GenericElement<T> {
         match quantized_param {
             Some(param) => self.unquantize_with_param(param),
             None => self.type_convert(),
@@ -283,8 +277,7 @@ mod tests {
 
         // Test unquantize with a quantized_param
         let quantized_param = QuantizedParam::from_minmax(0.0, 10.0);
-        let unquantized_generic =
-            generic_element.convert_or_unquantize::<f32>(Some(quantized_param));
+        let unquantized_generic = generic_element.convert_or_unquantize::<f32>(Some(quantized_param));
 
         // Check if element was unquantized (not converted)
         if let GenericElement::SimpleElement(simple) = unquantized_generic {

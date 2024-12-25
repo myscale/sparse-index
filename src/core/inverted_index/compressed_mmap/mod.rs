@@ -10,6 +10,4 @@ pub use compressed_inverted_index_mmap_config::*;
 pub use compressed_inverted_index_mmap_manager::*;
 pub use compressed_inverted_index_mmap_merger::*;
 pub use compressed_inverted_index_mmap_meta::CompressedMmapInvertedIndexMeta;
-pub use compressed_posting_list_header::{
-    CompressedPostingListHeader, COMPRESSED_POSTING_HEADER_SIZE,
-};
+pub use compressed_posting_list_header::{CompressedPostingListHeader, COMPRESSED_POSTING_HEADER_SIZE};

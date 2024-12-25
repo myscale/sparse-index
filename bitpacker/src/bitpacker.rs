@@ -20,12 +20,7 @@ impl BitPacker {
     }
 
     #[inline]
-    pub fn write<TWrite: io::Write + ?Sized>(
-        &mut self,
-        val: u64,
-        num_bits: u8,
-        output: &mut TWrite,
-    ) -> io::Result<()> {
+    pub fn write<TWrite: io::Write + ?Sized>(&mut self, val: u64, num_bits: u8, output: &mut TWrite) -> io::Result<()> {
         let num_bits = num_bits as usize;
         if self.mini_buffer_written + num_bits > 64 {
             self.mini_buffer |= val.wrapping_shl(self.mini_buffer_written as u32);
@@ -164,11 +159,7 @@ impl BitUnpacker {
         let mut offset = (highway_start * self.num_bits) as usize / 8;
         let mut output_cursor = (highway_start - start_idx) as usize;
         for _ in 0..num_blocks {
-            offset += BitPacker1x.decompress(
-                &data[offset..],
-                &mut output[output_cursor..],
-                self.num_bits as u8,
-            );
+            offset += BitPacker1x.decompress(&data[offset..], &mut output[output_cursor..], self.num_bits as u8);
             output_cursor += 32;
         }
 
@@ -177,13 +168,7 @@ impl BitUnpacker {
         get_batch_ramp(highway_end, &mut output[output_cursor..]);
     }
 
-    pub fn get_ids_for_value_range(
-        &self,
-        range: RangeInclusive<u64>,
-        id_range: Range<u32>,
-        data: &[u8],
-        positions: &mut Vec<u32>,
-    ) {
+    pub fn get_ids_for_value_range(&self, range: RangeInclusive<u64>, id_range: Range<u32>, data: &[u8], positions: &mut Vec<u32>) {
         if self.bit_width() > 32 {
             self.get_ids_for_value_range_slow(range, id_range, data, positions)
         } else {
@@ -196,13 +181,7 @@ impl BitUnpacker {
         }
     }
 
-    fn get_ids_for_value_range_slow(
-        &self,
-        range: RangeInclusive<u64>,
-        id_range: Range<u32>,
-        data: &[u8],
-        positions: &mut Vec<u32>,
-    ) {
+    fn get_ids_for_value_range_slow(&self, range: RangeInclusive<u64>, id_range: Range<u32>, data: &[u8], positions: &mut Vec<u32>) {
         positions.clear();
         for i in id_range {
             // If we cared we could make this branchless, but the slow implementation should rarely
@@ -214,13 +193,7 @@ impl BitUnpacker {
         }
     }
 
-    fn get_ids_for_value_range_fast(
-        &self,
-        value_range: RangeInclusive<u32>,
-        id_range: Range<u32>,
-        data: &[u8],
-        positions: &mut Vec<u32>,
-    ) {
+    fn get_ids_for_value_range_fast(&self, value_range: RangeInclusive<u32>, id_range: Range<u32>, data: &[u8], positions: &mut Vec<u32>) {
         positions.resize(id_range.len(), 0u32);
         self.get_batch_u32s(id_range.start, data, positions);
         crate::filter_vec::filter_vec_in_place(value_range, id_range.start, positions)
@@ -235,8 +208,7 @@ mod test {
         let mut data = Vec::new();
         let mut bitpacker = BitPacker::new();
         let max_val: u64 = (1u64 << num_bits as u64) - 1u64;
-        let vals: Vec<u64> =
-            (0u64..len as u64).map(|i| if max_val == 0 { 0 } else { i % max_val }).collect();
+        let vals: Vec<u64> = (0u64..len as u64).map(|i| if max_val == 0 { 0 } else { i % max_val }).collect();
         for &val in &vals {
             bitpacker.write(val, num_bits, &mut data).unwrap();
         }

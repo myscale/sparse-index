@@ -1,17 +1,12 @@
 use log::error;
 
 use crate::{
-    core::{
-        BlockDecoder, ElementRead, ExtendedElement, GenericElement, PostingListIter,
-        QuantizedWeight, SimpleElement, WeightType, COMPRESSION_BLOCK_SIZE,
-    },
+    core::{BlockDecoder, ElementRead, ExtendedElement, GenericElement, PostingListIter, QuantizedWeight, SimpleElement, WeightType, COMPRESSION_BLOCK_SIZE},
     RowId,
 };
 use std::marker::PhantomData;
 
-use super::{
-    CompressedPostingListView, ExtendedCompressedPostingBlock, SimpleCompressedPostingBlock,
-};
+use super::{CompressedPostingListView, ExtendedCompressedPostingBlock, SimpleCompressedPostingBlock};
 
 /// `TW` means wieght type stored in disk.
 /// `OW` means weight type before stored or quantized.
@@ -29,8 +24,7 @@ pub struct CompressedPostingListIterator<'a, OW: QuantizedWeight, TW: QuantizedW
 impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingListIterator<'a, OW, TW> {
     pub fn new(posting: &CompressedPostingListView<'a, TW>) -> Self {
         // Boundary.
-        let use_quantized =
-            OW::weight_type() != TW::weight_type() && OW::weight_type() == WeightType::WeightU8;
+        let use_quantized = OW::weight_type() != TW::weight_type() && OW::weight_type() == WeightType::WeightU8;
 
         if use_quantized && posting.quantization_params.is_none() {
             let error_msg = "Error happened when create `CompressedPostingListIterator`, `posting.quantization_params` can't be none when quantized is enabled.";
@@ -94,9 +88,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedPostingListIterator
     }
 }
 
-impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW>
-    for CompressedPostingListIterator<'a, OW, TW>
-{
+impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW> for CompressedPostingListIterator<'a, OW, TW> {
     fn peek(&mut self) -> Option<GenericElement<OW>> {
         // Boundary
         if self.cursor >= self.posting.row_ids_count as usize {
@@ -109,18 +101,10 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW>
             // dynamic decompresse block in `CompressedPostingListView`
             match self.posting.compressed_block_type {
                 super::CompressedBlockType::Simple => {
-                    self.posting.uncompress_simple_block(
-                        block_idx,
-                        &mut self.decoder,
-                        &mut self.row_ids_uncompressed_in_block,
-                    );
+                    self.posting.uncompress_simple_block(block_idx, &mut self.decoder, &mut self.row_ids_uncompressed_in_block);
                 }
                 super::CompressedBlockType::Extended => {
-                    self.posting.uncompress_extended_block(
-                        block_idx,
-                        &mut self.decoder,
-                        &mut self.row_ids_uncompressed_in_block,
-                    );
+                    self.posting.uncompress_extended_block(block_idx, &mut self.decoder, &mut self.row_ids_uncompressed_in_block);
                 }
             }
 
@@ -131,31 +115,21 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW>
 
         match self.posting.compressed_block_type {
             super::CompressedBlockType::Simple => {
-                let block: &SimpleCompressedPostingBlock<TW> =
-                    &self.posting.simple_blocks[block_idx];
+                let block: &SimpleCompressedPostingBlock<TW> = &self.posting.simple_blocks[block_idx];
 
-                let raw_simple_element = GenericElement::SimpleElement(SimpleElement {
-                    row_id: self.row_ids_uncompressed_in_block[relative_row_id],
-                    weight: block.weights[relative_row_id],
-                });
-                Some(
-                    raw_simple_element
-                        .convert_or_unquantize::<OW>(self.posting.quantization_params),
-                )
+                let raw_simple_element =
+                    GenericElement::SimpleElement(SimpleElement { row_id: self.row_ids_uncompressed_in_block[relative_row_id], weight: block.weights[relative_row_id] });
+                Some(raw_simple_element.convert_or_unquantize::<OW>(self.posting.quantization_params))
             }
             super::CompressedBlockType::Extended => {
-                let block: &ExtendedCompressedPostingBlock<TW> =
-                    &self.posting.extended_blocks[block_idx];
+                let block: &ExtendedCompressedPostingBlock<TW> = &self.posting.extended_blocks[block_idx];
 
                 let raw_extended_element = GenericElement::ExtendedElement(ExtendedElement {
                     row_id: self.row_ids_uncompressed_in_block[relative_row_id],
                     weight: block.weights[relative_row_id],
                     max_next_weight: block.max_next_weights[relative_row_id],
                 });
-                Some(
-                    raw_extended_element
-                        .convert_or_unquantize::<OW>(self.posting.quantization_params),
-                )
+                Some(raw_extended_element.convert_or_unquantize::<OW>(self.posting.quantization_params))
             }
         }
     }

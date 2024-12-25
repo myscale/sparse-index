@@ -17,8 +17,7 @@ pub(super) fn double_sort<T: Ord + Copy, V: Copy>(indices: &mut [T], values: &mu
         return;
     }
 
-    let mut indexed_values: Vec<(T, V)> =
-        indices.iter().zip(values.iter()).map(|(&i, &v)| (i, v)).collect();
+    let mut indexed_values: Vec<(T, V)> = indices.iter().zip(values.iter()).map(|(&i, &v)| (i, v)).collect();
 
     // Sort the vector of tuples by indices
     indexed_values.sort_unstable_by_key(|&(i, _)| i);
@@ -30,12 +29,7 @@ pub(super) fn double_sort<T: Ord + Copy, V: Copy>(indices: &mut [T], values: &mu
 }
 
 /// compute dot distance with given two sparse vectors
-pub(super) fn score_vectors<T: Ord + Eq>(
-    self_indices: &[T],
-    self_values: &[DimWeight],
-    other_indices: &[T],
-    other_values: &[DimWeight],
-) -> Option<ScoreType> {
+pub(super) fn score_vectors<T: Ord + Eq>(self_indices: &[T], self_values: &[DimWeight], other_indices: &[T], other_values: &[DimWeight]) -> Option<ScoreType> {
     let mut score = 0.0;
     // track whether there is any overlap
     let mut overlap = false;
@@ -60,10 +54,7 @@ pub(super) fn score_vectors<T: Ord + Eq>(
     }
 }
 
-pub(super) fn validate_sparse_vector_impl<T: Clone + Eq + Hash>(
-    indices: &[T],
-    values: &[DimWeight],
-) -> Result<(), ValidationErrors> {
+pub(super) fn validate_sparse_vector_impl<T: Clone + Eq + Hash>(indices: &[T], values: &[DimWeight]) -> Result<(), ValidationErrors> {
     let mut errors = ValidationErrors::default();
 
     if indices.len() != values.len() {
@@ -99,20 +90,14 @@ pub fn random_sparse_vector<R: Rng + ?Sized>(rnd_gen: &mut R, max_dim_size: usiz
 
     // make sure we have at least one vector
     if tuples.is_empty() {
-        tuples.push((
-            rnd_gen.gen_range(1..max_dim_size) as u32,
-            rnd_gen.gen_range(VALUE_RANGE) as f32,
-        ));
+        tuples.push((rnd_gen.gen_range(1..max_dim_size) as u32, rnd_gen.gen_range(VALUE_RANGE) as f32));
     }
 
     SparseVector::try_from(tuples).unwrap()
 }
 
 /// Generates a sparse vector with all dimensions filled
-pub fn random_full_sparse_vector<R: Rng + ?Sized>(
-    rnd_gen: &mut R,
-    max_size: usize,
-) -> SparseVector {
+pub fn random_full_sparse_vector<R: Rng + ?Sized>(rnd_gen: &mut R, max_size: usize) -> SparseVector {
     let mut tuples: Vec<(u32, f32)> = Vec::with_capacity(max_size);
 
     for i in 1..=max_size {
@@ -123,10 +108,7 @@ pub fn random_full_sparse_vector<R: Rng + ?Sized>(
 }
 
 /// Generates a sparse vector with only positive values
-pub fn random_positive_sparse_vector<R: Rng + ?Sized>(
-    rnd_gen: &mut R,
-    max_dim_size: usize,
-) -> SparseVector {
+pub fn random_positive_sparse_vector<R: Rng + ?Sized>(rnd_gen: &mut R, max_dim_size: usize) -> SparseVector {
     let mut vec = random_sparse_vector(rnd_gen, max_dim_size);
     for value in vec.values.iter_mut() {
         *value = value.abs();

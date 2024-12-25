@@ -11,10 +11,7 @@ use super::Directory;
 use crate::common::errors::{DataCorruption, SparseError};
 use crate::directory::error::{DeleteError, LockError, OpenReadError, OpenWriteError};
 use crate::directory::footer::{Footer, FooterProxy};
-use crate::directory::{
-    DirectoryLock, FileHandle, FileSlice, GarbageCollectionResult, Lock, WatchCallback,
-    WatchHandle, WritePtr, META_LOCK,
-};
+use crate::directory::{DirectoryLock, FileHandle, FileSlice, GarbageCollectionResult, Lock, WatchCallback, WatchHandle, WritePtr, META_LOCK};
 use crate::MANAGED_FILEPATH;
 
 /// Returns true if the file is "managed".
@@ -52,10 +49,7 @@ struct MetaInformation {
 /// that were created by sparse.
 ///
 /// These files will record in `.managed.json`.
-fn save_managed_paths(
-    directory: &dyn Directory,
-    wlock: &RwLockWriteGuard<'_, MetaInformation>,
-) -> io::Result<()> {
+fn save_managed_paths(directory: &dyn Directory, wlock: &RwLockWriteGuard<'_, MetaInformation>) -> io::Result<()> {
     let mut w = serde_json::to_vec(&wlock.managed_paths)?;
     writeln!(&mut w)?;
     directory.atomic_write(&MANAGED_FILEPATH, &w[..])?;
@@ -69,22 +63,10 @@ impl ManagedDirectory {
             Ok(data) => {
                 let managed_files_json = String::from_utf8_lossy(&data);
                 let managed_files: HashSet<PathBuf> = serde_json::from_str(&managed_files_json)
-                    .map_err(|e| {
-                        DataCorruption::new(
-                            MANAGED_FILEPATH.to_path_buf(),
-                            format!("Managed file cannot be deserialized: {e:?}. "),
-                        )
-                    })?;
-                Ok(ManagedDirectory {
-                    directory,
-                    meta_informations: Arc::new(RwLock::new(MetaInformation {
-                        managed_paths: managed_files,
-                    })),
-                })
+                    .map_err(|e| DataCorruption::new(MANAGED_FILEPATH.to_path_buf(), format!("Managed file cannot be deserialized: {e:?}. ")))?;
+                Ok(ManagedDirectory { directory, meta_informations: Arc::new(RwLock::new(MetaInformation { managed_paths: managed_files })) })
             }
-            Err(OpenReadError::FileDoesNotExist(_)) => {
-                Ok(ManagedDirectory { directory, meta_informations: Arc::default() })
-            }
+            Err(OpenReadError::FileDoesNotExist(_)) => Ok(ManagedDirectory { directory, meta_informations: Arc::default() }),
             io_err @ Err(OpenReadError::IoError { .. }) => Err(io_err.err().unwrap().into()),
             Err(OpenReadError::IncompatibleIndex(incompatibility)) => {
                 // For the moment, this should never happen  `meta.json`
@@ -111,10 +93,7 @@ impl ManagedDirectory {
     ///
     ///
     /// - `get_living_files`: callback function, return files still used by [`Index`].
-    pub fn garbage_collect<L: FnOnce() -> HashSet<PathBuf>>(
-        &mut self,
-        get_living_files: L,
-    ) -> crate::Result<GarbageCollectionResult> {
+    pub fn garbage_collect<L: FnOnce() -> HashSet<PathBuf>>(&mut self, get_living_files: L) -> crate::Result<GarbageCollectionResult> {
         let mut files_to_delete = vec![];
 
         // It is crucial to get the living files after acquiring the
@@ -128,10 +107,7 @@ impl ManagedDirectory {
         //
         // releasing the lock as .delete() will use it too.
         {
-            let meta_informations_rlock = self
-                .meta_informations
-                .read()
-                .expect("Managed directory rlock poisoned in garbage collect.");
+            let meta_informations_rlock = self.meta_informations.read().expect("Managed directory rlock poisoned in garbage collect.");
 
             // The point of this second "file" lock is to enforce the following scenario
             // 1) process B tries to load a new set of searcher.
@@ -143,11 +119,7 @@ impl ManagedDirectory {
                 Ok(_meta_lock) => {
                     // get alive files used by current index.
                     let living_files = get_living_files();
-                    debug!(
-                        "[{}] [garbage_collect] directory managed_paths: {:?}",
-                        thread::current().name().unwrap_or_default(),
-                        &meta_informations_rlock.managed_paths
-                    );
+                    debug!("[{}] [garbage_collect] directory managed_paths: {:?}", thread::current().name().unwrap_or_default(), &meta_informations_rlock.managed_paths);
                     // If file in `.managed.json`, but not in the living files, we need remove it.
                     for managed_path in &meta_informations_rlock.managed_paths {
                         if !living_files.contains(managed_path) {
@@ -202,8 +174,7 @@ impl ManagedDirectory {
         if !deleted_files.is_empty() {
             // update the list of managed files by removing
             // the file that were removed.
-            let mut meta_informations_wlock =
-                self.meta_informations.write().expect("Managed directory wlock poisoned (2).");
+            let mut meta_informations_wlock = self.meta_informations.write().expect("Managed directory wlock poisoned (2).");
             let managed_paths_write = &mut meta_informations_wlock.managed_paths;
             for delete_file in &deleted_files {
                 managed_paths_write.remove(delete_file);
@@ -261,12 +232,8 @@ impl ManagedDirectory {
     /// Verify checksum of a managed file
     pub fn validate_checksum(&self, path: &Path) -> result::Result<bool, OpenReadError> {
         let reader = self.directory.open_read(path)?;
-        let (footer, data) = Footer::extract_footer(reader)
-            .map_err(|io_error| OpenReadError::wrap_io_error(io_error, path.to_path_buf()))?;
-        let bytes = data.read_bytes().map_err(|io_error| OpenReadError::IoError {
-            io_error: Arc::new(io_error),
-            filepath: path.to_path_buf(),
-        })?;
+        let (footer, data) = Footer::extract_footer(reader).map_err(|io_error| OpenReadError::wrap_io_error(io_error, path.to_path_buf()))?;
+        let bytes = data.read_bytes().map_err(|io_error| OpenReadError::IoError { io_error: Arc::new(io_error), filepath: path.to_path_buf() })?;
         let mut hasher = Hasher::new();
         hasher.update(bytes.as_slice());
         let crc = hasher.finalize();
@@ -275,12 +242,7 @@ impl ManagedDirectory {
 
     /// List all managed files
     pub fn list_managed_files(&self) -> HashSet<PathBuf> {
-        let managed_paths = self
-            .meta_informations
-            .read()
-            .expect("Managed directory rlock poisoned in list damaged.")
-            .managed_paths
-            .clone();
+        let managed_paths = self.meta_informations.read().expect("Managed directory rlock poisoned in list damaged.").managed_paths.clone();
         managed_paths
     }
 }
@@ -297,22 +259,14 @@ impl Directory for ManagedDirectory {
 
     fn open_read(&self, path: &Path) -> result::Result<FileSlice, OpenReadError> {
         let file_slice = self.directory.open_read(path)?;
-        let (footer, reader) = Footer::extract_footer(file_slice)
-            .map_err(|io_error| OpenReadError::wrap_io_error(io_error, path.to_path_buf()))?;
+        let (footer, reader) = Footer::extract_footer(file_slice).map_err(|io_error| OpenReadError::wrap_io_error(io_error, path.to_path_buf()))?;
         footer.is_compatible()?;
         Ok(reader)
     }
 
     fn open_write(&self, path: &Path) -> result::Result<WritePtr, OpenWriteError> {
-        self.register_file_as_managed(path)
-            .map_err(|io_error| OpenWriteError::wrap_io_error(io_error, path.to_path_buf()))?;
-        Ok(io::BufWriter::new(Box::new(FooterProxy::new(
-            self.directory
-                .open_write(path)?
-                .into_inner()
-                .map_err(|_| ())
-                .expect("buffer should be empty"),
-        ))))
+        self.register_file_as_managed(path).map_err(|io_error| OpenWriteError::wrap_io_error(io_error, path.to_path_buf()))?;
+        Ok(io::BufWriter::new(Box::new(FooterProxy::new(self.directory.open_write(path)?.into_inner().map_err(|_| ()).expect("buffer should be empty")))))
     }
 
     fn atomic_write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
@@ -348,10 +302,7 @@ impl Directory for ManagedDirectory {
 
 impl Clone for ManagedDirectory {
     fn clone(&self) -> ManagedDirectory {
-        ManagedDirectory {
-            directory: self.directory.box_clone(),
-            meta_informations: Arc::clone(&self.meta_informations),
-        }
+        ManagedDirectory { directory: self.directory.box_clone(), meta_informations: Arc::clone(&self.meta_informations) }
     }
 }
 

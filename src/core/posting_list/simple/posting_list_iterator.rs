@@ -1,9 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::core::{
-    ElementRead, ElementSlice, GenericElement, GenericElementSlice, PostingListIter,
-    QuantizedParam, QuantizedWeight,
-};
+use crate::core::{ElementRead, ElementSlice, GenericElement, GenericElementSlice, PostingListIter, QuantizedParam, QuantizedWeight};
 use crate::RowId;
 
 #[derive(Debug, Clone)]
@@ -29,9 +26,7 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterator<'a, OW, T
     }
 }
 
-impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW>
-    for PostingListIterator<'a, OW, TW>
-{
+impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW> for PostingListIterator<'a, OW, TW> {
     fn peek(&mut self) -> Option<GenericElement<OW>> {
         // let element_opt: Option<&GenericElement<TW>> = self.posting.get(self.cursor);
         let element_opt = self.generic_elements_slice.get_opt(self.cursor);
@@ -54,15 +49,13 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> PostingListIter<OW, TW>
 
         // find the first position: row_id ≥ target_row_id
         // let next_element: Result<usize, usize> = self.posting[self.cursor..].binary_search_by(|e| e.row_id().cmp(&row_id));
-        let next_element =
-            self.generic_elements_slice.slice_from(self.cursor..).binary_search_by_row_id(row_id);
+        let next_element = self.generic_elements_slice.slice_from(self.cursor..).binary_search_by_row_id(row_id);
 
         match next_element {
             Ok(found_offset) => {
                 self.cursor += found_offset;
                 // let raw_element: GenericElement<TW> = self.posting[self.cursor].clone();
-                let raw_element =
-                    self.generic_elements_slice.get_opt(self.cursor).unwrap().to_owned();
+                let raw_element = self.generic_elements_slice.get_opt(self.cursor).unwrap().to_owned();
                 return Some(self.type_convert(&raw_element));
             }
             Err(insert_index) => {

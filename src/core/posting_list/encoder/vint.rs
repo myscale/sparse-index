@@ -82,10 +82,7 @@ pub(crate) fn uncompress_unsorted(compressed_data: &[u8], output_arr: &mut [u32]
 }
 
 #[inline]
-pub(crate) fn uncompress_unsorted_until_end(
-    compressed_data: &[u8],
-    output_arr: &mut [u32],
-) -> usize {
+pub(crate) fn uncompress_unsorted_until_end(compressed_data: &[u8], output_arr: &mut [u32]) -> usize {
     let mut num_read_bytes = 0;
     for (num_ints_written, output_mut) in output_arr.iter_mut().enumerate() {
         if compressed_data.len() == num_read_bytes {

@@ -8,10 +8,7 @@ pub struct QuantizedF16Param {
 
 impl QuantizedWeight for half::f16 {
     fn gen_quantized_param(min_weight: half::f16, max_weight: half::f16) -> QuantizedParam {
-        QuantizedParam {
-            min: min_weight.to_f32(),
-            diff256: (max_weight - min_weight).to_f32() / 255.0,
-        }
+        QuantizedParam { min: min_weight.to_f32(), diff256: (max_weight - min_weight).to_f32() / 255.0 }
     }
 
     fn quantize_with_param(value: Self, params: QuantizedParam) -> u8 {

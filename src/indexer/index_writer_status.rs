@@ -46,12 +46,7 @@ impl Inner {
 
 impl From<AddBatchReceiver> for IndexWriterStatus {
     fn from(receiver: AddBatchReceiver) -> Self {
-        IndexWriterStatus {
-            inner: Arc::new(Inner {
-                is_alive: AtomicBool::new(true),
-                receive_channel: RwLock::new(Some(receiver)),
-            }),
-        }
+        IndexWriterStatus { inner: Arc::new(Inner { is_alive: AtomicBool::new(true), receive_channel: RwLock::new(Some(receiver)) }) }
     }
 }
 

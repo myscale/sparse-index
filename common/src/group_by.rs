@@ -127,9 +127,7 @@ mod tests {
     use super::*;
 
     fn group_by_collect<I: Iterator<Item = u32>>(iter: I) -> Vec<(I::Item, Vec<I::Item>)> {
-        iter.group_by(|val| val / 10)
-            .map(|(el, iter)| (el, iter.collect::<Vec<_>>()))
-            .collect::<Vec<_>>()
+        iter.group_by(|val| val / 10).map(|(el, iter)| (el, iter.collect::<Vec<_>>())).collect::<Vec<_>>()
     }
 
     #[test]

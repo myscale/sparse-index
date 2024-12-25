@@ -17,6 +17,12 @@ pub struct ExtendedElement<W: QuantizedWeight> {
     pub max_next_weight: W,
 }
 
+impl<W: QuantizedWeight> std::fmt::Display for ExtendedElement<W> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(row_id: {}, weight: {:?}, max_next_weight: {:?})", self.row_id, self.weight, self.max_next_weight)
+    }
+}
+
 impl<W: QuantizedWeight> ElementWrite<W> for ExtendedElement<W> {
     fn update_weight(&mut self, value: W) {
         self.weight = value;
@@ -68,11 +74,7 @@ impl<'a, W: QuantizedWeight> ElementSlice<'a, W> for &'a [ExtendedElement<W>] {
 
 impl<W: QuantizedWeight> ExtendedElement<W> {
     pub fn new(row_id: RowId, weight: DimWeight) -> Self {
-        Self {
-            row_id,
-            weight: W::from_f32(weight),
-            max_next_weight: W::from_f32(super::DEFAULT_MAX_NEXT_WEIGHT),
-        }
+        Self { row_id, weight: W::from_f32(weight), max_next_weight: W::from_f32(super::DEFAULT_MAX_NEXT_WEIGHT) }
     }
 }
 
@@ -84,11 +86,7 @@ impl<W: QuantizedWeight> Default for ExtendedElement<W> {
 
 impl<W: QuantizedWeight> From<super::SimpleElement<W>> for ExtendedElement<W> {
     fn from(value: super::SimpleElement<W>) -> Self {
-        Self {
-            row_id: value.row_id,
-            weight: value.weight,
-            max_next_weight: W::from_f32(super::DEFAULT_MAX_NEXT_WEIGHT),
-        }
+        Self { row_id: value.row_id, weight: value.weight, max_next_weight: W::from_f32(super::DEFAULT_MAX_NEXT_WEIGHT) }
     }
 }
 #[cfg(test)]

@@ -3,10 +3,7 @@ mod test {
     use cxx::let_cxx_string;
     use tempfile::TempDir;
 
-    use crate::{
-        ffi::TupleElement, ffi_commit_index, ffi_create_index, ffi_insert_sparse_vector,
-        ffi_load_index_reader, ffi_sparse_search,
-    };
+    use crate::{ffi::TupleElement, ffi_commit_index, ffi_create_index, ffi_insert_sparse_vector, ffi_load_index_reader, ffi_sparse_search};
 
     fn mock_row_content(base: u32, rows: u32) -> impl Iterator<Item = Vec<TupleElement>> {
         (base * rows..base * rows + rows).map(|i| {

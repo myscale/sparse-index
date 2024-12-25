@@ -2,8 +2,7 @@ use crate::replace_in_place;
 
 /// Separates the different segments of a json path.
 pub const JSON_PATH_SEGMENT_SEP: u8 = 1u8;
-pub const JSON_PATH_SEGMENT_SEP_STR: &str =
-    unsafe { std::str::from_utf8_unchecked(&[JSON_PATH_SEGMENT_SEP]) };
+pub const JSON_PATH_SEGMENT_SEP_STR: &str = unsafe { std::str::from_utf8_unchecked(&[JSON_PATH_SEGMENT_SEP]) };
 
 /// Create a new JsonPathWriter, that creates flattened json paths for tantivy.
 #[derive(Clone, Debug, Default)]
@@ -45,9 +44,7 @@ impl JsonPathWriter {
             // The unsafe below is safe as long as b'.' and JSON_PATH_SEGMENT_SEP are
             // valid single byte ut8 strings.
             // By utf-8 design, they cannot be part of another codepoint.
-            unsafe {
-                replace_in_place(b'.', JSON_PATH_SEGMENT_SEP, appended_segment.as_bytes_mut())
-            };
+            unsafe { replace_in_place(b'.', JSON_PATH_SEGMENT_SEP, appended_segment.as_bytes_mut()) };
         }
     }
 

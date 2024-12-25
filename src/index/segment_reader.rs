@@ -33,48 +33,24 @@ impl SegmentReader {
         let rows_count: RowId = segment.meta().rows_count();
         let index_path = segment.index().directory().get_path().unwrap();
 
-        assert_ne!(
-            segment.index().index_settings.inverted_index_config.storage_type,
-            StorageType::Ram
-        );
+        assert_ne!(segment.index().index_settings.inverted_index_config.storage_type, StorageType::Ram);
 
-        let inverted_index: GenericInvertedIndex = GenericInvertedIndex::open_from(
-            &index_path,
-            Some(&segment.id().uuid_string()),
-            &segment.index().index_settings,
-        )?;
+        let inverted_index: GenericInvertedIndex = GenericInvertedIndex::open_from(&index_path, Some(&segment.id().uuid_string()), &segment.index().index_settings)?;
 
-        Ok(SegmentReader {
-            index_searcher: Searcher::new(inverted_index),
-            segment_id: segment.id(),
-            rows_count,
-        })
+        Ok(SegmentReader { index_searcher: Searcher::new(inverted_index), segment_id: segment.id(), rows_count })
     }
 
-    pub fn search(
-        &self,
-        query: &SparseVector,
-        sparse_bitmap: &Option<SparseBitmap>,
-        limits: u32,
-    ) -> crate::Result<TopK> {
+    pub fn search(&self, query: &SparseVector, sparse_bitmap: &Option<SparseBitmap>, limits: u32) -> crate::Result<TopK> {
         Ok(self.index_searcher.search(query, sparse_bitmap, limits))
     }
 
-    pub fn brute_force_search(
-        &self,
-        query: &SparseVector,
-        sparse_bitmap: &Option<SparseBitmap>,
-        limits: u32,
-    ) -> crate::Result<TopK> {
+    pub fn brute_force_search(&self, query: &SparseVector, sparse_bitmap: &Option<SparseBitmap>, limits: u32) -> crate::Result<TopK> {
         Ok(self.index_searcher.plain_search(query, sparse_bitmap, limits))
     }
 }
 
 impl fmt::Debug for SegmentReader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SegmentReader")
-            .field("segment_id", &self.segment_id())
-            .field("rows_count", &self.rows_count())
-            .finish()
+        f.debug_struct("SegmentReader").field("segment_id", &self.segment_id()).field("rows_count", &self.rows_count()).finish()
     }
 }

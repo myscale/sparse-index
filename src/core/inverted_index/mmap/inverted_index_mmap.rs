@@ -1,12 +1,9 @@
 use crate::core::common::ops::*;
 use crate::core::common::types::{DimId, DimOffset};
-use crate::core::inverted_index::common::{
-    InvertedIndexMeta, InvertedIndexMetrics, Revision, Version,
-};
+use crate::core::inverted_index::common::{InvertedIndexMeta, InvertedIndexMetrics, Revision, Version};
 use crate::core::posting_list::PostingListIterator;
 use crate::core::{
-    ElementSlice, GenericElementSlice, InvertedIndexMmapAccess, InvertedIndexMmapInit,
-    InvertedIndexRam, InvertedIndexRamAccess, PostingListIterAccess, QuantizedParam,
+    ElementSlice, GenericElementSlice, InvertedIndexMmapAccess, InvertedIndexMmapInit, InvertedIndexRam, InvertedIndexRamAccess, PostingListIterAccess, QuantizedParam,
     QuantizedWeight, WeightType,
 };
 use log::error;
@@ -16,10 +13,7 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use super::{
-    InvertedIndexMmapFileConfig, MmapInvertedIndexMeta, MmapManager, PostingListHeader,
-    POSTING_HEADER_SIZE,
-};
+use super::{InvertedIndexMmapFileConfig, MmapInvertedIndexMeta, MmapManager, PostingListHeader, POSTING_HEADER_SIZE};
 
 /// InvertedIndexMmap
 ///
@@ -35,38 +29,26 @@ pub struct InvertedIndexMmap<OW: QuantizedWeight, TW: QuantizedWeight> {
     pub _phantom_t: PhantomData<TW>,
 }
 
-impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapInit<OW, TW>
-    for InvertedIndexMmap<OW, TW>
-{
+impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapInit<OW, TW> for InvertedIndexMmap<OW, TW> {
     fn open(path: &Path, segment_id: Option<&str>) -> std::io::Result<Self> {
         Self::load_under_segment(path.to_path_buf(), segment_id)
     }
 
-    fn from_ram_index(
-        ram_index: Cow<InvertedIndexRam<TW>>,
-        path: PathBuf,
-        segment_id: Option<&str>,
-    ) -> crate::Result<Self> {
+    fn from_ram_index(ram_index: Cow<InvertedIndexRam<TW>>, path: PathBuf, segment_id: Option<&str>) -> crate::Result<Self> {
         Self::convert_and_save(&ram_index, path, segment_id)
     }
 }
 
-impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterAccess<OW, TW>
-    for InvertedIndexMmap<OW, TW>
-{
+impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterAccess<OW, TW> for InvertedIndexMmap<OW, TW> {
     // Pay attention to these weight type order.
     type Iter<'a> = PostingListIterator<'a, OW, TW>;
 
     fn iter(&self, dim_id: &DimOffset) -> Option<Self::Iter<'_>> {
-        self.posting_with_param(dim_id).map(|(generic_elements_slice, quantized_param)| {
-            PostingListIterator::new(generic_elements_slice, quantized_param)
-        })
+        self.posting_with_param(dim_id).map(|(generic_elements_slice, quantized_param)| PostingListIterator::new(generic_elements_slice, quantized_param))
     }
 }
 
-impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
-    for InvertedIndexMmap<OW, TW>
-{
+impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW> for InvertedIndexMmap<OW, TW> {
     fn size(&self) -> usize {
         self.meta.inverted_index_meta.posting_count
     }
@@ -81,8 +63,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
     }
 
     fn posting_len(&self, dim_id: &DimId) -> Option<usize> {
-        self.posting_with_param(dim_id)
-            .map(|(generic_elements_slice, _)| generic_elements_slice.length())
+        self.posting_with_param(dim_id).map(|(generic_elements_slice, _)| generic_elements_slice.length())
     }
 
     fn files(&self, segment_id: Option<&str>) -> Vec<PathBuf> {
@@ -94,44 +75,26 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
 
 impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
     /// Get PostingList obj with given dim-id, the weight type should be TW(may be quantized).
-    pub fn posting_with_param(
-        &self,
-        dim_id: &DimId,
-    ) -> Option<(GenericElementSlice<'_, TW>, Option<QuantizedParam>)> {
+    pub fn posting_with_param(&self, dim_id: &DimId) -> Option<(GenericElementSlice<'_, TW>, Option<QuantizedParam>)> {
         // check that the id is not out of bounds (posting_count includes the empty zeroth entry)
         if *dim_id >= self.size() as DimId {
-            error!(
-                "dim_id is overflow, dim_id should smaller than {}, but given: {}",
-                self.size(),
-                dim_id
-            );
+            error!("dim_id is overflow, dim_id should smaller than {}, but given: {}", self.size(), dim_id);
             return None;
         }
         // loading header obj with offsets.
         let offset_left = *dim_id as usize * POSTING_HEADER_SIZE;
-        let header: PostingListHeader = transmute_from_u8::<PostingListHeader>(
-            &self.headers_mmap[offset_left..(offset_left + POSTING_HEADER_SIZE)],
-        )
-        .clone();
+        let header: PostingListHeader = transmute_from_u8::<PostingListHeader>(&self.headers_mmap[offset_left..(offset_left + POSTING_HEADER_SIZE)]).clone();
 
         // loading posting obj
         let elements_bytes: &[u8] = &self.postings_mmap[header.start as usize..header.end as usize];
 
-        Some((
-            GenericElementSlice::from_bytes_and_type(header.element_type, elements_bytes),
-            header.quantized_params,
-        ))
+        Some((GenericElementSlice::from_bytes_and_type(header.element_type, elements_bytes), header.quantized_params))
     }
 
     /// Converting inverted-index-ram into mmap files.
     /// the weight type in inverted-index-ram may already been quantized.
-    pub fn convert_and_save(
-        inverted_index_ram: &InvertedIndexRam<TW>,
-        directory: PathBuf,
-        segment_id: Option<&str>,
-    ) -> crate::Result<Self> {
-        let (total_headers_storage_size, total_postings_storage_size, headers_mmap, postings_mmap) =
-            MmapManager::write_mmap_files(&directory, segment_id, inverted_index_ram)?;
+    pub fn convert_and_save(inverted_index_ram: &InvertedIndexRam<TW>, directory: PathBuf, segment_id: Option<&str>) -> crate::Result<Self> {
+        let (total_headers_storage_size, total_postings_storage_size, headers_mmap, postings_mmap) = MmapManager::write_mmap_files(&directory, segment_id, inverted_index_ram)?;
 
         let meta_file_path = MmapManager::get_index_meta_file_path(&directory.clone(), segment_id);
 
@@ -143,8 +106,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
                 inverted_index_ram.metrics().max_row_id,
                 inverted_index_ram.metrics().min_dim_id,
                 inverted_index_ram.metrics().max_dim_id,
-                (TW::weight_type() == WeightType::WeightU8)
-                    && (OW::weight_type() != TW::weight_type()),
+                (TW::weight_type() == WeightType::WeightU8) && (OW::weight_type() != TW::weight_type()),
                 inverted_index_ram.element_type(),
                 Version::mmap(Revision::V1),
             ),
@@ -154,14 +116,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
 
         atomic_save_json(&meta_file_path, &meta)?;
 
-        Ok(Self {
-            path: directory.clone(),
-            headers_mmap: headers_mmap.clone(),
-            postings_mmap: postings_mmap.clone(),
-            meta,
-            _phantom_w: PhantomData,
-            _phantom_t: PhantomData,
-        })
+        Ok(Self { path: directory.clone(), headers_mmap: headers_mmap.clone(), postings_mmap: postings_mmap.clone(), meta, _phantom_w: PhantomData, _phantom_t: PhantomData })
     }
 
     /// load without segment name.
@@ -176,8 +131,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmap<OW, TW> {
         let meta_data: MmapInvertedIndexMeta = read_json(&meta_file_path)?;
 
         // read inverted index data.
-        let (headers_mmap_file_path, postings_mmap_file_path) =
-            MmapManager::get_all_mmap_files_path(&path, segment_id);
+        let (headers_mmap_file_path, postings_mmap_file_path) = MmapManager::get_all_mmap_files_path(&path, segment_id);
         let headers_mmap = open_read_mmap(headers_mmap_file_path.as_ref())?;
         let postings_mmap = open_read_mmap(postings_mmap_file_path.as_ref())?;
 

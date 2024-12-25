@@ -55,10 +55,7 @@ pub struct CxxVectorStringStrategy;
 
 impl ConvertStrategy<CxxVector<CxxString>, Vec<String>> for CxxVectorStringStrategy {
     fn convert(&self, items: &CxxVector<CxxString>) -> Result<Vec<String>, CxxConvertError> {
-        items
-            .iter()
-            .map(|item| item.to_str().map(|t| t.to_string()).map_err(CxxConvertError::Utf8Error))
-            .collect()
+        items.iter().map(|item| item.to_str().map(|t| t.to_string()).map_err(CxxConvertError::Utf8Error)).collect()
     }
 }
 
@@ -77,11 +74,7 @@ where
     // T: VectorElement,
 {
     pub fn new(strategy: S) -> Self {
-        Converter {
-            strategy,
-            _marker_t: std::marker::PhantomData,
-            _marker_u: std::marker::PhantomData,
-        }
+        Converter { strategy, _marker_t: std::marker::PhantomData, _marker_u: std::marker::PhantomData }
     }
 
     pub fn convert(&self, item: &T) -> Result<U, CxxConvertError> {

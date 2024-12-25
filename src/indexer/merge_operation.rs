@@ -52,11 +52,7 @@ pub(crate) struct InnerMergeOperation {
 }
 
 impl MergeOperation {
-    pub(crate) fn new(
-        inventory: &MergeOperationInventory,
-        target_opstamp: Opstamp,
-        segment_ids: Vec<SegmentId>,
-    ) -> MergeOperation {
+    pub(crate) fn new(inventory: &MergeOperationInventory, target_opstamp: Opstamp, segment_ids: Vec<SegmentId>) -> MergeOperation {
         let inner_merge_operation = InnerMergeOperation { target_opstamp, segment_ids };
         MergeOperation { inner: inventory.track(inner_merge_operation) }
     }

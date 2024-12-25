@@ -30,13 +30,11 @@ impl<'a, W: QuantizedWeight> GenericElementSlice<'a, W> {
     pub fn from_bytes_and_type(element_type: ElementType, element_bytes: &'a [u8]) -> Self {
         match element_type {
             ElementType::SIMPLE => {
-                let posting_slice: &'a [SimpleElement<W>] =
-                    transmute_from_u8_to_slice(element_bytes);
+                let posting_slice: &'a [SimpleElement<W>] = transmute_from_u8_to_slice(element_bytes);
                 GenericElementSlice::from_simple_slice(posting_slice)
             }
             ElementType::EXTENDED => {
-                let posting_slice: &'a [ExtendedElement<W>] =
-                    transmute_from_u8_to_slice(element_bytes);
+                let posting_slice: &'a [ExtendedElement<W>] = transmute_from_u8_to_slice(element_bytes);
                 GenericElementSlice::from_extended_slice(posting_slice)
             }
         }
@@ -45,12 +43,8 @@ impl<'a, W: QuantizedWeight> GenericElementSlice<'a, W> {
     #[allow(unused)]
     pub fn to_u8_slice(&self) -> &'a [u8] {
         match self {
-            GenericElementSlice::SimpleElementSlice(&ref simple_slice) => {
-                transmute_to_u8_slice(simple_slice)
-            }
-            GenericElementSlice::ExtendedElementSlice(&ref extended_slice) => {
-                transmute_to_u8_slice(extended_slice)
-            }
+            GenericElementSlice::SimpleElementSlice(&ref simple_slice) => transmute_to_u8_slice(simple_slice),
+            GenericElementSlice::ExtendedElementSlice(&ref extended_slice) => transmute_to_u8_slice(extended_slice),
         }
     }
 }
@@ -58,9 +52,7 @@ impl<'a, W: QuantizedWeight> GenericElementSlice<'a, W> {
 #[cfg(test)]
 mod test {
     use crate::{
-        core::{
-            ElementRead, ElementSlice, ElementType, ExtendedElement, QuantizedWeight, SimpleElement,
-        },
+        core::{ElementRead, ElementSlice, ElementType, ExtendedElement, QuantizedWeight, SimpleElement},
         RowId,
     };
 

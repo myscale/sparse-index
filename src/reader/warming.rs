@@ -28,11 +28,7 @@ pub trait Warmer: Sync + Send {
 pub(crate) struct WarmingState(Arc<Mutex<WarmingStateInner>>);
 
 impl WarmingState {
-    pub fn new(
-        num_warming_threads: usize,
-        warmers: Vec<Weak<dyn Warmer>>,
-        searcher_generation_inventory: Inventory<SearcherGeneration>,
-    ) -> crate::Result<Self> {
+    pub fn new(num_warming_threads: usize, warmers: Vec<Weak<dyn Warmer>>, searcher_generation_inventory: Inventory<SearcherGeneration>) -> crate::Result<Self> {
         Ok(Self(Arc::new(Mutex::new(WarmingStateInner {
             num_warming_threads,
             warmers,
@@ -73,11 +69,7 @@ impl WarmingStateInner {
     /// If there are active warmers, warm them with the provided searcher, and kick background GC
     /// thread if it has not yet been kicked. Otherwise, prune state for dropped searcher
     /// generations inline.
-    fn warm_new_searcher_generation(
-        &mut self,
-        searcher: &Searcher,
-        this: &Arc<Mutex<Self>>,
-    ) -> crate::Result<()> {
+    fn warm_new_searcher_generation(&mut self, searcher: &Searcher, this: &Arc<Mutex<Self>>) -> crate::Result<()> {
         let warmers = self.pruned_warmers();
         if warmers.is_empty() {
             return Ok(());
@@ -85,16 +77,14 @@ impl WarmingStateInner {
 
         self.start_gc_thread_maybe(this)?;
         self.warmed_generation_ids.insert(searcher.generation().generation_id());
-        warming_executor(self.num_warming_threads.min(warmers.len()))?
-            .map(|warmer| warmer.warm(searcher), warmers.into_iter())?;
+        warming_executor(self.num_warming_threads.min(warmers.len()))?.map(|warmer| warmer.warm(searcher), warmers.into_iter())?;
         Ok(())
     }
 
     /// Upgrade and clean up weak references of Warmers, returning strong references (Weak -> Arc).
     fn pruned_warmers(&mut self) -> Vec<Arc<dyn Warmer>> {
         // Upgrade and collect each strong reference (ignore failed upgrades that return None; only collect successful Some).
-        let strong_warmers =
-            self.warmers.iter().flat_map(|weak_warmer| weak_warmer.upgrade()).collect::<Vec<_>>();
+        let strong_warmers = self.warmers.iter().flat_map(|weak_warmer| weak_warmer.upgrade()).collect::<Vec<_>>();
 
         // Convert the successfully upgraded strong references back to weak references.
         self.warmers = strong_warmers.iter().map(Arc::downgrade).collect();
@@ -107,17 +97,11 @@ impl WarmingStateInner {
         // Get all active SearchGenerations.
         let live_generations = self.searcher_generation_inventory.list();
         // Generate a set of IDs for all active SearchGenerations.
-        let live_generation_ids: HashSet<u64> = live_generations
-            .iter()
-            .map(|searcher_generation| searcher_generation.generation_id())
-            .collect();
+        let live_generation_ids: HashSet<u64> = live_generations.iter().map(|searcher_generation| searcher_generation.generation_id()).collect();
 
         // Check if GC is needed.
         // If all warmed SearchGenerations are active, then GC is not required.
-        let gc_not_required = self
-            .warmed_generation_ids
-            .iter()
-            .all(|warmed_up_generation| live_generation_ids.contains(warmed_up_generation));
+        let gc_not_required = self.warmed_generation_ids.iter().all(|warmed_up_generation| live_generation_ids.contains(warmed_up_generation));
         if gc_not_required {
             return false;
         }

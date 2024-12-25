@@ -26,8 +26,7 @@ impl FilterImplPerInstructionSet {
 
 // List of available implementation in preferred order.
 #[cfg(target_arch = "x86_64")]
-const IMPLS: [FilterImplPerInstructionSet; 2] =
-    [FilterImplPerInstructionSet::AVX2, FilterImplPerInstructionSet::Scalar];
+const IMPLS: [FilterImplPerInstructionSet; 2] = [FilterImplPerInstructionSet::AVX2, FilterImplPerInstructionSet::Scalar];
 
 #[cfg(not(target_arch = "x86_64"))]
 const IMPLS: [FilterImplPerInstructionSet; 1] = [FilterImplPerInstructionSet::Scalar];
@@ -48,9 +47,7 @@ impl FilterImplPerInstructionSet {
         match self {
             #[cfg(target_arch = "x86_64")]
             FilterImplPerInstructionSet::AVX2 => avx2::filter_vec_in_place(range, offset, output),
-            FilterImplPerInstructionSet::Scalar => {
-                scalar::filter_vec_in_place(range, offset, output)
-            }
+            FilterImplPerInstructionSet::Scalar => scalar::filter_vec_in_place(range, offset, output),
         }
     }
 }
@@ -62,8 +59,7 @@ fn get_best_available_instruction_set() -> FilterImplPerInstructionSet {
     let instruction_set_byte: u8 = INSTRUCTION_SET_BYTE.load(Ordering::Relaxed);
     if instruction_set_byte == u8::MAX {
         // Let's initialize the instruction set and cache it.
-        let instruction_set =
-            IMPLS.into_iter().find(FilterImplPerInstructionSet::is_available).unwrap();
+        let instruction_set = IMPLS.into_iter().find(FilterImplPerInstructionSet::is_available).unwrap();
         INSTRUCTION_SET_BYTE.store(instruction_set as u8, Ordering::Relaxed);
         return instruction_set;
     }
@@ -89,9 +85,7 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_instruction_set_to_code_from_code() {
-        for instruction_set in
-            [FilterImplPerInstructionSet::AVX2, FilterImplPerInstructionSet::Scalar]
-        {
+        for instruction_set in [FilterImplPerInstructionSet::AVX2, FilterImplPerInstructionSet::Scalar] {
             let code = instruction_set as u8;
             assert_eq!(instruction_set, FilterImplPerInstructionSet::from(code));
         }

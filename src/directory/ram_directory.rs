@@ -9,10 +9,7 @@ use log::warn;
 
 use super::FileHandle;
 use crate::directory::error::{DeleteError, OpenReadError, OpenWriteError};
-use crate::directory::{
-    AntiCallToken, Directory, FileSlice, TerminatingWrite, WatchCallback, WatchCallbackList,
-    WatchHandle, WritePtr,
-};
+use crate::directory::{AntiCallToken, Directory, FileSlice, TerminatingWrite, WatchCallback, WatchCallbackList, WatchHandle, WritePtr};
 use crate::META_FILEPATH;
 
 /// Writer associated with the [`RamDirectory`].
@@ -27,12 +24,7 @@ struct VecWriter {
 
 impl VecWriter {
     fn new(path_buf: PathBuf, shared_directory: RamDirectory) -> VecWriter {
-        VecWriter {
-            path: path_buf,
-            data: Cursor::new(Vec::new()),
-            shared_directory,
-            is_flushed: true,
-        }
+        VecWriter { path: path_buf, data: Cursor::new(Vec::new()), shared_directory, is_flushed: true }
     }
 }
 
@@ -83,10 +75,7 @@ impl InnerDirectory {
     }
 
     fn open_read(&self, path: &Path) -> Result<FileSlice, OpenReadError> {
-        self.fs
-            .get(path)
-            .ok_or_else(|| OpenReadError::FileDoesNotExist(PathBuf::from(path)))
-            .cloned()
+        self.fs.get(path).ok_or_else(|| OpenReadError::FileDoesNotExist(PathBuf::from(path))).cloned()
     }
 
     fn delete(&mut self, path: &Path) -> result::Result<(), DeleteError> {
@@ -135,10 +124,7 @@ impl RamDirectory {
     /// Ulterior writes on one of the copy
     /// will not affect the other copy.
     pub fn deep_clone(&self) -> RamDirectory {
-        let inner_clone = InnerDirectory {
-            fs: self.fs.read().unwrap().fs.clone(),
-            watch_router: Default::default(),
-        };
+        let inner_clone = InnerDirectory { fs: self.fs.read().unwrap().fs.clone(), watch_router: Default::default() };
         RamDirectory { fs: Arc::new(RwLock::new(inner_clone)) }
     }
 
@@ -193,10 +179,7 @@ impl Directory for RamDirectory {
         Ok(self
             .fs
             .read()
-            .map_err(|e| OpenReadError::IoError {
-                io_error: Arc::new(io::Error::new(io::ErrorKind::Other, e.to_string())),
-                filepath: path.to_path_buf(),
-            })?
+            .map_err(|e| OpenReadError::IoError { io_error: Arc::new(io::Error::new(io::ErrorKind::Other, e.to_string())), filepath: path.to_path_buf() })?
             .exists(path))
     }
 
@@ -214,9 +197,7 @@ impl Directory for RamDirectory {
     }
 
     fn atomic_read(&self, path: &Path) -> Result<Vec<u8>, OpenReadError> {
-        let bytes = self.open_read(path)?.read_bytes().map_err(|io_error| {
-            OpenReadError::IoError { io_error: Arc::new(io_error), filepath: path.to_path_buf() }
-        })?;
+        let bytes = self.open_read(path)?.read_bytes().map_err(|io_error| OpenReadError::IoError { io_error: Arc::new(io_error), filepath: path.to_path_buf() })?;
         Ok(bytes.as_slice().to_owned())
     }
 

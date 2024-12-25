@@ -2,10 +2,7 @@ use std::{borrow::Cow, path::PathBuf};
 
 use log::error;
 
-use crate::core::{
-    CompressedInvertedIndexMmap, IndexWeightType, InvertedIndexMmap, InvertedIndexMmapAccess,
-    InvertedIndexMmapInit, InvertedIndexRam, StorageType,
-};
+use crate::core::{CompressedInvertedIndexMmap, IndexWeightType, InvertedIndexMmap, InvertedIndexMmapAccess, InvertedIndexMmapInit, InvertedIndexRam, StorageType};
 
 pub enum GenericInvertedIndexRam {
     F32RamIndex(InvertedIndexRam<f32>),

@@ -1,10 +1,7 @@
 use enum_dispatch::enum_dispatch;
 use log::error;
 
-use crate::core::{
-    CompressedPostingListIterator, ElementRead, GenericElement, PostingListIter,
-    PostingListIterator, QuantizedWeight, SparseBitmap, TopK,
-};
+use crate::core::{CompressedPostingListIterator, ElementRead, GenericElement, PostingListIter, PostingListIterator, QuantizedWeight, SparseBitmap, TopK};
 use crate::ffi::ScoredPointOffset;
 use crate::RowId;
 use std::any::TypeId;

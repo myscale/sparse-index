@@ -14,13 +14,7 @@ pub struct InvertedIndexMetrics {
 
 impl Default for InvertedIndexMetrics {
     fn default() -> Self {
-        Self {
-            min_row_id: RowId::MAX,
-            max_row_id: RowId::MIN,
-            min_dim_id: 0,
-            max_dim_id: DimId::MIN,
-            vector_count: 0,
-        }
+        Self { min_row_id: RowId::MAX, max_row_id: RowId::MIN, min_dim_id: 0, max_dim_id: DimId::MIN, vector_count: 0 }
     }
 }
 

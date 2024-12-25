@@ -39,9 +39,7 @@ pub const INDEX_FORMAT_VERSION: u32 = 6;
 pub const INDEX_FORMAT_OLDEST_SUPPORTED_VERSION: u32 = 4;
 
 // re-export log ffi function.
-pub use api::cxx_ffi::{
-    sparse_index_log4rs_initialize, sparse_index_log4rs_initialize_with_callback,
-};
+pub use api::cxx_ffi::{sparse_index_log4rs_initialize, sparse_index_log4rs_initialize_with_callback};
 
 #[cxx::bridge(namespace = "SPARSE")]
 pub mod ffi {
@@ -95,18 +93,11 @@ pub mod ffi {
         /* index manager */
         pub fn ffi_create_index(index_path: &CxxString) -> FFIBoolResult;
 
-        pub fn ffi_create_index_with_parameter(
-            index_path: &CxxString,
-            index_json_parameter: &CxxString,
-        ) -> FFIBoolResult;
+        pub fn ffi_create_index_with_parameter(index_path: &CxxString, index_json_parameter: &CxxString) -> FFIBoolResult;
 
         pub fn ffi_commit_index(index_path: &CxxString) -> FFIBoolResult;
 
-        pub fn ffi_insert_sparse_vector(
-            index_path: &CxxString,
-            row_id: u32,
-            sparse_vector: &Vec<TupleElement>,
-        ) -> FFIBoolResult;
+        pub fn ffi_insert_sparse_vector(index_path: &CxxString, row_id: u32, sparse_vector: &Vec<TupleElement>) -> FFIBoolResult;
         pub fn ffi_free_index_writer(index_path: &CxxString) -> FFIBoolResult;
 
         /* index searcher */
@@ -114,13 +105,7 @@ pub mod ffi {
 
         pub fn ffi_free_index_reader(index_path: &CxxString) -> FFIBoolResult;
 
-        pub fn ffi_sparse_search(
-            index_path: &CxxString,
-            sparse_vector: &Vec<TupleElement>,
-            filter: &CxxVector<u8>,
-            enable_filter: bool,
-            top_k: u32,
-        ) -> FFIScoreResult;
+        pub fn ffi_sparse_search(index_path: &CxxString, sparse_vector: &Vec<TupleElement>, filter: &CxxVector<u8>, enable_filter: bool, top_k: u32) -> FFIScoreResult;
     }
 }
 

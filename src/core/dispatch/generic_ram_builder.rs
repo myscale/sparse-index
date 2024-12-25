@@ -3,10 +3,7 @@ use std::path::PathBuf;
 use log::error;
 
 use crate::{
-    core::{
-        ElementType, IndexWeightType, InvertedIndexRamBuilder, InvertedIndexRamBuilderTrait,
-        SparseVector, StorageType,
-    },
+    core::{ElementType, IndexWeightType, InvertedIndexRamBuilder, InvertedIndexRamBuilderTrait, SparseVector, StorageType},
     RowId,
 };
 

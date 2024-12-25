@@ -1,7 +1,6 @@
 use super::SegmentComponent;
 use crate::core::{
-    COMPRESSED_INVERTED_INDEX_HEADERS_SUFFIX, COMPRESSED_INVERTED_INDEX_POSTING_BLOCKS_SUFFIX,
-    COMPRESSED_INVERTED_INDEX_ROW_IDS_SUFFIX, INVERTED_INDEX_HEADERS_SUFFIX,
+    COMPRESSED_INVERTED_INDEX_HEADERS_SUFFIX, COMPRESSED_INVERTED_INDEX_POSTING_BLOCKS_SUFFIX, COMPRESSED_INVERTED_INDEX_ROW_IDS_SUFFIX, INVERTED_INDEX_HEADERS_SUFFIX,
     INVERTED_INDEX_META_FILE_SUFFIX, INVERTED_INDEX_POSTINGS_SUFFIX,
 };
 use crate::index::SegmentId;
@@ -27,18 +26,8 @@ impl SegmentMetaInventory {
     }
 
     /// create new segment_meta and record it into inventory.
-    pub fn new_segment_meta(
-        &self,
-        directory: PathBuf,
-        segment_id: SegmentId,
-        rows_count: u32,
-    ) -> SegmentMeta {
-        let inner = InnerSegmentMeta {
-            directory,
-            segment_id,
-            rows_count,
-            include_temp_sv_store: Arc::new(AtomicBool::new(true)),
-        };
+    pub fn new_segment_meta(&self, directory: PathBuf, segment_id: SegmentId, rows_count: u32) -> SegmentMeta {
+        let inner = InnerSegmentMeta { directory, segment_id, rows_count, include_temp_sv_store: Arc::new(AtomicBool::new(true)) };
         SegmentMeta::from(self.inventory.track(inner))
     }
 }
@@ -55,10 +44,7 @@ impl fmt::Debug for SegmentMeta {
 }
 
 impl serde::Serialize for SegmentMeta {
-    fn serialize<S: serde::Serializer>(
-        &self,
-        serializer: S,
-    ) -> Result<<S as serde::Serializer>::Ok, <S as serde::Serializer>::Error> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<<S as serde::Serializer>::Ok, <S as serde::Serializer>::Error> {
         self.tracked.serialize(serializer)
     }
 }
@@ -87,9 +73,7 @@ impl SegmentMeta {
     ///
     /// It's important for these files will not used by segment anymore.
     pub fn list_files(&self) -> HashSet<PathBuf> {
-        SegmentComponent::iterator()
-            .map(|component| self.relative_path(*component))
-            .collect::<HashSet<PathBuf>>()
+        SegmentComponent::iterator().map(|component| self.relative_path(*component)).collect::<HashSet<PathBuf>>()
     }
 
     // TODO: refine for different version.
@@ -99,15 +83,9 @@ impl SegmentMeta {
             SegmentComponent::InvertedIndexMeta => INVERTED_INDEX_META_FILE_SUFFIX.to_string(),
             SegmentComponent::InvertedIndexHeaders => INVERTED_INDEX_HEADERS_SUFFIX.to_string(),
             SegmentComponent::InvertedIndexPostings => INVERTED_INDEX_POSTINGS_SUFFIX.to_string(),
-            SegmentComponent::CompressedInvertedIndexHeaders => {
-                COMPRESSED_INVERTED_INDEX_HEADERS_SUFFIX.to_string()
-            }
-            SegmentComponent::CompressedInvertedIndexRowIds => {
-                COMPRESSED_INVERTED_INDEX_ROW_IDS_SUFFIX.to_string()
-            }
-            SegmentComponent::CompressedInvertedIndexBlocks => {
-                COMPRESSED_INVERTED_INDEX_POSTING_BLOCKS_SUFFIX.to_string()
-            } // SegmentComponent::Delete => ".delete".to_string(),
+            SegmentComponent::CompressedInvertedIndexHeaders => COMPRESSED_INVERTED_INDEX_HEADERS_SUFFIX.to_string(),
+            SegmentComponent::CompressedInvertedIndexRowIds => COMPRESSED_INVERTED_INDEX_ROW_IDS_SUFFIX.to_string(),
+            SegmentComponent::CompressedInvertedIndexBlocks => COMPRESSED_INVERTED_INDEX_POSTING_BLOCKS_SUFFIX.to_string(), // SegmentComponent::Delete => ".delete".to_string(),
         });
         PathBuf::from(path)
     }
@@ -177,12 +155,7 @@ pub struct IndexMeta {
 
 impl fmt::Debug for IndexMeta {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            serde_json::ser::to_string(self)
-                .expect("JSON serialization for IndexMeta should never fail.")
-        )
+        write!(f, "{}", serde_json::ser::to_string(self).expect("JSON serialization for IndexMeta should never fail."))
     }
 }
 
@@ -193,10 +166,7 @@ impl IndexMeta {
     }
 
     /// parse meta.json into IndexMeta obj.
-    pub(crate) fn deserialize(
-        meta_json: &str,
-        inventory: &SegmentMetaInventory,
-    ) -> serde_json::Result<IndexMeta> {
+    pub(crate) fn deserialize(meta_json: &str, inventory: &SegmentMetaInventory) -> serde_json::Result<IndexMeta> {
         let untracked_meta_json: UntrackedIndexMeta = serde_json::from_str(meta_json)?;
         Ok(untracked_meta_json.track(inventory))
     }
@@ -219,11 +189,7 @@ impl UntrackedIndexMeta {
     /// Consume `UntrackedIndexMeta` and generate a new `IndexMeta` object.
     pub fn track(self, inventory: &SegmentMetaInventory) -> IndexMeta {
         IndexMeta {
-            segments: self
-                .segments
-                .into_iter()
-                .map(|inner_seg_meta| inner_seg_meta.track(inventory))
-                .collect::<Vec<SegmentMeta>>(),
+            segments: self.segments.into_iter().map(|inner_seg_meta| inner_seg_meta.track(inventory)).collect::<Vec<SegmentMeta>>(),
             opstamp: self.opstamp,
             payload: self.payload,
         }

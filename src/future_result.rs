@@ -30,9 +30,7 @@ impl<T> From<SparseError> for FutureResult<T> {
 }
 
 impl<T> FutureResult<T> {
-    pub(crate) fn create(
-        error_msg_if_failure: &'static str,
-    ) -> (Self, oneshot::Sender<crate::Result<T>>) {
+    pub(crate) fn create(error_msg_if_failure: &'static str) -> (Self, oneshot::Sender<crate::Result<T>>) {
         let (sender, receiver) = oneshot::channel();
         let inner: Inner<T> = Inner::InProgress { receiver, error_msg_if_failure };
         (FutureResult { inner }, sender)
@@ -44,11 +42,7 @@ impl<T> FutureResult<T> {
     pub fn wait(self) -> crate::Result<T> {
         match self.inner {
             Inner::FailedBeforeStart(err) => Err(err.unwrap()),
-            Inner::InProgress { receiver, error_msg_if_failure } => {
-                receiver.recv().unwrap_or_else(|_| {
-                    Err(crate::SparseError::SystemError(error_msg_if_failure.to_string()))
-                })
-            }
+            Inner::InProgress { receiver, error_msg_if_failure } => receiver.recv().unwrap_or_else(|_| Err(crate::SparseError::SystemError(error_msg_if_failure.to_string()))),
         }
     }
 }
@@ -60,19 +54,13 @@ impl<T> Future for FutureResult<T> {
         unsafe {
             match &mut Pin::get_unchecked_mut(self).inner {
                 Inner::FailedBeforeStart(err) => Poll::Ready(Err(err.take().unwrap())),
-                Inner::InProgress { receiver, error_msg_if_failure } => {
-                    match Future::poll(Pin::new_unchecked(receiver), cx) {
-                        Poll::Ready(oneshot_res) => {
-                            let res = oneshot_res.unwrap_or_else(|_| {
-                                Err(crate::SparseError::SystemError(
-                                    error_msg_if_failure.to_string(),
-                                ))
-                            });
-                            Poll::Ready(res)
-                        }
-                        Poll::Pending => Poll::Pending,
+                Inner::InProgress { receiver, error_msg_if_failure } => match Future::poll(Pin::new_unchecked(receiver), cx) {
+                    Poll::Ready(oneshot_res) => {
+                        let res = oneshot_res.unwrap_or_else(|_| Err(crate::SparseError::SystemError(error_msg_if_failure.to_string())));
+                        Poll::Ready(res)
                     }
-                }
+                    Poll::Pending => Poll::Pending,
+                },
             }
         }
     }

@@ -74,19 +74,13 @@ impl From<io::Error> for TryAcquireLockError {
     }
 }
 
-fn try_acquire_lock(
-    filepath: &Path,
-    directory: &dyn Directory,
-) -> Result<DirectoryLock, TryAcquireLockError> {
+fn try_acquire_lock(filepath: &Path, directory: &dyn Directory) -> Result<DirectoryLock, TryAcquireLockError> {
     let mut write = directory.open_write(filepath).map_err(|e| match e {
         OpenWriteError::FileAlreadyExists(_) => TryAcquireLockError::FileExists,
         OpenWriteError::IoError { io_error, .. } => TryAcquireLockError::IoError(io_error),
     })?;
     write.flush().map_err(TryAcquireLockError::from)?;
-    Ok(DirectoryLock::from(Box::new(DirectoryLockGuard {
-        directory: directory.box_clone(),
-        path: filepath.to_owned(),
-    })))
+    Ok(DirectoryLock::from(Box::new(DirectoryLockGuard { directory: directory.box_clone(), path: filepath.to_owned() })))
 }
 
 fn retry_policy(is_blocking: bool) -> RetryPolicy {

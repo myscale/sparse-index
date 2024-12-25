@@ -25,10 +25,7 @@ impl Executor {
 
     /// Creates an Executor that dispatches the tasks in a thread pool.
     pub fn multi_thread(num_threads: usize, prefix: &'static str) -> crate::Result<Executor> {
-        let pool = ThreadPoolBuilder::new()
-            .num_threads(num_threads)
-            .thread_name(move |num| format!("{prefix}{num}"))
-            .build()?;
+        let pool = ThreadPoolBuilder::new().num_threads(num_threads).thread_name(move |num| format!("{prefix}{num}")).build()?;
         Ok(Executor::ThreadPool(pool))
     }
 
@@ -36,16 +33,7 @@ impl Executor {
     ///
     /// Regardless of the executor (`SingleThread` or `ThreadPool`), panics in the task
     /// will propagate to the caller.
-    pub fn map<
-        A: Send,
-        R: Send,
-        AIterator: Iterator<Item = A>,
-        F: Sized + Sync + Fn(A) -> crate::Result<R>,
-    >(
-        &self,
-        f: F,
-        args: AIterator,
-    ) -> crate::Result<Vec<R>> {
+    pub fn map<A: Send, R: Send, AIterator: Iterator<Item = A>, F: Sized + Sync + Fn(A) -> crate::Result<R>>(&self, f: F, args: AIterator) -> crate::Result<Vec<R>> {
         match self {
             Executor::SingleThread => args.map(f).collect::<crate::Result<_>>(),
             Executor::ThreadPool(pool) => {
@@ -76,17 +64,14 @@ impl Executor {
                     // This is important as it makes it possible for the fruit_receiver iteration to
                     // terminate.
                 };
-                let mut result_placeholders: Vec<Option<R>> =
-                    std::iter::repeat_with(|| None).take(num_fruits).collect();
+                let mut result_placeholders: Vec<Option<R>> = std::iter::repeat_with(|| None).take(num_fruits).collect();
                 for (pos, fruit_res) in fruit_receiver {
                     let fruit = fruit_res?;
                     result_placeholders[pos] = Some(fruit);
                 }
                 let results: Vec<R> = result_placeholders.into_iter().flatten().collect();
                 if results.len() != num_fruits {
-                    return Err(SparseError::InternalError(
-                        "One of the mapped execution failed.".to_string(),
-                    ));
+                    return Err(SparseError::InternalError("One of the mapped execution failed.".to_string()));
                 }
                 Ok(results)
             }
@@ -137,8 +122,7 @@ mod tests {
 
     #[test]
     fn test_map_multithread() {
-        let result: Vec<usize> =
-            Executor::multi_thread(3, "search-test").unwrap().map(|i| Ok(i * 2), 0..10).unwrap();
+        let result: Vec<usize> = Executor::multi_thread(3, "search-test").unwrap().map(|i| Ok(i * 2), 0..10).unwrap();
         assert_eq!(result.len(), 10);
         for i in 0..10 {
             assert_eq!(result[i], i * 2);

@@ -42,8 +42,7 @@ pub struct Lock {
 /// (creating more than one instance of the `IndexWriter`), are a spurious
 /// lock file remaining after a crash. In the latter case, removing the file after
 /// checking no process running tantivy is running is safe.
-pub static INDEX_WRITER_LOCK: Lazy<Lock> =
-    Lazy::new(|| Lock { filepath: PathBuf::from(".sparse-index-writer.lock"), is_blocking: false });
+pub static INDEX_WRITER_LOCK: Lazy<Lock> = Lazy::new(|| Lock { filepath: PathBuf::from(".sparse-index-writer.lock"), is_blocking: false });
 
 /// The meta lock file is used to protect the segment files being opened by
 /// `IndexReader::reload()` from being garbage collected.
@@ -62,5 +61,4 @@ pub static INDEX_WRITER_LOCK: Lazy<Lock> =
 /// To avoid this problem, a META_LOCK is introduced. When `IndexReader` reloads,
 /// it will attempt to acquire the META_LOCK.
 /// Similarly, the META_LOCK must also be acquired when GC begins executing.
-pub static META_LOCK: Lazy<Lock> =
-    Lazy::new(|| Lock { filepath: PathBuf::from(".sparse-index-meta.lock"), is_blocking: true });
+pub static META_LOCK: Lazy<Lock> = Lazy::new(|| Lock { filepath: PathBuf::from(".sparse-index-meta.lock"), is_blocking: true });

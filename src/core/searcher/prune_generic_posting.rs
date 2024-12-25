@@ -2,11 +2,7 @@ use crate::{core::ElementRead, RowId};
 
 use super::search_posting_iterator::SearchPostingIterator;
 
-pub fn prune_longest_posting(
-    longest_posting: &mut SearchPostingIterator,
-    min_score: f32,
-    right_postings: &mut [SearchPostingIterator],
-) -> bool {
+pub fn prune_longest_posting(longest_posting: &mut SearchPostingIterator, min_score: f32, right_postings: &mut [SearchPostingIterator]) -> bool {
     // 获得最左侧 longest posting iter 的首个未遍历的元素
     if let Some(element) = longest_posting.generic_posting.peek() {
         // 在 right iterators 中找到最小的 row_id
@@ -28,8 +24,7 @@ pub fn prune_longest_posting(
 
                         // 获得 longest posting 能够贡献的最大分数
                         let max_weight_in_longest = element.weight().max(element.max_next_weight());
-                        let max_score_contribution =
-                            max_weight_in_longest * longest_posting.dim_weight;
+                        let max_score_contribution = max_weight_in_longest * longest_posting.dim_weight;
 
                         // 根据贡献的最大分数判断是否能够剪枝
                         if max_score_contribution <= min_score {

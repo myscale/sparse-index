@@ -19,13 +19,7 @@ impl std::fmt::Display for ByteCount {
     }
 }
 
-const SUFFIX_AND_THRESHOLD: [(&str, u64); 5] = [
-    ("KB", 1_000),
-    ("MB", 1_000_000),
-    ("GB", 1_000_000_000),
-    ("TB", 1_000_000_000_000),
-    ("PB", 1_000_000_000_000_000),
-];
+const SUFFIX_AND_THRESHOLD: [(&str, u64); 5] = [("KB", 1_000), ("MB", 1_000_000), ("GB", 1_000_000_000), ("TB", 1_000_000_000_000), ("PB", 1_000_000_000_000_000)];
 
 impl ByteCount {
     #[inline]

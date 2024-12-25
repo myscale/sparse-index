@@ -15,14 +15,9 @@ use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
 
-use crate::directory::error::{
-    DeleteError, LockError, OpenDirectoryError, OpenReadError, OpenWriteError,
-};
+use crate::directory::error::{DeleteError, LockError, OpenDirectoryError, OpenReadError, OpenWriteError};
 use crate::directory::file_watcher::FileWatcher;
-use crate::directory::{
-    AntiCallToken, Directory, DirectoryLock, FileHandle, Lock, OwnedBytes, TerminatingWrite,
-    WatchCallback, WatchHandle, WritePtr,
-};
+use crate::directory::{AntiCallToken, Directory, DirectoryLock, FileHandle, Lock, OwnedBytes, TerminatingWrite, WatchCallback, WatchHandle, WritePtr};
 use crate::META_FILEPATH;
 
 pub type ArcBytes = Arc<dyn Deref<Target = [u8]> + Send + Sync + 'static>;
@@ -46,19 +41,13 @@ fn open_mmap(full_path: &Path) -> Result<Option<Mmap>, OpenReadError> {
         }
     })?;
 
-    let meta_data = file
-        .metadata()
-        .map_err(|io_err| OpenReadError::wrap_io_error(io_err, full_path.to_owned()))?;
+    let meta_data = file.metadata().map_err(|io_err| OpenReadError::wrap_io_error(io_err, full_path.to_owned()))?;
 
     // file exist, but file content is empty.
     if meta_data.len() == 0 {
         return Ok(None);
     }
-    let mmap_opt: Option<memmap2::Mmap> = unsafe {
-        memmap2::Mmap::map(&file)
-            .map(Some)
-            .map_err(|io_err| OpenReadError::wrap_io_error(io_err, full_path.to_path_buf()))
-    }?;
+    let mmap_opt: Option<memmap2::Mmap> = unsafe { memmap2::Mmap::map(&file).map(Some).map_err(|io_err| OpenReadError::wrap_io_error(io_err, full_path.to_path_buf())) }?;
 
     Ok(mmap_opt)
 }
@@ -107,12 +96,7 @@ impl MmapCache {
 
     /// Remove all outdated and can't upgrade weak_reference.
     fn remove_weak_ref(&mut self) {
-        let keys_to_remove: Vec<PathBuf> = self
-            .cache
-            .iter()
-            .filter(|(_, mmap_weakref)| mmap_weakref.upgrade().is_none())
-            .map(|(key, _)| key.clone())
-            .collect();
+        let keys_to_remove: Vec<PathBuf> = self.cache.iter().filter(|(_, mmap_weakref)| mmap_weakref.upgrade().is_none()).map(|(key, _)| key.clone()).collect();
         for key in keys_to_remove {
             self.cache.remove(&key);
         }
@@ -176,12 +160,7 @@ struct MmapDirectoryInner {
 
 impl MmapDirectoryInner {
     fn new(root_path: PathBuf, temp_directory: Option<TempDir>) -> MmapDirectoryInner {
-        MmapDirectoryInner {
-            mmap_cache: RwLock::new(MmapCache::new()),
-            _temp_directory: temp_directory,
-            watcher: FileWatcher::new(&root_path.join(*META_FILEPATH)),
-            root_path,
-        }
+        MmapDirectoryInner { mmap_cache: RwLock::new(MmapCache::new()), _temp_directory: temp_directory, watcher: FileWatcher::new(&root_path.join(*META_FILEPATH)), root_path }
     }
 
     fn watch(&self, callback: WatchCallback) -> WatchHandle {
@@ -206,8 +185,7 @@ impl MmapDirectory {
     /// This is mostly useful to test the MmapDirectory itself.
     /// For your unit tests, prefer the RamDirectory.
     pub fn create_from_tempdir() -> Result<MmapDirectory, OpenDirectoryError> {
-        let tempdir = TempDir::new()
-            .map_err(|io_err| OpenDirectoryError::FailedToCreateTempDir(Arc::new(io_err)))?;
+        let tempdir = TempDir::new().map_err(|io_err| OpenDirectoryError::FailedToCreateTempDir(Arc::new(io_err)))?;
         Ok(MmapDirectory::new(tempdir.path().to_path_buf(), Some(tempdir)))
     }
 
@@ -215,10 +193,7 @@ impl MmapDirectory {
     ///
     /// **This is only supported on unix platforms.**
     #[cfg(unix)]
-    pub fn open_with_madvice(
-        directory_path: impl AsRef<Path>,
-        madvice: Advice,
-    ) -> Result<MmapDirectory, OpenDirectoryError> {
+    pub fn open_with_madvice(directory_path: impl AsRef<Path>, madvice: Advice) -> Result<MmapDirectory, OpenDirectoryError> {
         let dir = Self::open_impl_to_avoid_monomorphization(directory_path.as_ref())?;
         dir.inner.mmap_cache.write().unwrap().set_advice(madvice);
         Ok(dir)
@@ -234,9 +209,7 @@ impl MmapDirectory {
 
     // Disable inlining to avoid monomorphization optimization and reduce the binary size.
     #[inline(never)]
-    fn open_impl_to_avoid_monomorphization(
-        directory_path: &Path,
-    ) -> Result<MmapDirectory, OpenDirectoryError> {
+    fn open_impl_to_avoid_monomorphization(directory_path: &Path) -> Result<MmapDirectory, OpenDirectoryError> {
         if !directory_path.exists() {
             return Err(OpenDirectoryError::DoesNotExist(PathBuf::from(directory_path)));
         }
@@ -342,9 +315,7 @@ pub(crate) fn atomic_write(path: &Path, content: &[u8]) -> io::Result<()> {
     // We create the temporary file in the same directory as the target file.
     // Indeed the canonical temp directory and the target file might sit in different
     // filesystem, in which case the atomic write may actually not work.
-    let parent_path = path.parent().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "Path {:?} does not have parent directory.")
-    })?;
+    let parent_path = path.parent().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Path {:?} does not have parent directory."))?;
     let mut tempfile = tempfile::Builder::new().tempfile_in(parent_path)?;
     tempfile.write_all(content)?;
     tempfile.flush()?;
@@ -397,9 +368,7 @@ impl Directory for MmapDirectory {
 
     fn exists(&self, path: &Path) -> Result<bool, OpenReadError> {
         let full_path = self.resolve_path(path);
-        full_path
-            .try_exists()
-            .map_err(|io_err| OpenReadError::wrap_io_error(io_err, path.to_path_buf()))
+        full_path.try_exists().map_err(|io_err| OpenReadError::wrap_io_error(io_err, path.to_path_buf()))
     }
 
     fn open_write(&self, path: &Path) -> Result<WritePtr, OpenWriteError> {
@@ -417,8 +386,7 @@ impl Directory for MmapDirectory {
         })?;
 
         // making sure the file is created.
-        file.flush()
-            .map_err(|io_error| OpenWriteError::wrap_io_error(io_error, path.to_path_buf()))?;
+        file.flush().map_err(|io_error| OpenWriteError::wrap_io_error(io_error, path.to_path_buf()))?;
 
         // Note we actually do not sync the parent directory here.
         //
@@ -437,9 +405,7 @@ impl Directory for MmapDirectory {
         let mut buffer = Vec::new();
         match File::open(full_path) {
             Ok(mut file) => {
-                file.read_to_end(&mut buffer).map_err(|io_error| {
-                    OpenReadError::wrap_io_error(io_error, path.to_path_buf())
-                })?;
+                file.read_to_end(&mut buffer).map_err(|io_error| OpenReadError::wrap_io_error(io_error, path.to_path_buf()))?;
                 Ok(buffer)
             }
             Err(io_error) => {
@@ -474,10 +440,7 @@ impl Directory for MmapDirectory {
             file.try_lock_exclusive().map_err(|_| LockError::LockBusy)?
         }
         // dropping the file handle will release the lock.
-        Ok(DirectoryLock::from(Box::new(ReleaseLockFile {
-            path: lock.filepath.clone(),
-            _file: file,
-        })))
+        Ok(DirectoryLock::from(Box::new(ReleaseLockFile { path: lock.filepath.clone(), _file: file })))
     }
 
     fn watch(&self, watch_callback: WatchCallback) -> crate::Result<WatchHandle> {
@@ -549,8 +512,7 @@ mod tests {
         // mmaps correctly.
         let mmap_directory = MmapDirectory::create_from_tempdir().unwrap();
         let num_paths = 10;
-        let paths: Vec<PathBuf> =
-            (0..num_paths).map(|i| PathBuf::from(&*format!("file_{}", i))).collect();
+        let paths: Vec<PathBuf> = (0..num_paths).map(|i| PathBuf::from(&*format!("file_{}", i))).collect();
         {
             for path in &paths {
                 let mut w = mmap_directory.open_write(path).unwrap();

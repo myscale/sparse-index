@@ -114,21 +114,9 @@ mod tests {
 
     #[test]
     fn test_minmax_inf() {
-        assert_eq!(
-            minmax(vec![f64::INFINITY, 1f64, 2f64].into_iter()),
-            Some((1f64, f64::INFINITY))
-        );
-        assert_eq!(
-            minmax(vec![-f64::INFINITY, 1f64, 2f64].into_iter()),
-            Some((-f64::INFINITY, 2f64))
-        );
-        assert_eq!(
-            minmax(vec![2f64, f64::INFINITY, 1f64].into_iter()),
-            Some((1f64, f64::INFINITY))
-        );
-        assert_eq!(
-            minmax(vec![2f64, 1f64, -f64::INFINITY].into_iter()),
-            Some((-f64::INFINITY, 2f64))
-        );
+        assert_eq!(minmax(vec![f64::INFINITY, 1f64, 2f64].into_iter()), Some((1f64, f64::INFINITY)));
+        assert_eq!(minmax(vec![-f64::INFINITY, 1f64, 2f64].into_iter()), Some((-f64::INFINITY, 2f64)));
+        assert_eq!(minmax(vec![2f64, f64::INFINITY, 1f64].into_iter()), Some((1f64, f64::INFINITY)));
+        assert_eq!(minmax(vec![2f64, 1f64, -f64::INFINITY].into_iter()), Some((-f64::INFINITY, 2f64)));
     }
 }

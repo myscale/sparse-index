@@ -5,9 +5,7 @@ use thiserror::Error;
 use crate::core::{InvertedIndexError, PostingListError};
 use crate::{
     core::FileOperationError,
-    directory::error::{
-        Incompatibility, LockError, OpenDirectoryError, OpenReadError, OpenWriteError,
-    },
+    directory::error::{Incompatibility, LockError, OpenDirectoryError, OpenReadError, OpenWriteError},
 };
 
 #[derive(Debug, Error)]

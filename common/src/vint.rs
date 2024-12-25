@@ -42,10 +42,7 @@ impl BinarySerializable for VIntU128 {
                     shift += 7;
                 }
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Reach end of buffer while reading VInt",
-                    ));
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "Reach end of buffer while reading VInt"));
                 }
             }
         }
@@ -80,24 +77,9 @@ pub fn serialize_vint_u32(val: u32, buf: &mut [u8; 8]) -> &[u8] {
     } else if val < START_4 {
         ((val & MASK_1) | ((val & MASK_2) << 1) | ((val & MASK_3) << 2) | (STOP_BIT << (8 * 2)), 3)
     } else if val < START_5 {
-        (
-            (val & MASK_1)
-                | ((val & MASK_2) << 1)
-                | ((val & MASK_3) << 2)
-                | ((val & MASK_4) << 3)
-                | (STOP_BIT << (8 * 3)),
-            4,
-        )
+        ((val & MASK_1) | ((val & MASK_2) << 1) | ((val & MASK_3) << 2) | ((val & MASK_4) << 3) | (STOP_BIT << (8 * 3)), 4)
     } else {
-        (
-            (val & MASK_1)
-                | ((val & MASK_2) << 1)
-                | ((val & MASK_3) << 2)
-                | ((val & MASK_4) << 3)
-                | ((val & MASK_5) << 4)
-                | (STOP_BIT << (8 * 4)),
-            5,
-        )
+        ((val & MASK_1) | ((val & MASK_2) << 1) | ((val & MASK_3) << 2) | ((val & MASK_4) << 3) | ((val & MASK_5) << 4) | (STOP_BIT << (8 * 4)), 5)
     };
     *buf = res.to_le_bytes();
     &buf[0..num_bytes]
@@ -203,10 +185,7 @@ impl BinarySerializable for VInt {
                     shift += 7;
                 }
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Reach end of buffer while reading VInt",
-                    ));
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "Reach end of buffer while reading VInt"));
                 }
             }
         }

@@ -26,11 +26,7 @@ pub struct FileWatcher {
 
 impl FileWatcher {
     pub fn new(path: &Path) -> FileWatcher {
-        FileWatcher {
-            path: Arc::from(path),
-            callbacks: Default::default(),
-            state: Default::default(),
-        }
+        FileWatcher { path: Arc::from(path), callbacks: Default::default(), state: Default::default() }
     }
 
     /// start FileWatcher thread.
@@ -54,15 +50,9 @@ impl FileWatcher {
                     if let Ok(checksum) = FileWatcher::compute_checksum(&path) {
                         // Determine if the file has been modified.
                         // Both the initial checksum and any checksum updates will be considered as file modifications.
-                        let metafile_has_changed = current_checksum_opt
-                            .map(|current_checksum| current_checksum != checksum)
-                            .unwrap_or(true);
+                        let metafile_has_changed = current_checksum_opt.map(|current_checksum| current_checksum != checksum).unwrap_or(true);
                         if metafile_has_changed {
-                            info!(
-                                "[{}] [FileWatcher] Meta file {:?} was modified",
-                                thread::current().name().unwrap_or_default(),
-                                path
-                            );
+                            info!("[{}] [FileWatcher] Meta file {:?} was modified", thread::current().name().unwrap_or_default(), path);
                             current_checksum_opt = Some(checksum);
                             // We actually ignore callbacks failing here.
                             // We just wait for the end of their execution.

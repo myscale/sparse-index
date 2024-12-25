@@ -42,13 +42,7 @@ pub fn create_and_ensure_length(path: &Path, length: u64) -> Result<File, io::Er
 }
 
 pub fn open_read_mmap(path: &Path) -> Result<Mmap, io::Error> {
-    let file = OpenOptions::new()
-        .read(true)
-        .write(false)
-        .append(true)
-        .create(true)
-        .truncate(false)
-        .open(path)?;
+    let file = OpenOptions::new().read(true).write(false).append(true).create(true).truncate(false).open(path)?;
 
     let mmap = unsafe { Mmap::map(&file)? };
     madvise::madvise(&mmap, madvise::get_global())?;

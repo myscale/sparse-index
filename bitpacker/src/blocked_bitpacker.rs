@@ -66,10 +66,7 @@ impl BlockedBitpacker {
 
     /// The memory used (inclusive childs)
     pub fn mem_usage(&self) -> usize {
-        std::mem::size_of::<BlockedBitpacker>()
-            + self.compressed_blocks.capacity()
-            + mem_usage(&self.offset_and_bits)
-            + mem_usage(&self.buffer)
+        std::mem::size_of::<BlockedBitpacker>() + self.compressed_blocks.capacity() + mem_usage(&self.offset_and_bits) + mem_usage(&self.buffer)
     }
 
     #[inline]
@@ -93,17 +90,11 @@ impl BlockedBitpacker {
             // mini_buffer before checking to flush
             // (to be done in BitPacker)
             for val in self.buffer.iter() {
-                bit_packer
-                    .write(*val - min_value, num_bits_block, &mut self.compressed_blocks)
-                    .expect("cannot write bitpacking to output");
+                bit_packer.write(*val - min_value, num_bits_block, &mut self.compressed_blocks).expect("cannot write bitpacking to output");
                 // write to in memory can't fail
             }
             bit_packer.flush(&mut self.compressed_blocks).unwrap();
-            self.offset_and_bits.push(BlockedBitpackerEntryMetaData::new(
-                offset,
-                num_bits_block,
-                *min_value,
-            ));
+            self.offset_and_bits.push(BlockedBitpackerEntryMetaData::new(offset, num_bits_block, *min_value));
 
             self.buffer.clear();
             self.compressed_blocks.resize(self.compressed_blocks.len() + 8, 0); // add padding for bitpacker
@@ -114,8 +105,7 @@ impl BlockedBitpacker {
         let metadata_pos = idx / BLOCK_SIZE;
         let pos_in_block = idx % BLOCK_SIZE;
         if let Some(metadata) = self.offset_and_bits.get(metadata_pos) {
-            let unpacked = BitUnpacker::new(metadata.num_bits())
-                .get(pos_in_block as u32, &self.compressed_blocks[metadata.offset() as usize..]);
+            let unpacked = BitUnpacker::new(metadata.num_bits()).get(pos_in_block as u32, &self.compressed_blocks[metadata.offset() as usize..]);
             unpacked + metadata.base_value()
         } else {
             self.buffer[pos_in_block]
@@ -125,8 +115,7 @@ impl BlockedBitpacker {
     pub fn iter(&self) -> impl Iterator<Item = u64> + '_ {
         // todo performance: we could decompress a whole block and cache it instead
         let bitpacked_elems = self.offset_and_bits.len() * BLOCK_SIZE;
-        let iter =
-            (0..bitpacked_elems).map(move |idx| self.get(idx)).chain(self.buffer.iter().cloned());
+        let iter = (0..bitpacked_elems).map(move |idx| self.get(idx)).chain(self.buffer.iter().cloned());
         iter
     }
 }

@@ -1,9 +1,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::api::cxx_ffi::cache::{
-    IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE,
-};
+use crate::api::cxx_ffi::cache::{IndexReaderBridge, IndexWriterBridge, FFI_INDEX_SEARCHER_CACHE, FFI_INDEX_WRITER_CACHE};
 use crate::common::errors::SparseError;
 use crate::error_ck;
 use crate::index::Index;
@@ -48,10 +46,7 @@ impl IndexManager {
         Ok(())
     }
 
-    pub(crate) fn create_writer(
-        index: &Index,
-        index_path: &str,
-    ) -> crate::Result<IndexWriterBridge> {
+    pub(crate) fn create_writer(index: &Index, index_path: &str) -> crate::Result<IndexWriterBridge> {
         let writer = index.writer_with_num_threads(BUILD_THREADS, MEMORY_64MB).map_err(|e| {
             let error_info = format!("Failed to create sparse index writer: {}", e);
             error_ck!("{}", error_info);
@@ -62,29 +57,23 @@ impl IndexManager {
         // merge_policy.set_min_num_segments(5);
         writer.set_merge_policy(Box::new(merge_policy));
 
-        Ok(IndexWriterBridge {
-            path: index_path.trim_end_matches('/').to_string(),
-            writer: Mutex::new(Some(writer)),
-        })
+        Ok(IndexWriterBridge { path: index_path.trim_end_matches('/').to_string(), writer: Mutex::new(Some(writer)) })
     }
 
-    pub(crate) fn get_index_writer_bridge(
-        index_path: &str,
-    ) -> crate::Result<Arc<IndexWriterBridge>> {
+    pub(crate) fn get_index_writer_bridge(index_path: &str) -> crate::Result<Arc<IndexWriterBridge>> {
         Ok(FFI_INDEX_WRITER_CACHE.get_index_writer_bridge(index_path.to_string())?)
     }
 
     pub(crate) fn reload_index_reader(index_path: &str) -> crate::Result<bool> {
-        let reload_status =
-            match FFI_INDEX_SEARCHER_CACHE.get_index_reader_bridge(index_path.to_string()) {
-                Ok(current_index_reader) => match current_index_reader.reload() {
-                    Ok(_) => true,
-                    Err(e) => {
-                        return Err(SparseError::Error(e));
-                    }
-                },
-                Err(_) => true,
-            };
+        let reload_status = match FFI_INDEX_SEARCHER_CACHE.get_index_reader_bridge(index_path.to_string()) {
+            Ok(current_index_reader) => match current_index_reader.reload() {
+                Ok(_) => true,
+                Err(e) => {
+                    return Err(SparseError::Error(e));
+                }
+            },
+            Err(_) => true,
+        };
         return Ok(reload_status);
     }
 
@@ -118,15 +107,12 @@ impl IndexManager {
 
         // Create a reader for the index with an appropriate reload policy.
         // OnCommit: reload when commiting; Manual: developer need call IndexReader::reload() to reload.
-        let reader: IndexReader =
-            index.reader_builder().reload_policy(ReloadPolicy::OnCommitWithDelay).try_into()?;
+        let reader: IndexReader = index.reader_builder().reload_policy(ReloadPolicy::OnCommitWithDelay).try_into()?;
 
         // Save IndexReaderBridge to cache.
-        let index_reader_bridge =
-            IndexReaderBridge { reader, path: index_path.trim_end_matches('/').to_string() };
+        let index_reader_bridge = IndexReaderBridge { reader, path: index_path.trim_end_matches('/').to_string() };
 
-        FFI_INDEX_SEARCHER_CACHE
-            .set_index_reader_bridge(index_path.to_string(), Arc::new(index_reader_bridge))?;
+        FFI_INDEX_SEARCHER_CACHE.set_index_reader_bridge(index_path.to_string(), Arc::new(index_reader_bridge))?;
 
         Ok(true)
     }

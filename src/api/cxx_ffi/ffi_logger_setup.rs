@@ -2,9 +2,7 @@ use std::ffi::{c_char, CStr};
 
 use crate::error_ck;
 
-use super::utils::{
-    empty_log_callback, LogCallback, LoggerConfig, SparseIndexLogger, LOG4RS_HANDLE, LOG_CALLBACK,
-};
+use super::utils::{empty_log_callback, LogCallback, LoggerConfig, SparseIndexLogger, LOG4RS_HANDLE, LOG_CALLBACK};
 
 #[no_mangle]
 pub extern "C" fn sparse_index_log4rs_initialize(
@@ -14,14 +12,7 @@ pub extern "C" fn sparse_index_log4rs_initialize(
     console_display: bool,
     only_record_sparse_index: bool,
 ) -> bool {
-    sparse_index_log4rs_initialize_with_callback(
-        log_directory,
-        log_level,
-        log_in_file,
-        console_display,
-        only_record_sparse_index,
-        empty_log_callback,
-    )
+    sparse_index_log4rs_initialize_with_callback(log_directory, log_level, log_in_file, console_display, only_record_sparse_index, empty_log_callback)
 }
 /// Initializes the logger configuration for the sparse_index lib.
 ///
@@ -64,13 +55,7 @@ pub extern "C" fn sparse_index_log4rs_initialize_with_callback(
         }
     };
 
-    let logger_config = LoggerConfig::new(
-        log_directory.clone(),
-        log_level.clone(),
-        log_in_file,
-        console_display,
-        only_record_sparse_index,
-    );
+    let logger_config = LoggerConfig::new(log_directory.clone(), log_level.clone(), log_in_file, console_display, only_record_sparse_index);
 
     match SparseIndexLogger::update_log_callback(&LOG_CALLBACK, callback) {
         Ok(_) => {}

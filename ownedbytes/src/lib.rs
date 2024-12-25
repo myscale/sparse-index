@@ -24,9 +24,7 @@ impl OwnedBytes {
     }
 
     /// Creates an `OwnedBytes` instance given a `StableDeref` object.
-    pub fn new<T: StableDeref + Deref<Target = [u8]> + 'static + Send + Sync>(
-        data_holder: T,
-    ) -> OwnedBytes {
+    pub fn new<T: StableDeref + Deref<Target = [u8]> + 'static + Send + Sync>(data_holder: T) -> OwnedBytes {
         let box_stable_deref = Arc::new(data_holder);
         let bytes: &[u8] = box_stable_deref.deref();
         let data = unsafe { &*(bytes as *const [u8]) };
@@ -139,8 +137,7 @@ impl fmt::Debug for OwnedBytes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // We truncate the bytes in order to make sure the debug string
         // is not too long.
-        let bytes_truncated: &[u8] =
-            if self.len() > 8 { &self.as_slice()[..10] } else { self.as_slice() };
+        let bytes_truncated: &[u8] = if self.len() > 8 { &self.as_slice()[..10] } else { self.as_slice() };
         write!(f, "OwnedBytes({bytes_truncated:?}, len={})", self.len())
     }
 }
@@ -216,10 +213,7 @@ impl io::Read for OwnedBytes {
     fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
         let read_len = self.read(buf)?;
         if read_len != buf.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "failed to fill whole buffer",
-            ));
+            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "failed to fill whole buffer"));
         }
         Ok(())
     }
@@ -236,10 +230,7 @@ mod tests {
         let short_bytes = OwnedBytes::new(b"abcd".as_ref());
         assert_eq!(format!("{short_bytes:?}"), "OwnedBytes([97, 98, 99, 100], len=4)");
         let long_bytes = OwnedBytes::new(b"abcdefghijklmnopq".as_ref());
-        assert_eq!(
-            format!("{long_bytes:?}"),
-            "OwnedBytes([97, 98, 99, 100, 101, 102, 103, 104, 105, 106], len=17)"
-        );
+        assert_eq!(format!("{long_bytes:?}"), "OwnedBytes([97, 98, 99, 100, 101, 102, 103, 104, 105, 106], len=17)");
     }
 
     #[test]

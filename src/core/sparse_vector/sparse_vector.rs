@@ -59,11 +59,7 @@ impl SparseVector {
 
     /// Construct a new vector that is the result of performing all indices-wise operations.
     /// Automatically sort input vectors if necessary.
-    pub fn combine_aggregate(
-        &self,
-        other: &SparseVector,
-        op: impl Fn(DimWeight, DimWeight) -> DimWeight,
-    ) -> Self {
+    pub fn combine_aggregate(&self, other: &SparseVector, op: impl Fn(DimWeight, DimWeight) -> DimWeight) -> Self {
         // Copy and sort `self` vector if not already sorted
         let this: Cow<SparseVector> = if !self.is_sorted() {
             let mut this = self.clone();

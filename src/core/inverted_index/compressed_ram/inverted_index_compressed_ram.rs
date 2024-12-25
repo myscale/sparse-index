@@ -3,8 +3,7 @@ use std::borrow::Cow;
 use log::error;
 
 use crate::core::{
-    inverted_index::common::InvertedIndexMetrics, CompressedBlockType, CompressedPostingBuilder,
-    CompressedPostingList, DimId, ElementRead, ElementType, InvertedIndexRam,
+    inverted_index::common::InvertedIndexMetrics, CompressedBlockType, CompressedPostingBuilder, CompressedPostingList, DimId, ElementRead, ElementType, InvertedIndexRam,
     InvertedIndexRamAccess, QuantizedParam, QuantizedWeight,
 };
 
@@ -25,11 +24,7 @@ impl<TW: QuantizedWeight> CompressedInvertedIndexRam<TW> {
     }
 
     // TODO: Refine ram trait.
-    pub fn from_ram_index<P: AsRef<std::path::Path>>(
-        ram_index: Cow<InvertedIndexRam<TW>>,
-        _path: P,
-        _segment_id: Option<&str>,
-    ) -> std::io::Result<Self> {
+    pub fn from_ram_index<P: AsRef<std::path::Path>>(ram_index: Cow<InvertedIndexRam<TW>>, _path: P, _segment_id: Option<&str>) -> std::io::Result<Self> {
         let mut postings = Vec::with_capacity(ram_index.size());
         let element_type = ram_index.element_type();
 

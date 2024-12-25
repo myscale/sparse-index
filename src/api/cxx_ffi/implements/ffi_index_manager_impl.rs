@@ -8,10 +8,7 @@ use crate::{
 };
 
 /// impl for `ffi_create_index_with_parameter`
-pub fn ffi_create_index_with_parameter_impl(
-    index_path: &str,
-    index_json_parameter: &str,
-) -> crate::Result<bool> {
+pub fn ffi_create_index_with_parameter_impl(index_path: &str, index_json_parameter: &str) -> crate::Result<bool> {
     let _ = IndexManager::prepare_directory(&index_path)?;
 
     // Parse json_parameter into `IndexSettings` and check it's valid.
@@ -23,18 +20,13 @@ pub fn ffi_create_index_with_parameter_impl(
 
     let bridge = IndexManager::create_writer(&index, &index_path)?;
 
-    let _ =
-        FFI_INDEX_WRITER_CACHE.set_index_writer_bridge(index_path.to_string(), Arc::new(bridge))?;
+    let _ = FFI_INDEX_WRITER_CACHE.set_index_writer_bridge(index_path.to_string(), Arc::new(bridge))?;
 
     Ok(true)
 }
 
 /// impl for `ffi_insert_sparse_vector`
-pub fn ffi_insert_sparse_vector_impl(
-    index_path: &str,
-    row_id: RowId,
-    sparse_vector: &SparseVector,
-) -> crate::Result<bool> {
+pub fn ffi_insert_sparse_vector_impl(index_path: &str, row_id: RowId, sparse_vector: &SparseVector) -> crate::Result<bool> {
     let bridge = IndexManager::get_index_writer_bridge(&index_path)?;
 
     let _ = bridge.add_row(SparseRowContent { row_id, sparse_vector: sparse_vector.clone() })?;

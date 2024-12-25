@@ -3,10 +3,7 @@ use crate::{
     RowId,
 };
 
-use super::{
-    CompressedBlockType, CompressedPostingListView, ExtendedCompressedPostingBlock,
-    SimpleCompressedPostingBlock,
-};
+use super::{CompressedBlockType, CompressedPostingListView, ExtendedCompressedPostingBlock, SimpleCompressedPostingBlock};
 
 #[derive(Default, Debug, Clone)]
 pub struct CompressedPostingList<TW>

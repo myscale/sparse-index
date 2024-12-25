@@ -84,11 +84,6 @@ impl IndexBuilder {
         save_metas(&IndexMeta::default(), &managed_directory)?;
         managed_directory.sync_directory()?;
 
-        Ok(Index {
-            directory: managed_directory,
-            index_settings: self.index_settings,
-            executor: Arc::new(Executor::single_thread()),
-            inventory: SegmentMetaInventory::default(),
-        })
+        Ok(Index { directory: managed_directory, index_settings: self.index_settings, executor: Arc::new(Executor::single_thread()), inventory: SegmentMetaInventory::default() })
     }
 }

@@ -30,12 +30,7 @@ impl SegmentRegisters {
         } else if self.committed.contains_all(segment_ids) {
             Some(SegmentsStatus::Committed)
         } else {
-            warn!(
-                "segment_ids: {:?}, committed_ids: {:?}, uncommitted_ids {:?}",
-                segment_ids,
-                self.committed.segment_ids(),
-                self.uncommitted.segment_ids()
-            );
+            warn!("segment_ids: {:?}, committed_ids: {:?}, uncommitted_ids {:?}", segment_ids, self.committed.segment_ids(), self.uncommitted.segment_ids());
             None
         }
     }
@@ -70,27 +65,16 @@ impl SegmentManager {
     /// Initialize SegmentManager.
     /// The provided segment metas are all considered committed.
     pub fn from_segments(segment_metas: Vec<SegmentMeta>) -> SegmentManager {
-        SegmentManager {
-            registers: RwLock::new(SegmentRegisters {
-                uncommitted: SegmentRegister::default(),
-                committed: SegmentRegister::new(segment_metas),
-            }),
-        }
+        SegmentManager { registers: RwLock::new(SegmentRegisters { uncommitted: SegmentRegister::default(), committed: SegmentRegister::new(segment_metas) }) }
     }
 
     /// Retrieve the segment IDs that can be merged from the committed and uncommitted collections.
     /// The provided `in_merge_segment_ids` stores the IDs that are currently being merged.
     ///
     /// return (committed mergeable, uncommitted mergeable)
-    pub fn get_mergeable_segments(
-        &self,
-        in_merge_segment_ids: &HashSet<SegmentId>,
-    ) -> (Vec<SegmentMeta>, Vec<SegmentMeta>) {
+    pub fn get_mergeable_segments(&self, in_merge_segment_ids: &HashSet<SegmentId>) -> (Vec<SegmentMeta>, Vec<SegmentMeta>) {
         let registers_lock = self.read();
-        (
-            registers_lock.committed.get_mergeable_segments(in_merge_segment_ids),
-            registers_lock.uncommitted.get_mergeable_segments(in_merge_segment_ids),
-        )
+        (registers_lock.committed.get_mergeable_segments(in_merge_segment_ids), registers_lock.uncommitted.get_mergeable_segments(in_merge_segment_ids))
     }
     /// return all segment entries (committed and uncommitted)
     pub fn segment_entries(&self) -> Vec<SegmentEntry> {
@@ -171,21 +155,16 @@ impl SegmentManager {
     /// Determine whether the segment IDs belong to the committed or uncommitted collection,
     /// remove this set of segment IDs from the corresponding collection, and finally add the new segments
     /// produced from the merge to the appropriate collection.
-    pub(crate) fn end_merge(
-        &self,
-        before_merge_segment_ids: &[SegmentId],
-        after_merge_segment_entry: Option<SegmentEntry>,
-    ) -> crate::Result<SegmentsStatus> {
+    pub(crate) fn end_merge(&self, before_merge_segment_ids: &[SegmentId], after_merge_segment_entry: Option<SegmentEntry>) -> crate::Result<SegmentsStatus> {
         let mut registers_lock = self.write();
-        let segments_status =
-            registers_lock.segments_status(before_merge_segment_ids).ok_or_else(|| {
-                warn!("couldn't find segment in SegmentManager");
-                crate::SparseError::InvalidArgument(
-                    "The segments that were merged could not be found in the SegmentManager. This \
+        let segments_status = registers_lock.segments_status(before_merge_segment_ids).ok_or_else(|| {
+            warn!("couldn't find segment in SegmentManager");
+            crate::SparseError::InvalidArgument(
+                "The segments that were merged could not be found in the SegmentManager. This \
                      is not necessarily a bug, and can happen after a rollback for instance."
-                        .to_string(),
-                )
-            })?;
+                    .to_string(),
+            )
+        })?;
 
         let target_register: &mut SegmentRegister = match segments_status {
             SegmentsStatus::Uncommitted => &mut registers_lock.uncommitted,

@@ -7,8 +7,7 @@ use crate::index::IndexSettings;
 use crate::{
     common::errors::SparseError,
     core::{
-        CompressedInvertedIndexMmap, CompressedInvertedIndexMmapMerger, DimId, ElementRead,
-        ElementType, InvertedIndexMmap, InvertedIndexMmapAccess, InvertedIndexMmapInit,
+        CompressedInvertedIndexMmap, CompressedInvertedIndexMmapMerger, DimId, ElementRead, ElementType, InvertedIndexMmap, InvertedIndexMmapAccess, InvertedIndexMmapInit,
         InvertedIndexMmapMerger, PostingListIter, PostingListIterAccess, QuantizedWeight,
     },
     RowId,
@@ -33,20 +32,16 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexWrapper<OW, TW> {
     pub fn type_id(&self) -> InvertedIndexWrapperType {
         match self {
             InvertedIndexWrapper::SimpleInvertedIndex(_) => InvertedIndexWrapperType::Simple,
-            InvertedIndexWrapper::CompressedInvertedIndex(_) => {
-                InvertedIndexWrapperType::Compressed
-            }
+            InvertedIndexWrapper::CompressedInvertedIndex(_) => InvertedIndexWrapperType::Compressed,
         }
     }
 
     pub(super) fn support_pruning(&self) -> bool {
         match self {
-            InvertedIndexWrapper::SimpleInvertedIndex(e) => {
-                match e.meta.inverted_index_meta.element_type {
-                    crate::core::ElementType::SIMPLE => false,
-                    crate::core::ElementType::EXTENDED => true,
-                }
-            }
+            InvertedIndexWrapper::SimpleInvertedIndex(e) => match e.meta.inverted_index_meta.element_type {
+                crate::core::ElementType::SIMPLE => false,
+                crate::core::ElementType::EXTENDED => true,
+            },
             InvertedIndexWrapper::CompressedInvertedIndex(_) => false,
         }
     }

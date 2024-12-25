@@ -45,15 +45,11 @@ impl Footer {
 
     pub fn extract_footer(file: FileSlice) -> io::Result<(Footer, FileSlice)> {
         if file.len() < 4 {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                format!("File corrupted. The file is smaller than 4 bytes (len={}).", file.len()),
-            ));
+            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, format!("File corrupted. The file is smaller than 4 bytes (len={}).", file.len())));
         }
 
         let footer_metadata_len = <(u32, u32)>::SIZE_IN_BYTES;
-        let (footer_len, footer_magic_byte): (u32, u32) =
-            file.slice_from_end(footer_metadata_len).read_bytes()?.as_ref().deserialize()?;
+        let (footer_len, footer_magic_byte): (u32, u32) = file.slice_from_end(footer_metadata_len).read_bytes()?.as_ref().deserialize()?;
 
         if footer_magic_byte != FOOTER_MAGIC_NUMBER {
             return Err(io::Error::new(
@@ -85,10 +81,7 @@ impl Footer {
             ));
         }
 
-        let footer: Footer =
-            serde_json::from_slice(&file.read_bytes_slice(
-                file.len() - total_footer_size..file.len() - footer_metadata_len,
-            )?)?;
+        let footer: Footer = serde_json::from_slice(&file.read_bytes_slice(file.len() - total_footer_size..file.len() - footer_metadata_len)?)?;
 
         let body = file.slice_to(file.len() - total_footer_size);
         Ok((footer, body))
@@ -97,15 +90,11 @@ impl Footer {
     /// Confirms that the index will be read correctly by this version of tantivy
     /// Has to be called after `extract_footer` to make sure it's not accessing uninitialised memory
     pub fn is_compatible(&self) -> Result<(), Incompatibility> {
-        const SUPPORTED_INDEX_FORMAT_VERSION_RANGE: std::ops::RangeInclusive<u32> =
-            INDEX_FORMAT_OLDEST_SUPPORTED_VERSION..=INDEX_FORMAT_VERSION;
+        const SUPPORTED_INDEX_FORMAT_VERSION_RANGE: std::ops::RangeInclusive<u32> = INDEX_FORMAT_OLDEST_SUPPORTED_VERSION..=INDEX_FORMAT_VERSION;
 
         let library_version = crate::common::version::version();
         if !SUPPORTED_INDEX_FORMAT_VERSION_RANGE.contains(&self.version.index_format_version) {
-            return Err(Incompatibility::IndexMismatch {
-                library_version: library_version.clone(),
-                index_version: self.version.clone(),
-            });
+            return Err(Incompatibility::IndexMismatch { library_version: library_version.clone(), index_version: self.version.clone() });
         }
         Ok(())
     }
@@ -196,10 +185,7 @@ mod tests {
         let fileslice = FileSlice::new(Arc::new(owned_bytes));
         let err = Footer::extract_footer(fileslice).unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
-        assert_eq!(
-            err.to_string(),
-            "File corrupted. The file is smaller than it\'s footer bytes (len=108)."
-        );
+        assert_eq!(err.to_string(), "File corrupted. The file is smaller than it\'s footer bytes (len=108).");
     }
 
     #[test]

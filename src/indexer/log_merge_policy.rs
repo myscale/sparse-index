@@ -91,17 +91,10 @@ impl MergePolicy for LogMergePolicy {
         }
 
         // Filter and generate merge candidates
-        let candidates: Vec<MergeCandidate> = levels
-            .iter()
-            .filter(|level| level.len() >= self.min_num_segments)
-            .map(|segments| MergeCandidate(segments.iter().map(|&seg| seg.id()).collect()))
-            .collect();
+        let candidates: Vec<MergeCandidate> =
+            levels.iter().filter(|level| level.len() >= self.min_num_segments).map(|segments| MergeCandidate(segments.iter().map(|&seg| seg.id()).collect())).collect();
 
-        debug!(
-            "[compute_merge_candidates] input segments size:{}, generate candidates size:{}",
-            segments.len(),
-            candidates.clone().len()
-        );
+        debug!("[compute_merge_candidates] input segments size:{}, generate candidates size:{}", segments.len(), candidates.clone().len());
         return candidates;
     }
 }

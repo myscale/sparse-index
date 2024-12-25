@@ -16,16 +16,11 @@ impl<'a, W: QuantizedWeight> GenericElementRef<'a, W> {
     /// Converts `GenericElementRef` to an owned `GenericElement`.
     pub fn to_owned(&self) -> GenericElement<W> {
         match self {
-            GenericElementRef::SimpleElementRef(&ref simple_ref) => {
-                GenericElement::SimpleElement(simple_ref.clone())
-            }
-            GenericElementRef::ExtendedElementRef(&ref extended_ref) => {
-                GenericElement::ExtendedElement(extended_ref.clone())
-            }
+            GenericElementRef::SimpleElementRef(&ref simple_ref) => GenericElement::SimpleElement(simple_ref.clone()),
+            GenericElementRef::ExtendedElementRef(&ref extended_ref) => GenericElement::ExtendedElement(extended_ref.clone()),
         }
     }
 }
-
 
 #[cfg(test)]
 mod test {

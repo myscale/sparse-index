@@ -21,6 +21,15 @@ pub enum ElementType {
     EXTENDED,
 }
 
+impl std::fmt::Display for ElementType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ElementType::SIMPLE => write!(f, "simple"),
+            ElementType::EXTENDED => write!(f, "extended"),
+        }
+    }
+}
+
 #[enum_dispatch]
 pub trait ElementWrite<W: QuantizedWeight> {
     fn update_weight(&mut self, value: W);

@@ -11,9 +11,7 @@ use crate::BinarySerializable;
 
 /// Precision with which datetimes are truncated when stored in fast fields. This setting is only
 /// relevant for fast fields. In the docstore, datetimes are always saved with nanosecond precision.
-#[derive(
-    Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default,
-)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DateTimePrecision {
     /// Second precision.
@@ -113,8 +111,7 @@ impl DateTime {
 
     /// Convert to UTC `OffsetDateTime`
     pub fn into_utc(self) -> OffsetDateTime {
-        let utc_datetime = OffsetDateTime::from_unix_timestamp_nanos(self.timestamp_nanos as i128)
-            .expect("valid UNIX timestamp");
+        let utc_datetime = OffsetDateTime::from_unix_timestamp_nanos(self.timestamp_nanos as i128).expect("valid UNIX timestamp");
         debug_assert_eq!(UtcOffset::UTC, utc_datetime.offset());
         utc_datetime
     }

@@ -1,13 +1,9 @@
 use crate::core::common::ops::*;
 use crate::core::common::types::DimId;
-use crate::core::inverted_index::common::{
-    InvertedIndexMeta, InvertedIndexMetrics, Revision, Version,
-};
+use crate::core::inverted_index::common::{InvertedIndexMeta, InvertedIndexMetrics, Revision, Version};
 use crate::core::{
-    CompressedBlockType, CompressedInvertedIndexRam, CompressedPostingListIterator,
-    CompressedPostingListView, ExtendedCompressedPostingBlock, InvertedIndexMmapAccess,
-    InvertedIndexMmapInit, InvertedIndexRam, InvertedIndexRamAccess, PostingListIter,
-    PostingListIterAccess, QuantizedWeight, SimpleCompressedPostingBlock, WeightType,
+    CompressedBlockType, CompressedInvertedIndexRam, CompressedPostingListIterator, CompressedPostingListView, ExtendedCompressedPostingBlock, InvertedIndexMmapAccess,
+    InvertedIndexMmapInit, InvertedIndexRam, InvertedIndexRamAccess, PostingListIter, PostingListIterAccess, QuantizedWeight, SimpleCompressedPostingBlock, WeightType,
 };
 use crate::{thread_name, RowId};
 use log::{debug, warn};
@@ -19,10 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::COMPRESSED_POSTING_HEADER_SIZE;
-use super::{
-    CompressedInvertedIndexMmapConfig, CompressedMmapInvertedIndexMeta, CompressedMmapManager,
-    CompressedPostingListHeader,
-};
+use super::{CompressedInvertedIndexMmapConfig, CompressedMmapInvertedIndexMeta, CompressedMmapManager, CompressedPostingListHeader};
 
 /// CompressedInvertedIndexMmap
 ///
@@ -39,27 +32,18 @@ pub struct CompressedInvertedIndexMmap<OW: QuantizedWeight, TW: QuantizedWeight>
     pub(crate) _tw: PhantomData<TW>,
 }
 
-impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapInit<OW, TW>
-    for CompressedInvertedIndexMmap<OW, TW>
-{
+impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapInit<OW, TW> for CompressedInvertedIndexMmap<OW, TW> {
     fn open(path: &Path, segment_id: Option<&str>) -> std::io::Result<Self> {
         Self::load_under_segment(path.to_path_buf(), segment_id)
     }
 
-    fn from_ram_index(
-        ram_index: Cow<InvertedIndexRam<TW>>,
-        path: PathBuf,
-        segment_id: Option<&str>,
-    ) -> crate::Result<Self> {
-        let compressed_inverted_index_ram: CompressedInvertedIndexRam<TW> =
-            CompressedInvertedIndexRam::from_ram_index(ram_index, path.clone(), segment_id)?;
+    fn from_ram_index(ram_index: Cow<InvertedIndexRam<TW>>, path: PathBuf, segment_id: Option<&str>) -> crate::Result<Self> {
+        let compressed_inverted_index_ram: CompressedInvertedIndexRam<TW> = CompressedInvertedIndexRam::from_ram_index(ram_index, path.clone(), segment_id)?;
         Self::convert_and_save(&compressed_inverted_index_ram, &path, segment_id)
     }
 }
 
-impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterAccess<OW, TW>
-    for CompressedInvertedIndexMmap<OW, TW>
-{
+impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterAccess<OW, TW> for CompressedInvertedIndexMmap<OW, TW> {
     type Iter<'a> = CompressedPostingListIterator<'a, OW, TW>;
 
     fn iter(&self, dim_id: &DimId) -> Option<Self::Iter<'_>> {
@@ -70,8 +54,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterAccess<OW, TW>
         let view = res_opt.unwrap();
 
         // When using iterator peek func, you will get a `OW` type of weight.
-        let iterator: CompressedPostingListIterator<'_, OW, TW> =
-            CompressedPostingListIterator::<OW, TW>::new(&view);
+        let iterator: CompressedPostingListIterator<'_, OW, TW> = CompressedPostingListIterator::<OW, TW>::new(&view);
 
         debug!(
             "[{}]-[cmp-mmap]-[iter] TW:{:?}, OW:{:?}, quantize param:{:?}, iter size:{}",
@@ -85,9 +68,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListIterAccess<OW, TW>
     }
 }
 
-impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW>
-    for CompressedInvertedIndexMmap<OW, TW>
-{
+impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexMmapAccess<OW, TW> for CompressedInvertedIndexMmap<OW, TW> {
     fn size(&self) -> usize {
         self.meta.inverted_index_meta.posting_count
     }
@@ -152,30 +133,21 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
     pub fn posting_with_param(&self, dim_id: &DimId) -> Option<CompressedPostingListView<TW>> {
         // check that the id is not out of bounds (posting_count includes the empty zeroth entry)
         if *dim_id >= self.meta.inverted_index_meta.posting_count as DimId {
-            warn!(
-                "dim_id is overflow, dim_id should smaller than {}",
-                self.meta.inverted_index_meta.posting_count
-            );
+            warn!("dim_id is overflow, dim_id should smaller than {}", self.meta.inverted_index_meta.posting_count);
             return None;
         }
         // loding header-obj with given offsets.
         let header_start = *dim_id as usize * COMPRESSED_POSTING_HEADER_SIZE;
         let header_obj: CompressedPostingListHeader =
-            transmute_from_u8::<CompressedPostingListHeader>(
-                &self.headers_mmap[header_start..(header_start + COMPRESSED_POSTING_HEADER_SIZE)],
-            )
-            .clone();
+            transmute_from_u8::<CompressedPostingListHeader>(&self.headers_mmap[header_start..(header_start + COMPRESSED_POSTING_HEADER_SIZE)]).clone();
 
         // TODO: Figure out about transfer of owner ship.
-        let row_ids_compressed = &self.row_ids_mmap
-            [header_obj.compressed_row_ids_start..header_obj.compressed_row_ids_end];
-        let blocks: &[u8] =
-            &self.blocks_mmap[header_obj.compressed_blocks_start..header_obj.compressed_blocks_end];
+        let row_ids_compressed = &self.row_ids_mmap[header_obj.compressed_row_ids_start..header_obj.compressed_row_ids_end];
+        let blocks: &[u8] = &self.blocks_mmap[header_obj.compressed_blocks_start..header_obj.compressed_blocks_end];
         // Convert into Blocks type.
         match header_obj.compressed_block_type {
             CompressedBlockType::Simple => {
-                let raw_simple_blocks: &[SimpleCompressedPostingBlock<TW>] =
-                    transmute_from_u8_to_slice(blocks);
+                let raw_simple_blocks: &[SimpleCompressedPostingBlock<TW>] = transmute_from_u8_to_slice(blocks);
                 Some(CompressedPostingListView {
                     row_ids_compressed,
                     simple_blocks: raw_simple_blocks,
@@ -187,8 +159,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
                 })
             }
             CompressedBlockType::Extended => {
-                let raw_extended_blocks: &[ExtendedCompressedPostingBlock<TW>] =
-                    transmute_from_u8_to_slice(blocks);
+                let raw_extended_blocks: &[ExtendedCompressedPostingBlock<TW>] = transmute_from_u8_to_slice(blocks);
                 Some(CompressedPostingListView {
                     row_ids_compressed,
                     simple_blocks: &[],
@@ -203,31 +174,12 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
     }
 
     /// Store inverted-index-ram into mmap files.
-    pub fn convert_and_save(
-        compressed_inv_index_ram: &CompressedInvertedIndexRam<TW>,
-        directory: &PathBuf,
-        segment_id: Option<&str>,
-    ) -> crate::Result<Self> {
-        let (
-            total_blocks_count,
-            total_row_ids_storage_size,
-            total_blocks_storage_size,
-            total_headers_storage_size,
-            headers_mmap,
-            row_ids_mmap,
-            blocks_mmap,
-        ) = CompressedMmapManager::write_mmap_files(
-            directory,
-            segment_id,
-            compressed_inv_index_ram,
-        )?;
+    pub fn convert_and_save(compressed_inv_index_ram: &CompressedInvertedIndexRam<TW>, directory: &PathBuf, segment_id: Option<&str>) -> crate::Result<Self> {
+        let (total_blocks_count, total_row_ids_storage_size, total_blocks_storage_size, total_headers_storage_size, headers_mmap, row_ids_mmap, blocks_mmap) =
+            CompressedMmapManager::write_mmap_files(directory, segment_id, compressed_inv_index_ram)?;
 
         // TODO: Refine pathBuf.
-        let meta_file_path = CompressedMmapManager::get_file_path(
-            &directory,
-            segment_id,
-            CompressedInvertedIndexMmapConfig::meta_file_name,
-        );
+        let meta_file_path = CompressedMmapManager::get_file_path(&directory, segment_id, CompressedInvertedIndexMmapConfig::meta_file_name);
 
         let meta: CompressedMmapInvertedIndexMeta = CompressedMmapInvertedIndexMeta {
             inverted_index_meta: InvertedIndexMeta::new(
@@ -237,8 +189,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
                 compressed_inv_index_ram.metrics().max_row_id,
                 compressed_inv_index_ram.metrics().min_dim_id,
                 compressed_inv_index_ram.metrics().max_dim_id,
-                (TW::weight_type() == WeightType::WeightU8)
-                    && (OW::weight_type() != TW::weight_type()),
+                (TW::weight_type() == WeightType::WeightU8) && (OW::weight_type() != TW::weight_type()),
                 compressed_inv_index_ram.element_type(),
                 Version::compressed_mmap(Revision::V1),
             ),
@@ -250,15 +201,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
 
         atomic_save_json(&meta_file_path, &meta)?;
 
-        Ok(Self {
-            path: directory.clone(),
-            headers_mmap,
-            row_ids_mmap,
-            blocks_mmap,
-            meta,
-            _ow: PhantomData,
-            _tw: PhantomData,
-        })
+        Ok(Self { path: directory.clone(), headers_mmap, row_ids_mmap, blocks_mmap, meta, _ow: PhantomData, _tw: PhantomData })
     }
 
     /// load without segment name.
@@ -269,13 +212,8 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
     /// load with given segment name.
     pub fn load_under_segment(path: PathBuf, segment_id: Option<&str>) -> std::io::Result<Self> {
         // init directory
-        let (headers_mmap_file_path, row_ids_mmap_file_path, blocks_mmap_file_path) =
-            CompressedMmapManager::get_all_files(&path.clone(), segment_id);
-        let meta_file_path = CompressedMmapManager::get_file_path(
-            &path.clone(),
-            segment_id,
-            CompressedInvertedIndexMmapConfig::meta_file_name,
-        );
+        let (headers_mmap_file_path, row_ids_mmap_file_path, blocks_mmap_file_path) = CompressedMmapManager::get_all_files(&path.clone(), segment_id);
+        let meta_file_path = CompressedMmapManager::get_file_path(&path.clone(), segment_id, CompressedInvertedIndexMmapConfig::meta_file_name);
 
         // read meta file data.
         let meta: CompressedMmapInvertedIndexMeta = read_json(&meta_file_path)?;

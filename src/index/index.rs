@@ -22,25 +22,14 @@ use super::{IndexBuilder, IndexSettings, Segment, SegmentId, SegmentMeta};
 /// Read the `meta.json` file from the current index directory based on the directory path.
 /// Convert the untracked `UntrackedIndexMeta` to `IndexMeta` (tracked by inventory).
 /// Return the `IndexMeta` object.
-fn load_metas(
-    directory: &dyn Directory,
-    inventory: &SegmentMetaInventory,
-) -> crate::Result<IndexMeta> {
+fn load_metas(directory: &dyn Directory, inventory: &SegmentMetaInventory) -> crate::Result<IndexMeta> {
     let meta_data = directory.atomic_read(&META_FILEPATH)?;
     let meta_string = String::from_utf8(meta_data).map_err(|_utf8_err| {
         error!("Meta data is not valid utf8.");
-        DataCorruption::new(
-            META_FILEPATH.to_path_buf(),
-            "Meta file does not contain valid utf8 file.".to_string(),
-        )
+        DataCorruption::new(META_FILEPATH.to_path_buf(), "Meta file does not contain valid utf8 file.".to_string())
     })?;
     IndexMeta::deserialize(&meta_string, inventory)
-        .map_err(|e| {
-            DataCorruption::new(
-                META_FILEPATH.to_path_buf(),
-                format!("Meta file cannot be deserialized. {e:?}. Content: {meta_string:?}"),
-            )
-        })
+        .map_err(|e| DataCorruption::new(META_FILEPATH.to_path_buf(), format!("Meta file cannot be deserialized. {e:?}. Content: {meta_string:?}")))
         .map_err(From::from)
 }
 
@@ -69,10 +58,7 @@ impl Index {
         Ok(())
     }
 
-    pub fn set_shared_multithread_executor(
-        &mut self,
-        shared_thread_pool: Arc<Executor>,
-    ) -> crate::Result<()> {
+    pub fn set_shared_multithread_executor(&mut self, shared_thread_pool: Arc<Executor>) -> crate::Result<()> {
         self.executor = shared_thread_pool.clone();
         Ok(())
     }
@@ -86,10 +72,7 @@ impl Index {
 // For index create and write.
 impl Index {
     /// Create [`Index`] with custom [`Directory`] and [`IndexSettings`]
-    pub fn create<T: Into<Box<dyn Directory>>>(
-        dir: T,
-        settings: IndexSettings,
-    ) -> crate::Result<Index> {
+    pub fn create<T: Into<Box<dyn Directory>>>(dir: T, settings: IndexSettings) -> crate::Result<Index> {
         let dir: Box<dyn Directory> = dir.into();
         let builder: IndexBuilder = IndexBuilder::new();
         builder.with_settings(settings).create(dir)
@@ -97,10 +80,7 @@ impl Index {
 
     /// Create [`Index`] with given **path** and [`IndexSettings`], **path** may be like `/home/user/test/`.
     /// [`Index`] will be created with mmap mode.
-    pub fn create_in_dir<P: AsRef<Path>>(
-        directory_path: P,
-        settings: IndexSettings,
-    ) -> crate::Result<Index> {
+    pub fn create_in_dir<P: AsRef<Path>>(directory_path: P, settings: IndexSettings) -> crate::Result<Index> {
         IndexBuilder::new().with_settings(settings).create_in_dir(directory_path)
     }
 
@@ -109,11 +89,7 @@ impl Index {
     /// As long as the `SegmentMeta` exists, the files associated with it are guaranteed
     /// not to be garbage collected, regardless of whether the segment is recorded as part of the index.
     pub fn new_segment_meta(&self, segment_id: SegmentId, rows_count: RowId) -> SegmentMeta {
-        self.inventory.new_segment_meta(
-            self.directory().get_path().unwrap(),
-            segment_id,
-            rows_count,
-        )
+        self.inventory.new_segment_meta(self.directory().get_path().unwrap(), segment_id, rows_count)
     }
 
     /// Open a new index writer and attempt to acquire a lock file.
@@ -129,11 +105,7 @@ impl Index {
     /// # Errors
     /// If the lock file already exists, return `Error::DirectoryLockBusy` or `Error::IoError`.
     /// If the memory allocation per thread is too small or too large, return `SparseError::InvalidArgument`.
-    pub fn writer_with_num_threads(
-        &self,
-        num_threads: usize,
-        overall_memory_budget_in_bytes: usize,
-    ) -> crate::Result<IndexWriter> {
+    pub fn writer_with_num_threads(&self, num_threads: usize, overall_memory_budget_in_bytes: usize) -> crate::Result<IndexWriter> {
         let directory_lock = self.directory.acquire_lock(&INDEX_WRITER_LOCK).map_err(|err| {
             SparseError::LockFailure(
                 err,
@@ -177,11 +149,7 @@ impl Index {
 
     /// Creates a new segment.
     pub fn new_segment(&self) -> Segment {
-        let segment_meta = self.inventory.new_segment_meta(
-            self.directory().get_path().unwrap(),
-            SegmentId::generate_random(),
-            0,
-        );
+        let segment_meta = self.inventory.new_segment_meta(self.directory().get_path().unwrap(), SegmentId::generate_random(), 0);
         self.segment(segment_meta)
     }
 }
@@ -198,11 +166,7 @@ impl Index {
     }
 
     pub fn searchable_segments(&self) -> crate::Result<Vec<Segment>> {
-        Ok(self
-            .searchable_segment_metas()?
-            .into_iter()
-            .map(|segment_meta| self.segment(segment_meta))
-            .collect())
+        Ok(self.searchable_segment_metas()?.into_iter().map(|segment_meta| self.segment(segment_meta)).collect())
     }
 
     /// Retrieve the current Index's `SegmentMeta` list by reading the `meta.json` file (starting from the last commit).
@@ -240,15 +204,10 @@ impl Index {
         let managed_files = self.directory.list_managed_files();
 
         // Get all searchable segment files and collect them into a HashSet
-        let active_segments_files: HashSet<PathBuf> = self
-            .searchable_segment_metas()?
-            .iter()
-            .flat_map(|segment_meta| segment_meta.list_files())
-            .collect();
+        let active_segments_files: HashSet<PathBuf> = self.searchable_segment_metas()?.iter().flat_map(|segment_meta| segment_meta.list_files()).collect();
 
         // Find files that exist in both managed files and segments
-        let active_existing_files: HashSet<&PathBuf> =
-            active_segments_files.intersection(&managed_files).collect();
+        let active_existing_files: HashSet<&PathBuf> = active_segments_files.intersection(&managed_files).collect();
 
         let mut damaged_files = HashSet::new();
         for path in active_existing_files {
@@ -274,12 +233,7 @@ impl Index {
         // Loading index settings from disk file.
         let index_settings = IndexSettings::load(&directory.get_path().unwrap())?;
 
-        Ok(Index {
-            directory,
-            index_settings,
-            executor: Arc::new(Executor::single_thread()),
-            inventory,
-        })
+        Ok(Index { directory, index_settings, executor: Arc::new(Executor::single_thread()), inventory })
     }
 
     /// load [`IndexReader`]
@@ -319,10 +273,7 @@ mod tests {
     use log::info;
 
     use crate::{
-        core::{
-            ElementType, IndexWeightType, InvertedIndexConfig, SparseRowContent, SparseVector,
-            StorageType,
-        },
+        core::{ElementType, IndexWeightType, InvertedIndexConfig, SparseRowContent, SparseVector, StorageType},
         index::IndexSettings,
         indexer::LogMergePolicy,
     };
@@ -331,11 +282,7 @@ mod tests {
 
     use rand::Rng;
 
-    fn generate_random_vectors(
-        len: usize,
-        dim_range: u32,
-        value_range: f32,
-    ) -> (Vec<u32>, Vec<f32>) {
+    fn generate_random_vectors(len: usize, dim_range: u32, value_range: f32) -> (Vec<u32>, Vec<f32>) {
         let mut rng = rand::thread_rng();
 
         let random_dims: Vec<u32> = (0..len).map(|_| rng.gen_range(0..dim_range)).collect();
@@ -377,8 +324,7 @@ mod tests {
                 element_type: ElementType::SIMPLE,
             },
         };
-        let index = Index::create_in_dir(index_directory, index_settings)
-            .expect("error create index in dir");
+        let index = Index::create_in_dir(index_directory, index_settings).expect("error create index in dir");
         let mut index_writer = index.writer(1024 * 1024 * 128).expect("error create index writer");
 
         let log_merge_policy = LogMergePolicy::default();
@@ -397,11 +343,7 @@ mod tests {
 
         let res = index_writer.wait_merging_threads();
         let time_end = Instant::now();
-        info!(
-            "release merging threads is {}, duration is {}s",
-            res.is_ok(),
-            time_end.duration_since(time_begin).as_secs()
-        );
+        info!("release merging threads is {}, duration is {}s", res.is_ok(), time_end.duration_since(time_begin).as_secs());
 
         let searcher = index.reader().expect("error index reader").searcher();
         for row in mock_row_content(5, 100) {

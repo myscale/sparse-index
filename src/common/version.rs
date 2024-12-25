@@ -29,10 +29,7 @@ pub static VERSION: Lazy<Version> = Lazy::new(|| Version {
 
 impl ToString for Version {
     fn to_string(&self) -> String {
-        format!(
-            "tantivy v{}.{}.{}, index_format v{}",
-            self.major, self.minor, self.patch, self.index_format_version
-        )
+        format!("tantivy v{}.{}.{}, index_format v{}", self.major, self.minor, self.patch, self.index_format_version)
     }
 }
 

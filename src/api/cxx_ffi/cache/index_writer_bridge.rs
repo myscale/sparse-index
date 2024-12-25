@@ -71,22 +71,12 @@ impl IndexWriterBridgeCache {
         }
     }
 
-    pub fn set_index_writer_bridge(
-        &self,
-        key: String,
-        value: Arc<IndexWriterBridge>,
-    ) -> Result<(), String> {
+    pub fn set_index_writer_bridge(&self, key: String, value: Arc<IndexWriterBridge>) -> Result<(), String> {
         let pinned = self.cache.pin();
         let trimmed_key: String = key.trim_end_matches('/').to_string();
         if pinned.contains_key(&trimmed_key) {
             pinned.insert(trimmed_key.clone(), value.clone());
-            warn_ck!(
-                "{}",
-                format!(
-                    "Index writer already exists with given key: [{}], it has been overwritten.",
-                    trimmed_key
-                )
-            )
+            warn_ck!("{}", format!("Index writer already exists with given key: [{}], it has been overwritten.", trimmed_key))
         } else {
             pinned.insert(trimmed_key, value.clone());
         }
@@ -98,10 +88,7 @@ impl IndexWriterBridgeCache {
         if pinned.contains_key(&trimmed_key) {
             pinned.remove(&trimmed_key);
         } else {
-            let message = format!(
-                "IndexWriterBridge doesn't exist, can't remove it with given key: [{}]",
-                trimmed_key
-            );
+            let message = format!("IndexWriterBridge doesn't exist, can't remove it with given key: [{}]", trimmed_key);
             debug_ck!("{}", message)
         }
         Ok(())

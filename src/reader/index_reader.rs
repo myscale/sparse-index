@@ -40,12 +40,7 @@ pub struct IndexReaderBuilder {
 impl IndexReaderBuilder {
     #[must_use]
     pub(crate) fn new(index: Index) -> IndexReaderBuilder {
-        IndexReaderBuilder {
-            reload_policy: ReloadPolicy::OnCommitWithDelay,
-            index,
-            warmers: Vec::new(),
-            num_warming_threads: 1,
-        }
+        IndexReaderBuilder { reload_policy: ReloadPolicy::OnCommitWithDelay, index, warmers: Vec::new(), num_warming_threads: 1 }
     }
 
     /// Builds the reader.
@@ -57,13 +52,8 @@ impl IndexReaderBuilder {
     /// Convert `IndexReaderBuilder` into `IndexReader`
     pub fn try_into(self) -> crate::Result<IndexReader> {
         let searcher_generation_inventory = Inventory::default();
-        let warming_state = WarmingState::new(
-            self.num_warming_threads,
-            self.warmers,
-            searcher_generation_inventory.clone(),
-        )?;
-        let inner_reader =
-            InnerIndexReader::new(self.index, warming_state, searcher_generation_inventory)?;
+        let warming_state = WarmingState::new(self.num_warming_threads, self.warmers, searcher_generation_inventory.clone())?;
+        let inner_reader = InnerIndexReader::new(self.index, warming_state, searcher_generation_inventory)?;
         let inner_reader_arc = Arc::new(inner_reader);
         let watch_handle_opt: Option<WatchHandle> = match self.reload_policy {
             ReloadPolicy::Manual => {
@@ -77,8 +67,7 @@ impl IndexReaderBuilder {
                         error!("Error while loading searcher after commit was detected. {:?}", err);
                     }
                 };
-                let watch_handle =
-                    inner_reader_arc.index.directory().watch(WatchCallback::new(callback))?;
+                let watch_handle = inner_reader_arc.index.directory().watch(WatchCallback::new(callback))?;
                 Some(watch_handle)
             }
         };
@@ -136,19 +125,8 @@ impl InnerIndexReader {
     ) -> crate::Result<Self> {
         let searcher_generation_counter: Arc<AtomicU64> = Default::default();
 
-        let searcher = Self::create_searcher(
-            &index,
-            &warming_state,
-            &searcher_generation_counter,
-            &searcher_generation_inventory,
-        )?;
-        Ok(InnerIndexReader {
-            index,
-            warming_state,
-            searcher: ArcSwap::from(searcher),
-            searcher_generation_counter,
-            searcher_generation_inventory,
-        })
+        let searcher = Self::create_searcher(&index, &warming_state, &searcher_generation_counter, &searcher_generation_inventory)?;
+        Ok(InnerIndexReader { index, warming_state, searcher: ArcSwap::from(searcher), searcher_generation_counter, searcher_generation_inventory })
     }
     /// Opens the freshest segments [`SegmentReader`].
     ///
@@ -158,8 +136,7 @@ impl InnerIndexReader {
         // Prevents segment files from getting deleted while we are in the process of opening them
         let _meta_lock = index.directory().acquire_lock(&META_LOCK)?;
         let searchable_segments = index.searchable_segments()?;
-        let segment_readers =
-            searchable_segments.iter().map(SegmentReader::open).collect::<crate::Result<_>>()?;
+        let segment_readers = searchable_segments.iter().map(SegmentReader::open).collect::<crate::Result<_>>()?;
         Ok(segment_readers)
     }
 
@@ -169,8 +146,7 @@ impl InnerIndexReader {
         searcher_generation_inventory: &Inventory<SearcherGeneration>,
     ) -> TrackedObject<SearcherGeneration> {
         let generation_id = searcher_generation_counter.fetch_add(1, atomic::Ordering::AcqRel);
-        let searcher_generation =
-            SearcherGeneration::from_segment_readers(segment_readers, generation_id);
+        let searcher_generation = SearcherGeneration::from_segment_readers(segment_readers, generation_id);
         searcher_generation_inventory.track(searcher_generation)
     }
 
@@ -181,26 +157,16 @@ impl InnerIndexReader {
         searcher_generation_inventory: &'a Inventory<SearcherGeneration>,
     ) -> crate::Result<Arc<SearcherInner>> {
         let segment_readers = Self::open_segment_readers(index)?;
-        let searcher_generation = Self::track_segment_readers_in_inventory(
-            &segment_readers,
-            searcher_generation_counter,
-            searcher_generation_inventory,
-        );
+        let searcher_generation = Self::track_segment_readers_in_inventory(&segment_readers, searcher_generation_counter, searcher_generation_inventory);
 
-        let searcher =
-            Arc::new(SearcherInner::new(index.clone(), segment_readers, searcher_generation)?);
+        let searcher = Arc::new(SearcherInner::new(index.clone(), segment_readers, searcher_generation)?);
 
         warming_state.warm_new_searcher_generation(&searcher.clone().into())?;
         Ok(searcher)
     }
 
     fn reload(&self) -> crate::Result<()> {
-        let searcher = Self::create_searcher(
-            &self.index,
-            &self.warming_state,
-            &self.searcher_generation_counter,
-            &self.searcher_generation_inventory,
-        )?;
+        let searcher = Self::create_searcher(&self.index, &self.warming_state, &self.searcher_generation_counter, &self.searcher_generation_inventory)?;
 
         self.searcher.store(searcher);
 

@@ -25,18 +25,12 @@ fn to_cstring(s: String) -> CString {
 pub struct SparseIndexLogger;
 
 impl SparseIndexLogger {
-    pub fn update_log_callback(
-        cell: &OnceCell<LogCallback>,
-        callback: LogCallback,
-    ) -> Result<(), String> {
+    pub fn update_log_callback(cell: &OnceCell<LogCallback>, callback: LogCallback) -> Result<(), String> {
         let _ = cell.get_or_init(|| callback);
         Ok(())
     }
 
-    pub fn update_log4rs_handler(
-        cell: &OnceCell<log4rs::Handle>,
-        log_config: log4rs::Config,
-    ) -> Result<(), String> {
+    pub fn update_log4rs_handler(cell: &OnceCell<log4rs::Handle>, log_config: log4rs::Config) -> Result<(), String> {
         match cell.get() {
             Some(handle) => {
                 handle.set_config(log_config);
@@ -44,8 +38,7 @@ impl SparseIndexLogger {
                 Ok(())
             }
             None => {
-                let handle = log4rs::init_config(log_config)
-                    .map_err(|e| format!("Failed to initialize log4rs: {}", e))?;
+                let handle = log4rs::init_config(log_config).map_err(|e| format!("Failed to initialize log4rs: {}", e))?;
                 // INFO!("Successfully initialize log4rs handler.");
                 cell.set(handle).map_err(|_| "Failed to save log4rs handler to cell".to_string())
             }
@@ -64,11 +57,7 @@ impl SparseIndexLogger {
         let thread_id: String = Self::get_thread_id();
         let thread_name: String = thread::current().name().unwrap_or("none").to_string();
 
-        let thread_info: String = if thread_name == "none" {
-            format!("[tid:{}]", thread_id)
-        } else {
-            format!("[tid:{} - {}]", thread_id, thread_name)
-        };
+        let thread_info: String = if thread_name == "none" { format!("[tid:{}]", thread_id) } else { format!("[tid:{} - {}]", thread_id, thread_name) };
 
         let thread_info_c = to_cstring(thread_info);
         let c_message = to_cstring(message);
@@ -110,9 +99,7 @@ mod tests {
     fn test_update_log4rs_handler() {
         // let _guard = TEST_MUTEX.lock().unwrap();
 
-        let stdout_appender = ConsoleAppender::builder()
-            .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
-            .build();
+        let stdout_appender = ConsoleAppender::builder().encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n"))).build();
 
         let log_config_info = Config::builder()
             .appender(Appender::builder().build("stdout", Box::new(stdout_appender)))
@@ -126,9 +113,7 @@ mod tests {
         assert!(!format!("{:?}", LOG4RS_HANDLE.get().unwrap()).contains("Info"));
 
         // ConsoleAppender doesn't impl Clone trait.
-        let stdout_appender = ConsoleAppender::builder()
-            .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
-            .build();
+        let stdout_appender = ConsoleAppender::builder().encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n"))).build();
 
         let log_config_debug = Config::builder()
             .appender(Appender::builder().build("stdout", Box::new(stdout_appender)))

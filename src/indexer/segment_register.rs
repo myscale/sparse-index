@@ -47,15 +47,8 @@ impl SegmentRegister {
 
     /// Retrieve the segment metas that can be merged (those segment IDs that are not currently being merged).
     /// - `in_merge_segment_ids` contains the segment IDs that are currently being merged; these segment IDs should not be merged again.
-    pub fn get_mergeable_segments(
-        &self,
-        in_merge_segment_ids: &HashSet<SegmentId>,
-    ) -> Vec<SegmentMeta> {
-        self.segment_states
-            .values()
-            .filter(|segment_entry| !in_merge_segment_ids.contains(&segment_entry.segment_id()))
-            .map(|segment_entry| segment_entry.meta().clone())
-            .collect()
+    pub fn get_mergeable_segments(&self, in_merge_segment_ids: &HashSet<SegmentId>) -> Vec<SegmentMeta> {
+        self.segment_states.values().filter(|segment_entry| !in_merge_segment_ids.contains(&segment_entry.segment_id())).map(|segment_entry| segment_entry.meta().clone()).collect()
     }
 
     /// Return all segment IDs stored in the register.
@@ -141,8 +134,7 @@ mod tests {
         segment_register.remove_segment(&segment_id_a);
         segment_register.remove_segment(&segment_id_b);
         {
-            let segment_meta_merged =
-                inventory.new_segment_meta(PathBuf::default(), segment_id_merged, 0u32);
+            let segment_meta_merged = inventory.new_segment_meta(PathBuf::default(), segment_id_merged, 0u32);
             let segment_entry = SegmentEntry::new(segment_meta_merged, None);
             segment_register.add_segment_entry(segment_entry);
         }
