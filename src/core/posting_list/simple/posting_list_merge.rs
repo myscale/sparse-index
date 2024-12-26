@@ -21,18 +21,19 @@ impl PostingListMerger {
 
     fn build_posting_list<OW: QuantizedWeight, TW: QuantizedWeight>(merged: PostingList<OW>, quantized_param: Option<QuantizedParam>, use_quantized: bool) -> PostingList<TW> {
         if use_quantized {
+            // Only `SimpleElement` can be quantized.
             PostingList { elements: merged.elements.into_iter().map(|e| e.quantize_with_param::<TW>(quantized_param.unwrap())).collect(), element_type: ElementType::SIMPLE }
         } else {
             unsafe { std::mem::transmute(merged) }
         }
     }
 
-    // simple posting 不需要计算 max_next_weight，只需要考虑quantized
+    // For `SimpleElement`, doesn't need calculate `max_next_weight`, only needs quantized.
     fn merge_simple_postings<OW: QuantizedWeight, TW: QuantizedWeight>(lists: &[Vec<GenericElement<OW>>]) -> Result<(PostingList<TW>, Option<QuantizedParam>), PostingListError> {
         // Boundary.
         let use_quantized = OW::weight_type() != TW::weight_type() && TW::weight_type() == WeightType::WeightU8;
         if !use_quantized && OW::weight_type() != TW::weight_type() {
-            let error_msg = "Merging for `ElementType::SIMPLE` without quantized, weight_type should keep same.";
+            let error_msg = "Merging for `SimpleElement` without being quantized, weight_type should keep same.";
             error!("{}", error_msg);
             return Err(PostingListError::MergeError(error_msg.to_string()));
         }
@@ -49,15 +50,16 @@ impl PostingListMerger {
         let total_elements: usize = lists.iter().map(|list| list.len()).sum();
 
         while merged_count < total_elements {
-            let min_row_id_posting_idx =
+            // Find the posting_idx, which contains the minnest row_id.
+            let min_row_id_posting_idx: Option<usize> =
                 cursors.iter().enumerate().filter(|&(i, &index)| index < lists[i].len()).min_by_key(|&(i, &index)| lists[i][index].row_id()).map(|(i, _)| i);
 
             // Processing the PostingList (this PostingList contains min_row_id)
             if let Some(posting_idx) = min_row_id_posting_idx {
-                let element = lists[posting_idx][cursors[posting_idx]].clone();
+                let element = &lists[posting_idx][cursors[posting_idx]];
                 // Boundary
                 if element.element_type() != ElementType::SIMPLE {
-                    let error_msg = "During merging process, the PostingElement type can only be `ElementType::SIMPLE`";
+                    let error_msg = "Note expected!, the PostingElement type can only be `ElementType::SIMPLE` during merging process";
                     error!("{}", error_msg);
                     return Err(PostingListError::MergeError(error_msg.to_string()));
                 }
@@ -76,13 +78,16 @@ impl PostingListMerger {
                 // increase cursor
                 cursors[posting_idx] += 1;
                 merged_count += 1;
+            } else {
+                // Exit the loop if there's no valid posting left to process
+                break;
             }
         }
 
         if use_quantized {
             quantized_param = Some(Self::calculate_quantized_param(min_weight, max_weight));
         }
-        let posting_list = Self::build_posting_list(merged, quantized_param.clone(), use_quantized);
+        let posting_list: PostingList<TW> = Self::build_posting_list(merged, quantized_param.clone(), use_quantized);
         Ok((posting_list, quantized_param))
     }
 
@@ -90,12 +95,12 @@ impl PostingListMerger {
         // Boundary.
         let use_quantized = OW::weight_type() != TW::weight_type() && TW::weight_type() == WeightType::WeightU8;
         if use_quantized {
-            let error_msg = "`ElementType::EXTENDED` not support quantized! Can't execute merge.";
+            let error_msg = "`ExtendedElement` can't be quantized! Can't continue merging process.";
             error!("{}", error_msg);
             return Err(PostingListError::MergeError(error_msg.to_string()));
         }
-        if OW::weight_type() != TW::weight_type() {
-            let error_msg = "Quantized not supported for `ElementType::EXTENDED`, weight_type should keep same.";
+        if !use_quantized && OW::weight_type() != TW::weight_type() {
+            let error_msg = "For `ExtendedElement`, it's OW and TW weight_type should keep same.";
             error!("{}", error_msg);
             return Err(PostingListError::MergeError(error_msg.to_string()));
         }
@@ -125,11 +130,10 @@ impl PostingListMerger {
 
             // Processing the PostingList (this PostingList contains max_row_id)
             if let Some(posting_idx) = max_row_id_posting_idx {
-                // TODO enum 可以直接使用原始类型进行注解？这里的注解是 Generic，改成 Extended 可以吗？
                 let mut element: GenericElement<OW> = lists[posting_idx][cursors_rev[posting_idx] - 1].clone();
                 // Boundary
                 if element.element_type() != ElementType::EXTENDED {
-                    let error_msg = "During merging process, the PostingElement type can only be `ElementType::EXTENDED`";
+                    let error_msg = "Note expected!, the PostingElement type can only be `ElementType::Extended` during merging process";
                     error!("{}", error_msg);
                     return Err(PostingListError::MergeError(error_msg.to_string()));
                 }
@@ -141,15 +145,16 @@ impl PostingListMerger {
                 cursors_rev[posting_idx] -= 1;
             }
         }
-        // 将结果反转，使其按照 row_id 从小到大排序
+        // Reverse elements, make their `row_id` in order.
         merged.elements.reverse();
 
         let tw_posting_list: PostingList<TW> = unsafe { std::mem::transmute(merged) };
         Ok((tw_posting_list, None))
     }
 
-    /// input a group of postings, they are in the same dim-id.
-    /// 这里执行的 merge 是对同一个 dim 下面对应的所有 posting list 执行的 merge，所以说 merge 操作并不会遇到相同的 row_id
+    /// This merge operation is performed across multiple `InvertedIndex` segments for the same dimension,
+    /// merging all the posting lists corresponding to the same dimension.
+    /// Therefore, the merge operation will never encounter the same row_id.
     pub fn merge_posting_lists<OW: QuantizedWeight, TW: QuantizedWeight>(
         lists: &Vec<Vec<GenericElement<OW>>>,
         element_type: ElementType,
@@ -165,100 +170,132 @@ impl PostingListMerger {
 mod tests {
     use core::f32;
 
-    use crate::core::{ElementType, ExtendedElement, GenericElement, PostingList};
+    use crate::{
+        core::{ElementType, GenericElement, PostingList, PostingListBuilder, QuantizedParam, QuantizedWeight},
+        RowId,
+    };
 
     use super::PostingListMerger;
 
-    /// mock 7 postings for the same dim-id.
-    /// mock 7 postings for the same dim-id.
-    fn get_mocked_postings() -> (Vec<Vec<GenericElement<f32>>>, PostingList<f32>) {
-        let lists: Vec<Vec<GenericElement<f32>>> = vec![
-            vec![], // 0
-            vec![
-                // 1
-                ExtendedElement { row_id: 0, weight: 2.3, max_next_weight: 2.8 }.into(),
-                ExtendedElement { row_id: 4, weight: 1.4, max_next_weight: 2.8 }.into(),
-                ExtendedElement { row_id: 5, weight: 2.1, max_next_weight: 2.8 }.into(),
-                ExtendedElement { row_id: 9, weight: 2.8, max_next_weight: 1.2 }.into(),
-                ExtendedElement { row_id: 12, weight: 1.2, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-            vec![], // 2
-            vec![
-                // 3
-                ExtendedElement { row_id: 1, weight: 1.2, max_next_weight: 4.3 }.into(),
-                ExtendedElement { row_id: 3, weight: 4.3, max_next_weight: 3.1 }.into(),
-                ExtendedElement { row_id: 8, weight: 2.9, max_next_weight: 3.1 }.into(),
-                ExtendedElement { row_id: 10, weight: 1.8, max_next_weight: 3.1 }.into(),
-                ExtendedElement { row_id: 14, weight: 3.1, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-            vec![
-                // 4
-                ExtendedElement { row_id: 2, weight: 0.3, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 11, weight: 3.4, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 13, weight: 2.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 15, weight: 1.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 17, weight: 1.5, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 21, weight: 3.8, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 24, weight: 4.2, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-            vec![
-                // 5
-                ExtendedElement { row_id: 6, weight: 2.3, max_next_weight: 3.4 }.into(),
-                ExtendedElement { row_id: 7, weight: 3.4, max_next_weight: 3.2 }.into(),
-                ExtendedElement { row_id: 16, weight: 3.2, max_next_weight: 2.8 }.into(),
-                ExtendedElement { row_id: 19, weight: 2.8, max_next_weight: 1.9 }.into(),
-                ExtendedElement { row_id: 20, weight: 1.9, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-            vec![
-                // 6
-                ExtendedElement { row_id: 18, weight: 2.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 22, weight: 4.2, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 23, weight: 3.9, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 25, weight: 1.6, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 26, weight: 1.2, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 30, weight: 4.1, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-        ];
+    fn mock_build_posting<OW: QuantizedWeight, TW: QuantizedWeight>(element_type: ElementType, elements: Vec<(RowId, f32)>) -> (PostingList<TW>, Option<QuantizedParam>) {
+        let mut builder = PostingListBuilder::<OW, TW>::new(element_type, false).expect("");
+        for (row_id, weight) in elements {
+            builder.add(row_id, weight);
+        }
+        builder.build().unwrap()
+    }
 
-        let merged = PostingList {
-            elements: vec![
-                ExtendedElement { row_id: 0, weight: 2.3, max_next_weight: 4.3 }.into(),
-                ExtendedElement { row_id: 1, weight: 1.2, max_next_weight: 4.3 }.into(),
-                ExtendedElement { row_id: 2, weight: 0.3, max_next_weight: 4.3 }.into(),
-                ExtendedElement { row_id: 3, weight: 4.3, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 4, weight: 1.4, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 5, weight: 2.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 6, weight: 2.3, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 7, weight: 3.4, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 8, weight: 2.9, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 9, weight: 2.8, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 10, weight: 1.8, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 11, weight: 3.4, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 12, weight: 1.2, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 13, weight: 2.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 14, weight: 3.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 15, weight: 1.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 16, weight: 3.2, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 17, weight: 1.5, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 18, weight: 2.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 19, weight: 2.8, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 20, weight: 1.9, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 21, weight: 3.8, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 22, weight: 4.2, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 23, weight: 3.9, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 24, weight: 4.2, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 25, weight: 1.6, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 26, weight: 1.2, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 30, weight: 4.1, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-            element_type: ElementType::EXTENDED,
-        };
-        return (lists, merged);
+    fn mock_posting_candidates<OW: QuantizedWeight, TW: QuantizedWeight>(element_type: ElementType) -> (Vec<Vec<GenericElement<TW>>>, (PostingList<TW>, Option<QuantizedParam>)) {
+        let vec_0: Vec<(u32, f32)> = vec![];
+        let vec_1: Vec<(u32, f32)> = vec![(3, 4.3)];
+        let vec_2: Vec<(u32, f32)> = vec![(0, 2.3), (4, 1.4), (5, 2.1), (9, 2.8), (12, 1.2)];
+        let vec_3: Vec<(u32, f32)> = vec![(1, 1.2), (10, 1.8)];
+        let vec_4: Vec<(u32, f32)> = vec![];
+        let vec_5: Vec<(u32, f32)> = vec![(2, 0.3), (11, 3.4), (13, 2.1), (15, 1.1), (17, 1.5), (21, 3.8), (24, 4.2)];
+        let vec_6: Vec<(u32, f32)> = vec![(8, 2.9), (14, 3.1)];
+        let vec_7: Vec<(u32, f32)> = vec![(6, 2.3), (7, 3.4), (16, 3.2), (19, 2.8), (20, 1.9)];
+        let vec_8: Vec<(u32, f32)> = vec![(18, 2.1), (22, 4.2), (23, 3.9), (25, 1.6), (30, 4.1)];
+        let vec_9: Vec<(u32, f32)> = vec![(26, 1.1)];
+
+        let mock_vectors = vec![vec_0, vec_1, vec_2, vec_3, vec_4, vec_5, vec_6, vec_7, vec_8, vec_9];
+
+        let mut combined_vec: Vec<(u32, f32)> = vec![];
+        for v in mock_vectors.clone() {
+            combined_vec.extend(v);
+        }
+        combined_vec.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut postings: Vec<Vec<GenericElement<TW>>> = Vec::new();
+
+        for v in mock_vectors.clone() {
+            let (posting, _) = mock_build_posting::<OW, TW>(element_type, v);
+            let elements: Vec<GenericElement<TW>> = posting.elements;
+            postings.push(elements);
+        }
+
+        let merged: (PostingList<TW>, Option<QuantizedParam>) = mock_build_posting::<OW, TW>(element_type, combined_vec);
+
+        return (postings, merged);
     }
     #[test]
-    fn test_merge_posting_lists() {
-        let postings = get_mocked_postings();
-        let result = PostingListMerger::merge_posting_lists::<f32, f32>(&postings.0, ElementType::EXTENDED).expect("msg");
-        assert_eq!(result.0, postings.1);
+    fn test_merge_simple_posting_lists() {
+        // merge for f32-f32 postings. (not-quantized)
+        {
+            let (candidates, (merged_posting, _)) = mock_posting_candidates::<f32, f32>(ElementType::SIMPLE);
+            let (merged_result, param) = PostingListMerger::merge_posting_lists::<f32, f32>(&candidates, ElementType::SIMPLE).unwrap();
+            assert!(param.is_none());
+            assert_eq!(merged_posting, merged_result);
+        }
+        // merge for f16-f16 postings. (not-quantized)
+        {
+            let (candidates, (merged_posting, _)) = mock_posting_candidates::<half::f16, half::f16>(ElementType::SIMPLE);
+            let (merged_result, param) = PostingListMerger::merge_posting_lists::<half::f16, half::f16>(&candidates, ElementType::SIMPLE).unwrap();
+            assert!(param.is_none());
+            assert_eq!(merged_posting, merged_result);
+        }
+        // merge for u8-u8 postings. (not-quantized)
+        {
+            let (candidates, (merged_posting, _)) = mock_posting_candidates::<u8, u8>(ElementType::SIMPLE);
+            let (merged_result, param) = PostingListMerger::merge_posting_lists::<u8, u8>(&candidates, ElementType::SIMPLE).unwrap();
+            assert!(param.is_none());
+            assert_eq!(merged_posting, merged_result);
+        }
+        // merge for f32-u8 postings (quantized).
+        {
+            let (candidates, (merged_posting, _)) = mock_posting_candidates::<f32, f32>(ElementType::SIMPLE);
+            let (merged_result, _) = PostingListMerger::merge_posting_lists::<f32, u8>(&candidates, ElementType::SIMPLE).unwrap();
+            let mut builder = PostingListBuilder::<f32, u8>::new(ElementType::SIMPLE, false).unwrap();
+            builder.update_inner_posting(merged_posting);
+            let (expected_merged_posting, param) = builder.build().unwrap();
+            assert!(param.is_some());
+            assert_eq!(merged_result, expected_merged_posting);
+        }
+        // merge for f16-u8 postings (quantized).
+        {
+            let (candidates, (merged_posting, _)) = mock_posting_candidates::<half::f16, half::f16>(ElementType::SIMPLE);
+            let (merged_result, _) = PostingListMerger::merge_posting_lists::<half::f16, u8>(&candidates, ElementType::SIMPLE).unwrap();
+            let mut builder = PostingListBuilder::<half::f16, u8>::new(ElementType::SIMPLE, false).unwrap();
+            builder.update_inner_posting(merged_posting);
+            let (expected_merged_posting, param) = builder.build().unwrap();
+            assert!(param.is_some());
+            assert_eq!(merged_result, expected_merged_posting);
+        }
+    }
+
+    #[test]
+    fn test_merge_extended_posting_lists() {
+        // merge for f32-f32 postings. (not-quantized)
+        {
+            let (candidates, (merged_posting, _)) = mock_posting_candidates::<f32, f32>(ElementType::EXTENDED);
+            let (merged_result, param) = PostingListMerger::merge_posting_lists::<f32, f32>(&candidates, ElementType::EXTENDED).unwrap();
+            assert!(param.is_none());
+            assert_eq!(merged_posting, merged_result);
+        }
+        // merge for f16-f16 postings. (not-quantized)
+        {
+            let (candidates, (merged_posting, _)) = mock_posting_candidates::<half::f16, half::f16>(ElementType::EXTENDED);
+            let (merged_result, param) = PostingListMerger::merge_posting_lists::<half::f16, half::f16>(&candidates, ElementType::EXTENDED).unwrap();
+            assert!(param.is_none());
+            assert_eq!(merged_posting, merged_result);
+        }
+        // merge for u8-u8 postings. (not-quantized)
+        {
+            let (candidates, (merged_posting, _)) = mock_posting_candidates::<u8, u8>(ElementType::EXTENDED);
+            let (merged_result, param) = PostingListMerger::merge_posting_lists::<u8, u8>(&candidates, ElementType::EXTENDED).unwrap();
+            assert!(param.is_none());
+            assert_eq!(merged_posting, merged_result);
+        }
+        // invalid merge for f32-u8 postings (quantized).
+        {
+            let (candidates, (_, _)) = mock_posting_candidates::<f32, f32>(ElementType::EXTENDED);
+            let res = PostingListMerger::merge_posting_lists::<f32, u8>(&candidates, ElementType::EXTENDED);
+            assert!(res.is_err());
+        }
+        // invalid merge for f16-u8 postings (quantized).
+        {
+            let (candidates, (_, _)) = mock_posting_candidates::<half::f16, half::f16>(ElementType::EXTENDED);
+            let res = PostingListMerger::merge_posting_lists::<half::f16, u8>(&candidates, ElementType::EXTENDED);
+            assert!(res.is_err());
+        }
     }
 }

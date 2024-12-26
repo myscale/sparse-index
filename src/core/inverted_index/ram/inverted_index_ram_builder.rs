@@ -60,8 +60,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexRamBuilderTrait<TW> 
             // resize postings.
             if dim_id >= self.posting_builders.len() {
                 // TODO: 优化错误传递， finally sort 也可以忽略掉
-                self.posting_builders
-                    .resize_with(dim_id + 1, || PostingListBuilder::<OW, TW>::new(self.element_type, self.propagate_while_upserting).expect(""));
+                self.posting_builders.resize_with(dim_id + 1, || PostingListBuilder::<OW, TW>::new(self.element_type, self.propagate_while_upserting).expect(""));
             }
             // insert new sparse_vector into postings.
             let memory_before = self.posting_builders[dim_id].memory_usage().0;
