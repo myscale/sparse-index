@@ -148,27 +148,29 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmap<OW, T
         match header_obj.compressed_block_type {
             CompressedBlockType::Simple => {
                 let raw_simple_blocks: &[SimpleCompressedPostingBlock<TW>] = transmute_from_u8_to_slice(blocks);
-                Some(CompressedPostingListView {
+                let view = CompressedPostingListView::new(
                     row_ids_compressed,
-                    simple_blocks: raw_simple_blocks,
-                    extended_blocks: &[],
-                    compressed_block_type: header_obj.compressed_block_type,
-                    quantization_params: header_obj.quantized_params,
-                    row_ids_count: header_obj.row_ids_count,
-                    max_row_id: header_obj.max_row_id,
-                })
+                    raw_simple_blocks,
+                    &[],
+                    header_obj.compressed_block_type,
+                    header_obj.quantized_params,
+                    header_obj.row_ids_count,
+                    header_obj.max_row_id,
+                );
+                Some(view)
             }
             CompressedBlockType::Extended => {
                 let raw_extended_blocks: &[ExtendedCompressedPostingBlock<TW>] = transmute_from_u8_to_slice(blocks);
-                Some(CompressedPostingListView {
+                let view = CompressedPostingListView::new(
                     row_ids_compressed,
-                    simple_blocks: &[],
-                    extended_blocks: raw_extended_blocks,
-                    compressed_block_type: header_obj.compressed_block_type,
-                    quantization_params: header_obj.quantized_params,
-                    row_ids_count: header_obj.row_ids_count,
-                    max_row_id: header_obj.max_row_id,
-                })
+                    &[],
+                    raw_extended_blocks,
+                    header_obj.compressed_block_type,
+                    header_obj.quantized_params,
+                    header_obj.row_ids_count,
+                    header_obj.max_row_id,
+                );
+                Some(view)
             }
         }
     }

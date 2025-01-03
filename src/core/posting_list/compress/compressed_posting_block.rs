@@ -1,9 +1,9 @@
 use crate::{
-    core::{ElementType, QuantizedWeight, COMPRESSION_BLOCK_SIZE},
+    core::{ElementType, QuantizedParam, QuantizedWeight, WeightType, COMPRESSION_BLOCK_SIZE},
     RowId,
 };
 
-#[derive(Default, Copy, Debug, Clone, PartialEq)]
+#[derive(Default, Copy, Debug, Clone, PartialEq, Eq)]
 pub enum CompressedBlockType {
     #[default]
     Simple,
@@ -30,9 +30,11 @@ impl Into<ElementType> for CompressedBlockType {
 
 pub trait CompressedPostingBlock<W: QuantizedWeight> {
     fn compressed_block_type(&self) -> CompressedBlockType;
+
+    fn approximately_eq(&self, other: &Self, quantized_param: Option<QuantizedParam>) -> bool;
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimpleCompressedPostingBlock<TW>
 where
     TW: QuantizedWeight,
@@ -55,7 +57,7 @@ where
     pub weights: [TW; COMPRESSION_BLOCK_SIZE],
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExtendedCompressedPostingBlock<TW>
 where
     TW: QuantizedWeight,
@@ -85,10 +87,68 @@ impl<TW: QuantizedWeight> CompressedPostingBlock<TW> for SimpleCompressedPosting
     fn compressed_block_type(&self) -> CompressedBlockType {
         CompressedBlockType::Simple
     }
+
+    fn approximately_eq(&self, other: &Self, quantized_param: Option<QuantizedParam>) -> bool {
+        if quantized_param.is_none() {
+            return self == other;
+        } else {
+            assert_eq!(TW::weight_type(), WeightType::WeightU8)
+        }
+        let left = Self { weights: [TW::MINIMUM(); COMPRESSION_BLOCK_SIZE], ..self.clone() };
+        let right = Self { weights: [TW::MINIMUM(); COMPRESSION_BLOCK_SIZE], ..other.clone() };
+
+        if left != right {
+            return false;
+        }
+
+        let param = quantized_param.unwrap();
+        for (&w1, &w2) in self.weights.iter().zip(&other.weights) {
+            if param.approximately_eq(w1, w2) {
+                continue;
+            } else {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
 
 impl<TW: QuantizedWeight> CompressedPostingBlock<TW> for ExtendedCompressedPostingBlock<TW> {
     fn compressed_block_type(&self) -> CompressedBlockType {
         CompressedBlockType::Extended
+    }
+
+    fn approximately_eq(&self, other: &Self, quantized_param: Option<QuantizedParam>) -> bool {
+        if quantized_param.is_none() {
+            return self == other;
+        } else {
+            assert_eq!(TW::weight_type(), WeightType::WeightU8)
+        }
+        let left = Self { weights: [TW::MINIMUM(); COMPRESSION_BLOCK_SIZE], ..self.clone() };
+        let right = Self { weights: [TW::MINIMUM(); COMPRESSION_BLOCK_SIZE], ..other.clone() };
+
+        if left != right {
+            return false;
+        }
+
+        let param = quantized_param.unwrap();
+        // for `weights` and `max_next_weights`.
+        for idx in 0..COMPRESSION_BLOCK_SIZE {
+            let w1 = TW::to_u8(self.weights[idx]);
+            let w2 = TW::to_u8(other.weights[idx]);
+            let mw1 = TW::to_u8(self.max_next_weights[idx]);
+            let mw2 = TW::to_u8(other.max_next_weights[idx]);
+
+            if TW::unquantize_with_param(w1, param.clone()) == TW::unquantize_with_param(w2, param.clone())
+                && TW::unquantize_with_param(mw1, param.clone()) == TW::unquantize_with_param(mw2, param.clone())
+            {
+                continue;
+            } else {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

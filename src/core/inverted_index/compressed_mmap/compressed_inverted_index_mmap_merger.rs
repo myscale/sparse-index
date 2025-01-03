@@ -91,7 +91,8 @@ impl<'a, OW: QuantizedWeight, TW: QuantizedWeight> CompressedInvertedIndexMmapMe
 
             trace!("[{}]-[cmp-mmap-merger]-[dim-id:{}] merging a group of cmp-posting-iters.", thread_name!(), dim_id);
             // TODO Figure out life comment in here
-            let (merged_compressed_posting, quantized_param) = CompressedPostingListMerger::merge_posting_lists::<OW, TW>(&mut compressed_posting_iterators, self.element_type);
+            let (merged_compressed_posting, quantized_param) =
+                CompressedPostingListMerger::merge_posting_lists::<OW, TW>(&mut compressed_posting_iterators, self.element_type).expect("msg");
             // `TW` actually means storage type in disk.
             let compressed_posting_view: CompressedPostingListView<'_, TW> = merged_compressed_posting.view();
 

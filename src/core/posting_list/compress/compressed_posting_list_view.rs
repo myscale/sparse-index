@@ -3,7 +3,7 @@ use std::mem::size_of;
 use log::error;
 
 use crate::{
-    core::{posting_list::encoder::VIntDecoder, BlockDecoder, QuantizedParam, QuantizedWeight, COMPRESSION_BLOCK_SIZE},
+    core::{posting_list::encoder::VIntDecoder, BlockDecoder, PostingListError, QuantizedParam, QuantizedWeight, COMPRESSION_BLOCK_SIZE},
     RowId,
 };
 
@@ -23,6 +23,7 @@ where
     pub max_row_id: Option<RowId>,
 }
 
+#[allow(unused)]
 impl<'a, TW> CompressedPostingListView<'a, TW>
 where
     TW: QuantizedWeight,
@@ -39,15 +40,10 @@ where
         Self { row_ids_compressed, simple_blocks, extended_blocks, compressed_block_type, quantization_params: quantized_params, row_ids_count, max_row_id }
     }
 
-    // pub fn parts(&self) -> (&'a [u8], &'a [GenericCompressedPostingBlock<TW>]) {
-    //     (self.row_ids_compressed, self.blocks)
-    // }
-
     pub fn last_id(&self) -> Option<RowId> {
         self.max_row_id
     }
 
-    // TODO: Figure out the ownership transfer after calling `to_vec()`, also think about `self` ownership
     pub fn to_owned(&self) -> CompressedPostingList<TW> {
         CompressedPostingList {
             row_ids_compressed: self.row_ids_compressed.to_vec(),
@@ -64,139 +60,119 @@ where
         self.row_ids_count as usize
     }
 
-    pub fn uncompress_simple_block(&self, block_idx: usize, decoder: &mut BlockDecoder, row_ids_uncompressed_in_block: &mut Vec<RowId>) {
-        // Boundary.
-        if block_idx >= self.simple_blocks.len() {
-            let error_msg = format!(
-                "Can't uncompress {:?} block, idx boundary is out of [simple:{}, extended:{}]",
-                self.compressed_block_type,
-                self.simple_blocks.len(),
-                self.extended_blocks.len()
-            );
-            error!("{}", error_msg);
-            panic!("{}", error_msg);
-        }
-
-        let simple_block_ref = &self.simple_blocks[block_idx];
-
-        let block_offset_start = simple_block_ref.block_offset as usize;
-        let block_offset_end = (simple_block_ref.block_offset + simple_block_ref.row_ids_compressed_size as u64) as usize;
-        let row_ids_compressed_in_block: &[u8] = &self.row_ids_compressed[block_offset_start..block_offset_end];
+    fn inner_uncompress_block(
+        &self,
+        decoder: &mut BlockDecoder,
+        row_ids_uncompressed_in_block: &mut Vec<RowId>,
+        row_ids_offset_start: usize,  // Current block's left offset in [`self.row_ids_compressed`]
+        row_ids_offset_end: usize,    // Current block's right offset in [`self.row_ids_compressed`]
+        row_ids_count: u8,            // How many row_ids (elements) in current block.
+        row_id_start: RowId,          // The smallest row_id in current block.
+        num_bits: u8,                 // Useful for current block uncompress, each block's `num_bits` may not same.
+        row_ids_compressed_size: u16, // We record `row_ids` data_size of all blocks
+    ) -> Result<(), PostingListError> {
+        // We will uncompress bytes in [`row_ids_compressed_in_block`] into [`row_ids_uncompressed_in_block`]
+        let row_ids_compressed_in_block: &[u8] = &self.row_ids_compressed[row_ids_offset_start..row_ids_offset_end];
 
         row_ids_uncompressed_in_block.clear();
 
-        if simple_block_ref.row_ids_count as usize == COMPRESSION_BLOCK_SIZE {
-            let consumed_bytes: usize =
-                decoder.uncompress_block_sorted(row_ids_compressed_in_block, simple_block_ref.row_id_start.checked_sub(1).unwrap_or(0), simple_block_ref.num_bits, true);
-            if consumed_bytes != simple_block_ref.row_ids_compressed_size as usize {
-                let error_msg = format!(
-                    "During block uncompressing simple block (a complete `COMPRESSION_BLOCK_SIZE`), consumed_bytes:{} not equal with row_ids_compressed_size:{}",
-                    consumed_bytes, simple_block_ref.row_ids_compressed_size as usize
-                );
+        if row_ids_count as usize == COMPRESSION_BLOCK_SIZE {
+            let consumed_bytes: usize = decoder.uncompress_block_sorted(row_ids_compressed_in_block, row_id_start.checked_sub(1).unwrap_or(0), num_bits, true);
+
+            if consumed_bytes != row_ids_compressed_size as usize {
+                let error_msg =
+                    format!("During block uncompressing-block-sorted, `consumed_bytes`:{} not equal with `row_ids_compressed_size`:{}", consumed_bytes, row_ids_compressed_size);
                 error!("{}", error_msg);
-                panic!("{}", error_msg);
+                return Err(PostingListError::UncompressError(error_msg));
             }
             let res: &[u32; COMPRESSION_BLOCK_SIZE] = decoder.full_output();
 
             row_ids_uncompressed_in_block.reserve(COMPRESSION_BLOCK_SIZE);
             row_ids_uncompressed_in_block.extend_from_slice(res);
         } else {
-            let consumed_bytes: usize = decoder.uncompress_vint_sorted(
-                row_ids_compressed_in_block,
-                simple_block_ref.row_id_start.checked_sub(1).unwrap_or(0),
-                simple_block_ref.row_ids_count as usize,
-                RowId::MAX,
-            );
-            if consumed_bytes != simple_block_ref.row_ids_compressed_size as usize {
-                let error_msg = format!(
-                    "During block uncompressing simple block (incomplete COMPRESSION_BLOCK_SIZE``), consumed_bytes:{} not equal with row_ids_compressed_size:{}",
-                    consumed_bytes, simple_block_ref.row_ids_compressed_size as usize
-                );
+            let consumed_bytes: usize = decoder.uncompress_vint_sorted(row_ids_compressed_in_block, row_id_start.checked_sub(1).unwrap_or(0), row_ids_count as usize, RowId::MAX);
+
+            if consumed_bytes != row_ids_compressed_size as usize {
+                let error_msg =
+                    format!("During block uncompressing-vint-sorted, `consumed_bytes`:{} not equal with `row_ids_compressed_size`:{}", consumed_bytes, row_ids_compressed_size);
                 error!("{}", error_msg);
-                panic!("{}", error_msg);
+                return Err(PostingListError::UncompressError(error_msg));
             }
             let res: &[u32] = &decoder.output_array()[0..decoder.output_len];
 
             row_ids_uncompressed_in_block.reserve(res.len());
             row_ids_uncompressed_in_block.extend_from_slice(res);
         }
+        Ok(())
     }
 
-    pub fn uncompress_extended_block(&self, block_idx: usize, decoder: &mut BlockDecoder, row_ids_uncompressed_in_block: &mut Vec<RowId>) {
-        // Boundary.
-        if block_idx >= self.extended_blocks.len() {
-            let error_msg = format!(
-                "Can't uncompress {:?} block, idx boundary is out of [simple:{}, extended:{}]",
-                self.compressed_block_type,
-                self.simple_blocks.len(),
-                self.extended_blocks.len()
-            );
-            error!("{}", error_msg);
-            panic!("{}", error_msg);
-        }
+    pub fn uncompress_block(
+        &self,
+        block_type: CompressedBlockType,
+        block_idx: usize,
+        decoder: &mut BlockDecoder,
+        row_ids_uncompressed_in_block: &mut Vec<RowId>,
+    ) -> Result<(), PostingListError> {
+        match block_type {
+            CompressedBlockType::Simple => {
+                // Boundary.
+                if block_idx >= self.simple_blocks.len() {
+                    let error_msg = format!(
+                        "Can't uncompress SimpleBlock for `CompressedPostingList`, `block_idx` is overflow, [simple:{}, extended:{}]",
+                        self.simple_blocks.len(),
+                        self.extended_blocks.len()
+                    );
+                    error!("{}", error_msg);
+                    return Err(PostingListError::UncompressError(error_msg));
+                }
+                // uncompress simple block
+                let simple_block_ref: &SimpleCompressedPostingBlock<TW> = &self.simple_blocks[block_idx];
 
-        let extended_block_ref = &self.extended_blocks[block_idx];
+                let block_offset_start = simple_block_ref.block_offset as usize;
+                let block_offset_end = (simple_block_ref.block_offset + simple_block_ref.row_ids_compressed_size as u64) as usize;
 
-        let block_offset_start = extended_block_ref.block_offset as usize;
-        let block_offset_end = (extended_block_ref.block_offset + extended_block_ref.row_ids_compressed_size as u64) as usize;
-        let row_ids_compressed_in_block: &[u8] = &self.row_ids_compressed[block_offset_start..block_offset_end];
-
-        row_ids_uncompressed_in_block.clear();
-
-        if extended_block_ref.row_ids_count as usize == COMPRESSION_BLOCK_SIZE {
-            let consumed_bytes: usize =
-                decoder.uncompress_block_sorted(row_ids_compressed_in_block, extended_block_ref.row_id_start.checked_sub(1).unwrap_or(0), extended_block_ref.num_bits, true);
-            if consumed_bytes != extended_block_ref.row_ids_compressed_size as usize {
-                let error_msg = format!(
-                    "During block uncompressing extended block (a complete `COMPRESSION_BLOCK_SIZE`), consumed_bytes:{} not equal with row_ids_compressed_size:{}",
-                    consumed_bytes, extended_block_ref.row_ids_compressed_size as usize
-                );
-                error!("{}", error_msg);
-                panic!("{}", error_msg);
+                self.inner_uncompress_block(
+                    decoder,
+                    row_ids_uncompressed_in_block,
+                    block_offset_start,
+                    block_offset_end,
+                    simple_block_ref.row_ids_count,
+                    simple_block_ref.row_id_start,
+                    simple_block_ref.num_bits,
+                    simple_block_ref.row_ids_compressed_size,
+                )?;
             }
-            let res: &[u32; COMPRESSION_BLOCK_SIZE] = decoder.full_output();
+            CompressedBlockType::Extended => {
+                // Boundary.
+                if block_idx >= self.extended_blocks.len() {
+                    let error_msg = format!(
+                        "Can't uncompress ExtendedBlock for `CompressedPostingList`, `block_idx` is overflow, [simple:{}, extended:{}]",
+                        self.simple_blocks.len(),
+                        self.extended_blocks.len()
+                    );
+                    error!("{}", error_msg);
+                    return Err(PostingListError::UncompressError(error_msg));
+                }
+                // uncompress extended block
+                let extended_block_ref: &ExtendedCompressedPostingBlock<TW> = &self.extended_blocks[block_idx];
 
-            row_ids_uncompressed_in_block.reserve(COMPRESSION_BLOCK_SIZE);
-            row_ids_uncompressed_in_block.extend_from_slice(res);
-        } else {
-            let consumed_bytes: usize = decoder.uncompress_vint_sorted(
-                row_ids_compressed_in_block,
-                extended_block_ref.row_id_start.checked_sub(1).unwrap_or(0),
-                extended_block_ref.row_ids_count as usize,
-                RowId::MAX,
-            );
-            if consumed_bytes != extended_block_ref.row_ids_compressed_size as usize {
-                let error_msg = format!(
-                    "During block uncompressing extended block (incomplete COMPRESSION_BLOCK_SIZE``), consumed_bytes:{} not equal with row_ids_compressed_size:{}",
-                    consumed_bytes, extended_block_ref.row_ids_compressed_size as usize
-                );
-                error!("{}", error_msg);
-                panic!("{}", error_msg);
+                let block_offset_start = extended_block_ref.block_offset as usize;
+                let block_offset_end = (extended_block_ref.block_offset + extended_block_ref.row_ids_compressed_size as u64) as usize;
+
+                self.inner_uncompress_block(
+                    decoder,
+                    row_ids_uncompressed_in_block,
+                    block_offset_start,
+                    block_offset_end,
+                    extended_block_ref.row_ids_count,
+                    extended_block_ref.row_id_start,
+                    extended_block_ref.num_bits,
+                    extended_block_ref.row_ids_compressed_size,
+                )?;
             }
-            let res: &[u32] = &decoder.output_array()[0..decoder.output_len];
-
-            row_ids_uncompressed_in_block.reserve(res.len());
-            row_ids_uncompressed_in_block.extend_from_slice(res);
         }
+        return Ok(());
     }
-
-    // TODO: refine code, add this func into trait.
-    // pub fn total_storage_size(&self) -> usize {
-
-    //     let blocks_size = match self.compressed_block_type {
-    //         CompressedBlockType::Simple => self.generic_blocks.len() * size_of::<SimpleCompressedPostingBlock<TW>>(),
-    //         CompressedBlockType::Extended => self.generic_blocks.len() * size_of::<ExtendedCompressedPostingBlock<TW>>(),
-    //     };
-
-    //     let total =
-    //         self.row_ids_compressed.len() * size_of::<u8>() +  // row_id_compressed
-    //         blocks_size +                                      // total posting blocks
-    //         size_of::<CompressedBlockType>() +
-    //         size_of::<Option<QuantizedParam>>() +
-    //         size_of::<RowId>() +                               // val: row_ids_count
-    //         size_of::<RowId>();                                // val: max_row_id
-    //     return total;
-    // }
 
     fn storage_size<F>(&self, calculator: F) -> usize
     where
@@ -214,5 +190,34 @@ where
 
     pub fn row_ids_storage_size(&self) -> usize {
         self.storage_size(|e| e.row_ids_compressed.len() * size_of::<u8>())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_view_clone() {
+        let row_ids_compressed: &[u8] = &vec![1, 2, 3];
+        let simple_blocks: &[SimpleCompressedPostingBlock<f32>] = &[];
+        let extended_blocks: &[ExtendedCompressedPostingBlock<f32>] = &[];
+
+        let original: CompressedPostingListView<'_, f32> = CompressedPostingListView {
+            row_ids_compressed,
+            simple_blocks,
+            extended_blocks,
+            compressed_block_type: CompressedBlockType::Simple,
+            quantization_params: None,
+            row_ids_count: 3,
+            max_row_id: None,
+        };
+
+        let cloned = original.clone();
+
+        // Ensure that both the original and cloned views point to the same memory locations for their data.
+        assert!(std::ptr::addr_eq(original.row_ids_compressed as *const _, cloned.row_ids_compressed as *const _));
+        assert!(std::ptr::addr_eq(original.simple_blocks as *const _, cloned.simple_blocks as *const _));
+        assert!(std::ptr::addr_eq(original.extended_blocks as *const _, cloned.extended_blocks as *const _));
     }
 }

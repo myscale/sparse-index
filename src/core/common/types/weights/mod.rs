@@ -20,15 +20,43 @@ pub enum WeightType {
     WeightU8,
 }
 
-#[derive(PartialEq, Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct QuantizedParam {
     min: f32,
     diff256: f32,
 }
 
+impl PartialEq for QuantizedParam {
+    fn eq(&self, other: &Self) -> bool {
+        self.min == other.min && self.diff256 == other.diff256
+    }
+}
+
+impl Eq for QuantizedParam {}
+
 impl QuantizedParam {
     pub fn from_minmax(min: f32, max: f32) -> Self {
         Self { min, diff256: (max - min) / 255.0 }
+    }
+
+    pub fn min_precision(&self) -> f32 {
+        self.diff256
+    }
+
+    pub fn approximately_eq<W: QuantizedWeight>(&self, left: W, right: W) -> bool {
+        let u8_right = W::to_u8(right);
+        let u8_left = W::to_u8(left);
+
+        if u8_right.abs_diff(u8_left) > 1 {
+            return false;
+        }
+
+        let f32_right = f32::unquantize_with_param(u8_right, self.clone());
+        let f32_left = f32::unquantize_with_param(u8_left, self.clone());
+
+        // In certain cases, even if the difference between `u8` values equals 1, the `f32` unquantized value may exceed one step.
+        // We introduced a 0.5% precision loss to ensure accurate comparisons.
+        (f32_right - f32_left) <= (self.min_precision() * 1.005)
     }
 }
 

@@ -46,7 +46,7 @@ impl<TW: QuantizedWeight> CompressedInvertedIndexRam<TW> {
 
                     },
                     |posting| {
-                        let mut compressed_posting_builder: CompressedPostingBuilder<TW, TW> = CompressedPostingBuilder::<TW, TW>::new(element_type, false, false);
+                        let mut compressed_posting_builder: CompressedPostingBuilder<TW, TW> = CompressedPostingBuilder::<TW, TW>::new(element_type, true, false).expect("msg");
 
                         for element in &posting.elements {
                             compressed_posting_builder.add(element.row_id(), TW::to_f32(element.weight()));

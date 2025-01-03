@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::directory::error;
+
 #[derive(Debug, Error)]
 pub enum PostingListError {
     #[error("A merge error happened: '{0}'")]
@@ -13,4 +15,7 @@ pub enum PostingListError {
 
     #[error("Convert error: '{0}'")]
     TypeConvertError(String),
+
+    #[error("UncompressError: '{0}")]
+    UncompressError(String),
 }

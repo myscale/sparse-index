@@ -5,7 +5,7 @@ use crate::{
 
 use super::{CompressedBlockType, CompressedPostingListView, ExtendedCompressedPostingBlock, SimpleCompressedPostingBlock};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct CompressedPostingList<TW>
 where
     TW: QuantizedWeight,
@@ -13,7 +13,7 @@ where
     /// Compressed row_ids data, each block will has it's own offset in it.
     pub row_ids_compressed: Vec<u8>,
 
-    /// Fixed-size chunks.
+    /// Fixed-size blocks.
     pub simple_blocks: Vec<SimpleCompressedPostingBlock<TW>>,
     pub extended_blocks: Vec<ExtendedCompressedPostingBlock<TW>>,
 
@@ -34,18 +34,47 @@ impl<TW> CompressedPostingList<TW>
 where
     TW: QuantizedWeight,
 {
+    #[allow(unused)]
     pub fn len(&self) -> usize {
         self.row_ids_count as usize
     }
+
     pub fn view(&self) -> CompressedPostingListView<TW> {
-        CompressedPostingListView {
-            row_ids_compressed: &self.row_ids_compressed,
-            simple_blocks: &self.simple_blocks,
-            extended_blocks: &self.extended_blocks,
-            compressed_block_type: self.compressed_block_type,
-            quantization_params: self.quantization_params,
-            row_ids_count: self.row_ids_count,
-            max_row_id: self.max_row_id,
+        CompressedPostingListView::new(
+            &self.row_ids_compressed,
+            &self.simple_blocks,
+            &self.extended_blocks,
+            self.compressed_block_type,
+            self.quantization_params,
+            self.row_ids_count,
+            self.max_row_id,
+        )
+    }
+
+    #[cfg(test)]
+    pub fn approximately_eq(&self, other: &Self) -> bool {
+        use super::CompressedPostingBlock;
+
+        let left = Self { simple_blocks: vec![], extended_blocks: vec![], ..self.clone() };
+        let right = Self { simple_blocks: vec![], extended_blocks: vec![], ..self.clone() };
+
+        // compare fields without blocks.
+        if left != right {
+            return false;
+        }
+
+        // compare blocks.
+        match self.compressed_block_type {
+            CompressedBlockType::Simple => {
+                let cur_blocks: &Vec<SimpleCompressedPostingBlock<TW>> = &self.simple_blocks;
+                let other_blocks: &Vec<SimpleCompressedPostingBlock<TW>> = &other.simple_blocks;
+                cur_blocks.iter().zip(other_blocks).all(|(left, right)| left.approximately_eq(right, self.quantization_params.clone()))
+            }
+            CompressedBlockType::Extended => {
+                let cur_blocks: &Vec<ExtendedCompressedPostingBlock<TW>> = &self.extended_blocks;
+                let other_blocks: &Vec<ExtendedCompressedPostingBlock<TW>> = &other.extended_blocks;
+                cur_blocks.iter().zip(other_blocks).all(|(left, right)| left.approximately_eq(right, self.quantization_params.clone()))
+            }
         }
     }
 }

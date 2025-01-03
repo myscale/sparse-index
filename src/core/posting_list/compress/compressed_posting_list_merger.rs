@@ -1,4 +1,4 @@
-use crate::core::{ElementRead, ElementType, PostingListIter, QuantizedParam, QuantizedWeight};
+use crate::core::{ElementType, GenericElement, PostingListError, PostingListIter, PostingListMerger, QuantizedParam, QuantizedWeight};
 
 use super::{CompressedPostingBuilder, CompressedPostingList, CompressedPostingListIterator};
 
@@ -9,124 +9,181 @@ impl CompressedPostingListMerger {
     pub fn merge_posting_lists<OW: QuantizedWeight, TW: QuantizedWeight>(
         compressed_posting_iterators: &mut Vec<CompressedPostingListIterator<'_, OW, TW>>,
         element_type: ElementType,
-    ) -> (CompressedPostingList<TW>, Option<QuantizedParam>) {
-        // TODO: Refine compressed posting merging design, currently we should finally sort the whole posting, it's too slow.
-        let mut merged_compressed_posting_builder: CompressedPostingBuilder<OW, TW> = CompressedPostingBuilder::<OW, TW>::new(element_type, true, false);
-
-        // TODO: 优化策略，对齐所有的 compressed posting iterators，从头选择 row_id 最小的那个开始逐个合并
-        // TODO： 另外也需要照顾到 是否含有 max_next_weight 的场景
+    ) -> Result<(CompressedPostingList<TW>, Option<QuantizedParam>), PostingListError> {
+        let mut postings: Vec<Vec<GenericElement<OW>>> = Vec::with_capacity(compressed_posting_iterators.len());
         for iterator in compressed_posting_iterators {
+            let mut elements = Vec::new();
             while iterator.remains() != 0 {
                 let element = iterator.next();
                 if element.is_some() {
                     let element = element.unwrap();
-                    merged_compressed_posting_builder.add(element.row_id(), OW::to_f32(element.weight()));
+                    elements.push(element);
+                } else {
+                    break;
                 }
             }
+            postings.push(elements);
         }
 
-        let merged_compressed_posting_list: CompressedPostingList<TW> = merged_compressed_posting_builder.build();
-        let quantized_param: Option<QuantizedParam> = merged_compressed_posting_list.quantization_params;
-
-        return (merged_compressed_posting_list, quantized_param);
+        // Reuse the code of `PostingListMerger`
+        match element_type {
+            ElementType::SIMPLE => {
+                let mut builder: CompressedPostingBuilder<OW, TW> = CompressedPostingBuilder::<OW, TW>::new(element_type, false, false)?;
+                let (merged, _, _) = PostingListMerger::merge_simple_postings(&postings)?;
+                builder.posting = merged;
+                let compressed_merged = builder.build();
+                let param = compressed_merged.quantization_params.clone();
+                return Ok((compressed_merged, param));
+            }
+            ElementType::EXTENDED => {
+                // For `ExtendedElement` type, we don't need execute `finally_propagate`
+                let mut builder: CompressedPostingBuilder<OW, TW> = CompressedPostingBuilder::<OW, TW>::new(element_type, false, false)?;
+                let merged = PostingListMerger::merge_extended_postings(&postings)?;
+                builder.posting = merged;
+                let compressed_merged = builder.build();
+                return Ok((compressed_merged, None));
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::test::{enlarge_elements, get_compressed_posting_iterators, mock_build_compressed_posting};
+    use crate::core::{CompressedPostingList, CompressedPostingListMerger, ElementType, QuantizedParam, QuantizedWeight};
     use core::f32;
 
-    use crate::core::{ElementType, ExtendedElement, GenericElement, PostingList};
+    fn mock_compressed_posting_candidates<OW: QuantizedWeight, TW: QuantizedWeight>(
+        element_type: ElementType,
+        enlarge: i32,
+    ) -> (Vec<CompressedPostingList<TW>>, (CompressedPostingList<TW>, Option<QuantizedParam>)) {
+        let mut vec_0: Vec<(u32, f32)> = vec![];
+        let mut vec_1: Vec<(u32, f32)> = vec![(3, 4.3)];
+        let mut vec_2: Vec<(u32, f32)> = vec![(0, 2.3), (4, 1.4), (5, 2.1), (9, 2.8), (12, 1.2)];
+        let mut vec_3: Vec<(u32, f32)> = vec![(1, 1.2), (10, 1.8)];
+        let mut vec_4: Vec<(u32, f32)> = vec![];
+        let mut vec_5: Vec<(u32, f32)> = vec![(2, 0.3), (11, 3.4), (13, 2.1), (15, 1.1), (17, 1.5), (21, 3.8), (24, 4.2)];
+        let mut vec_6: Vec<(u32, f32)> = vec![(8, 2.9), (14, 3.1)];
+        let mut vec_7: Vec<(u32, f32)> = vec![(6, 2.3), (7, 3.4), (16, 3.2), (19, 2.8), (20, 1.9)];
+        let mut vec_8: Vec<(u32, f32)> = vec![(18, 2.1), (22, 4.2), (23, 3.9), (25, 1.6), (30, 4.1)];
+        let mut vec_9: Vec<(u32, f32)> = vec![(26, 1.1)];
 
-    /// mock 7 postings for the same dim-id.
-    fn get_mocked_postings() -> (Vec<Vec<GenericElement<f32>>>, PostingList<f32>) {
-        let lists: Vec<Vec<GenericElement<f32>>> = vec![
-            vec![], // 0
-            vec![
-                // 1
-                ExtendedElement { row_id: 0, weight: 2.3, max_next_weight: 2.8 }.into(),
-                ExtendedElement { row_id: 4, weight: 1.4, max_next_weight: 2.8 }.into(),
-                ExtendedElement { row_id: 5, weight: 2.1, max_next_weight: 2.8 }.into(),
-                ExtendedElement { row_id: 9, weight: 2.8, max_next_weight: 1.2 }.into(),
-                ExtendedElement { row_id: 12, weight: 1.2, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-            vec![], // 2
-            vec![
-                // 3
-                ExtendedElement { row_id: 1, weight: 1.2, max_next_weight: 4.3 }.into(),
-                ExtendedElement { row_id: 3, weight: 4.3, max_next_weight: 3.1 }.into(),
-                ExtendedElement { row_id: 8, weight: 2.9, max_next_weight: 3.1 }.into(),
-                ExtendedElement { row_id: 10, weight: 1.8, max_next_weight: 3.1 }.into(),
-                ExtendedElement { row_id: 14, weight: 3.1, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-            vec![
-                // 4
-                ExtendedElement { row_id: 2, weight: 0.3, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 11, weight: 3.4, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 13, weight: 2.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 15, weight: 1.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 17, weight: 1.5, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 21, weight: 3.8, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 24, weight: 4.2, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-            vec![
-                // 5
-                ExtendedElement { row_id: 6, weight: 2.3, max_next_weight: 3.4 }.into(),
-                ExtendedElement { row_id: 7, weight: 3.4, max_next_weight: 3.2 }.into(),
-                ExtendedElement { row_id: 16, weight: 3.2, max_next_weight: 2.8 }.into(),
-                ExtendedElement { row_id: 19, weight: 2.8, max_next_weight: 1.9 }.into(),
-                ExtendedElement { row_id: 20, weight: 1.9, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-            vec![
-                // 6
-                ExtendedElement { row_id: 18, weight: 2.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 22, weight: 4.2, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 23, weight: 3.9, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 25, weight: 1.6, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 26, weight: 1.2, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 30, weight: 4.1, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-        ];
+        let mut mock_vectors =
+            vec![vec_0.clone(), vec_1.clone(), vec_2.clone(), vec_3.clone(), vec_4.clone(), vec_5.clone(), vec_6.clone(), vec_7.clone(), vec_8.clone(), vec_9.clone()];
 
-        let merged = PostingList {
-            elements: vec![
-                ExtendedElement { row_id: 0, weight: 2.3, max_next_weight: 4.3 }.into(),
-                ExtendedElement { row_id: 1, weight: 1.2, max_next_weight: 4.3 }.into(),
-                ExtendedElement { row_id: 2, weight: 0.3, max_next_weight: 4.3 }.into(),
-                ExtendedElement { row_id: 3, weight: 4.3, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 4, weight: 1.4, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 5, weight: 2.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 6, weight: 2.3, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 7, weight: 3.4, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 8, weight: 2.9, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 9, weight: 2.8, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 10, weight: 1.8, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 11, weight: 3.4, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 12, weight: 1.2, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 13, weight: 2.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 14, weight: 3.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 15, weight: 1.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 16, weight: 3.2, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 17, weight: 1.5, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 18, weight: 2.1, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 19, weight: 2.8, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 20, weight: 1.9, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 21, weight: 3.8, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 22, weight: 4.2, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 23, weight: 3.9, max_next_weight: 4.2 }.into(),
-                ExtendedElement { row_id: 24, weight: 4.2, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 25, weight: 1.6, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 26, weight: 1.2, max_next_weight: 4.1 }.into(),
-                ExtendedElement { row_id: 30, weight: 4.1, max_next_weight: f32::NEG_INFINITY }.into(),
-            ],
-            element_type: ElementType::EXTENDED,
-        };
-        return (lists, merged);
+        for _ in 0..enlarge {
+            let max_id = mock_vectors.iter().flat_map(|e| e.iter()).map(|(id, _)| *id).max().unwrap_or(0) + 1;
+            vec_0 = enlarge_elements(vec_0.clone(), max_id as u32);
+            vec_1 = enlarge_elements(vec_1.clone(), max_id as u32);
+            vec_2 = enlarge_elements(vec_2.clone(), max_id as u32);
+            vec_3 = enlarge_elements(vec_3.clone(), max_id as u32);
+            vec_4 = enlarge_elements(vec_4.clone(), max_id as u32);
+            vec_5 = enlarge_elements(vec_5.clone(), max_id as u32);
+            vec_6 = enlarge_elements(vec_6.clone(), max_id as u32);
+            vec_7 = enlarge_elements(vec_7.clone(), max_id as u32);
+            vec_8 = enlarge_elements(vec_8.clone(), max_id as u32);
+            vec_9 = enlarge_elements(vec_9.clone(), max_id as u32);
+            mock_vectors =
+                vec![vec_0.clone(), vec_1.clone(), vec_2.clone(), vec_3.clone(), vec_4.clone(), vec_5.clone(), vec_6.clone(), vec_7.clone(), vec_8.clone(), vec_9.clone()];
+        }
+
+        let mut combined_vec: Vec<(u32, f32)> = vec![];
+        for v in mock_vectors.clone() {
+            combined_vec.extend(v);
+        }
+        combined_vec.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut postings = Vec::new();
+
+        for v in mock_vectors.clone() {
+            let (posting, _) = mock_build_compressed_posting::<OW, TW>(element_type, v);
+            postings.push(posting);
+        }
+
+        let merged: (CompressedPostingList<TW>, Option<QuantizedParam>) = mock_build_compressed_posting::<OW, TW>(element_type, combined_vec);
+
+        return (postings, merged);
     }
+
     #[test]
-    fn test_merge_posting_lists() {
-        // let postings = get_mocked_postings();
-        // let result = PostingListMerger::merge_posting_lists::<f32, f32>(&postings.0);
-        // assert_eq!(result.0, postings.1);
+    fn test_merge_simple_compressed_posting_lists() {
+        // merge for f32-f32 postings. (not-quantized)
+        {
+            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<f32, f32>(ElementType::SIMPLE, 12);
+            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
+            let (result_cmp_posting, result_quantized_param) = CompressedPostingListMerger::merge_posting_lists::<f32, f32>(&mut candidate_iterators, ElementType::SIMPLE).unwrap();
+            assert!(result_quantized_param.is_none());
+            assert_eq!(expected_cmp_posting, result_cmp_posting);
+        }
+        // merge for f16-f16 postings. (not-quantized)
+        {
+            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<half::f16, half::f16>(ElementType::SIMPLE, 12);
+            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
+            let (result_cmp_posting, result_quantized_param) =
+                CompressedPostingListMerger::merge_posting_lists::<half::f16, half::f16>(&mut candidate_iterators, ElementType::SIMPLE).unwrap();
+            assert!(result_quantized_param.is_none());
+            assert_eq!(expected_cmp_posting, result_cmp_posting);
+        }
+        // merge for u8-u8 postings. (not-quantized)
+        {
+            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<u8, u8>(ElementType::SIMPLE, 12);
+            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
+            let (result_cmp_posting, result_quantized_param) = CompressedPostingListMerger::merge_posting_lists::<u8, u8>(&mut candidate_iterators, ElementType::SIMPLE).unwrap();
+            assert!(result_quantized_param.is_none());
+            assert_eq!(expected_cmp_posting, result_cmp_posting);
+        }
+        // merge for f32-u8 postings (quantized).
+        {
+            let (candidates, (expected_cmp_posting, expected_quantized_param)) = mock_compressed_posting_candidates::<f32, u8>(ElementType::SIMPLE, 12);
+            let mut candidate_iterators = get_compressed_posting_iterators::<f32, u8>(&candidates);
+            let (result_cmp_posting, result_quantized_param) = CompressedPostingListMerger::merge_posting_lists::<f32, u8>(&mut candidate_iterators, ElementType::SIMPLE).unwrap();
+
+            assert!(expected_quantized_param.is_some());
+            assert!(result_quantized_param.is_some());
+            assert_eq!(expected_quantized_param, result_quantized_param);
+            assert!(result_cmp_posting.approximately_eq(&expected_cmp_posting));
+        }
+        // merge for f16-u8 postings (quantized).
+        {
+            let (candidates, (expected_cmp_posting, expected_quantized_param)) = mock_compressed_posting_candidates::<half::f16, u8>(ElementType::SIMPLE, 12);
+            let mut candidate_iterators = get_compressed_posting_iterators::<half::f16, u8>(&candidates);
+            let (result_cmp_posting, result_quantized_param) =
+                CompressedPostingListMerger::merge_posting_lists::<half::f16, u8>(&mut candidate_iterators, ElementType::SIMPLE).unwrap();
+
+            assert!(expected_quantized_param.is_some());
+            assert!(result_quantized_param.is_some());
+            assert_eq!(expected_quantized_param, result_quantized_param);
+            assert!(result_cmp_posting.approximately_eq(&expected_cmp_posting));
+        }
+    }
+
+    #[test]
+    fn test_merge_extended_compressed_posting_lists() {
+        // merge for f32-f32 postings. (not-quantized)
+        {
+            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<f32, f32>(ElementType::EXTENDED, 12);
+            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
+            let (result_cmp_posting, result_quantized_param) =
+                CompressedPostingListMerger::merge_posting_lists::<f32, f32>(&mut candidate_iterators, ElementType::EXTENDED).unwrap();
+            assert!(result_quantized_param.is_none());
+            assert_eq!(expected_cmp_posting, result_cmp_posting);
+        }
+        // merge for f16-f16 postings. (not-quantized)
+        {
+            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<half::f16, half::f16>(ElementType::EXTENDED, 12);
+            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
+            let (result_cmp_posting, result_quantized_param) =
+                CompressedPostingListMerger::merge_posting_lists::<half::f16, half::f16>(&mut candidate_iterators, ElementType::EXTENDED).unwrap();
+            assert!(result_quantized_param.is_none());
+            assert_eq!(expected_cmp_posting, result_cmp_posting);
+        }
+        // merge for u8-u8 postings. (not-quantized)
+        {
+            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<u8, u8>(ElementType::EXTENDED, 12);
+            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
+            let (result_cmp_posting, result_quantized_param) = CompressedPostingListMerger::merge_posting_lists::<u8, u8>(&mut candidate_iterators, ElementType::EXTENDED).unwrap();
+            assert!(result_quantized_param.is_none());
+            assert_eq!(expected_cmp_posting, result_cmp_posting);
+        }
     }
 }

@@ -48,16 +48,17 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
     pub fn new(element_type: ElementType, propagate_while_upserting: bool) -> Result<Self, PostingListError> {
         // If we need quantize weight.
         let need_quantized = TW::weight_type() != OW::weight_type() && TW::weight_type() == WeightType::WeightU8;
-        if !need_quantized {
-            assert_eq!(TW::weight_type(), OW::weight_type());
+        if !need_quantized && TW::weight_type() != OW::weight_type() {
+            let error_msg = "[PostingListBuilder] WeightType should keep same, while quantized is disabled.";
+            error!("{}", error_msg);
+            return Err(PostingListError::InvalidParameter(error_msg.to_string()));
         }
 
-        // only simple element support quantized.
-        // quantize extended element will lead max_next_weight nonsense.
+        // Quantize ExtendedElement will lead `max_next_weight` nonsense.
         if need_quantized && element_type == ElementType::EXTENDED {
-            let error_msg = format!("extended element not supported be quantized.");
+            let error_msg = "[PostingListBuilder] ExtendedElement doesn't support to be quantized.";
             error!("{}", error_msg);
-            return Err(PostingListError::InvalidParameter(error_msg));
+            return Err(PostingListError::InvalidParameter(error_msg.to_string()));
         }
 
         Ok(Self::builder()
