@@ -40,9 +40,5 @@ pub trait PostingListIter<OW: QuantizedWeight, TW: QuantizedWeight> {
     fn for_each_till_row_id(&mut self, row_id: RowId, f: impl FnMut(&GenericElement<OW>));
 }
 
-
-
 #[cfg(test)]
-mod test {
-    
-}
+mod test {}

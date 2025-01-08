@@ -8,13 +8,15 @@ pub use posting_list_builder::PostingListBuilder;
 pub use posting_list_iterator::PostingListIterator;
 pub use posting_list_merge::PostingListMerger;
 
-
 #[cfg(test)]
 mod test {
     use itertools::Itertools;
     use rand::Rng;
 
-    use crate::{core::{ElementRead, ElementType, ExtendedElement, GenericElement, QuantizedParam, QuantizedWeight, SimpleElement, WeightType}, RowId};
+    use crate::{
+        core::{ElementRead, ElementType, ExtendedElement, GenericElement, QuantizedParam, QuantizedWeight, SimpleElement, WeightType},
+        RowId,
+    };
 
     use super::{PostingList, PostingListBuilder};
 
@@ -35,7 +37,7 @@ mod test {
     }
 
     pub(super) fn generate_random_int(min: u32, max: u32) -> u32 {
-        if min>=max {
+        if min >= max {
             return min;
         } else {
             let mut rng = rand::thread_rng();
@@ -66,20 +68,17 @@ mod test {
         let (posting, quantized_param) = result.unwrap();
 
         let (elements_simple, elements_extended) = match element_type {
-            ElementType::SIMPLE => (
-                posting.elements.iter().map(|e|(e.row_id(), e.weight())).collect::<Vec<_>>(),
-                vec![]
-            ),
-            ElementType::EXTENDED => (
-                vec![],
-                posting.elements.iter().map(|e|(e.row_id(), e.weight(), e.max_next_weight())).collect::<Vec<_>>()
-            ),
+            ElementType::SIMPLE => (posting.elements.iter().map(|e| (e.row_id(), e.weight())).collect::<Vec<_>>(), vec![]),
+            ElementType::EXTENDED => (vec![], posting.elements.iter().map(|e| (e.row_id(), e.weight(), e.max_next_weight())).collect::<Vec<_>>()),
         };
 
         (posting, quantized_param, elements, (elements_simple, elements_extended))
     }
 
-    pub(super) fn build_simple_posting_from_elements<OW: QuantizedWeight, TW: QuantizedWeight>(element_type: ElementType, elements: Vec<(RowId, f32)>) -> (PostingList<TW>, Option<QuantizedParam>) {
+    pub(super) fn build_simple_posting_from_elements<OW: QuantizedWeight, TW: QuantizedWeight>(
+        element_type: ElementType,
+        elements: Vec<(RowId, f32)>,
+    ) -> (PostingList<TW>, Option<QuantizedParam>) {
         let mut builder = PostingListBuilder::<OW, TW>::new(element_type, false).expect("");
         for (row_id, weight) in elements {
             builder.add(row_id, weight);
@@ -89,37 +88,32 @@ mod test {
     }
 
     // Only for testing.
-    pub(super) fn expect_posting_with_simple_elements<OW: QuantizedWeight, TW: QuantizedWeight>(
-        elements: Vec<(RowId, f32)>,
-    ) -> (PostingList<TW>, Option<QuantizedParam>) {
+    pub(super) fn expect_posting_with_simple_elements<OW: QuantizedWeight, TW: QuantizedWeight>(elements: Vec<(RowId, f32)>) -> (PostingList<TW>, Option<QuantizedParam>) {
         let need_quantized = OW::weight_type() != TW::weight_type() && TW::weight_type() == WeightType::WeightU8;
 
         let mut elements = elements;
-        elements.sort_by(|l, r|l.0.cmp(&r.0));
+        elements.sort_by(|l, r| l.0.cmp(&r.0));
 
         // Assume that the `elements` is sorted by `row_id`.
-        let (min, max) = match elements.iter().map(|(_,w)|w).minmax() {
+        let (min, max) = match elements.iter().map(|(_, w)| w).minmax() {
             itertools::MinMaxResult::NoElements => (OW::MINIMUM(), OW::MINIMUM()),
             itertools::MinMaxResult::OneElement(&e) => (OW::from_f32(e), OW::from_f32(e)),
             itertools::MinMaxResult::MinMax(&min, &max) => (OW::from_f32(min), OW::from_f32(max)),
         };
         let quantized_param = match need_quantized {
             true => {
-                if min==OW::MINIMUM() && max==OW::MINIMUM() {
+                if min == OW::MINIMUM() && max == OW::MINIMUM() {
                     Some(QuantizedParam::default())
                 } else {
                     Some(OW::gen_quantized_param(min, max))
                 }
-            },
+            }
             false => None,
         };
 
         let mut posting_elements: Vec<GenericElement<TW>> = Vec::new();
         for (row_id, weight) in elements {
-            let generic_element: GenericElement<OW> = SimpleElement{
-                row_id,
-                weight: OW::from_f32(weight),
-            }.into();
+            let generic_element: GenericElement<OW> = SimpleElement { row_id, weight: OW::from_f32(weight) }.into();
             if need_quantized {
                 posting_elements.push(generic_element.quantize_with_param(quantized_param.unwrap()));
             } else {
@@ -127,39 +121,27 @@ mod test {
             }
         }
 
-        let posting = PostingList::<TW> {
-            elements: posting_elements,
-            element_type: ElementType::SIMPLE,
-        };
+        let posting = PostingList::<TW> { elements: posting_elements, element_type: ElementType::SIMPLE };
 
         (posting, quantized_param)
     }
 
     // Only for testing.
-    pub(super) fn expect_posting_with_extended_elements<OW: QuantizedWeight, TW: QuantizedWeight>(
-        elements: Vec<(RowId, f32, f32)>,
-    ) -> (PostingList<TW>, Option<QuantizedParam>) {
+    pub(super) fn expect_posting_with_extended_elements<OW: QuantizedWeight, TW: QuantizedWeight>(elements: Vec<(RowId, f32, f32)>) -> (PostingList<TW>, Option<QuantizedParam>) {
         let need_quantized = OW::weight_type() != TW::weight_type() && TW::weight_type() == WeightType::WeightU8;
         // Keep the same logic with SparseIndex, ExtendedElement can't be quantized.
         assert_eq!(need_quantized, false);
 
         let mut elements = elements;
-        elements.sort_by(|l, r|l.0.cmp(&r.0));
-        
+        elements.sort_by(|l, r| l.0.cmp(&r.0));
+
         // Assume that the `elements` is sorted by `row_id`.
         let mut posting_elements: Vec<GenericElement<TW>> = Vec::new();
         for (row_id, weight, max_next_weight) in elements {
-            let generic_element: GenericElement<OW> = ExtendedElement{
-                row_id,
-                weight: OW::from_f32(weight),
-                max_next_weight: OW::from_f32(max_next_weight),
-            }.into();
+            let generic_element: GenericElement<OW> = ExtendedElement { row_id, weight: OW::from_f32(weight), max_next_weight: OW::from_f32(max_next_weight) }.into();
             posting_elements.push(generic_element.type_convert::<TW>());
         }
-        let posting = PostingList::<TW> {
-            elements: posting_elements,
-            element_type: ElementType::EXTENDED,
-        };
+        let posting = PostingList::<TW> { elements: posting_elements, element_type: ElementType::EXTENDED };
 
         (posting, None)
     }
@@ -173,8 +155,8 @@ mod test {
         }
         // Init first element
         elements.push((row_id_start, format!("{:.3}", generate_random_float()).parse::<f32>().unwrap()));
-        
-        for _ in (row_id_start+1)..(row_id_start+count as RowId) {
+
+        for _ in (row_id_start + 1)..(row_id_start + count as RowId) {
             let row_id = elements.last().unwrap().0
                 + match enable_elements_sequential {
                     true => 1,

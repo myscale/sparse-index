@@ -56,7 +56,8 @@ mod test {
     }
 
     pub(super) fn mock_compressed_posting_from_sequence_elements<OW: QuantizedWeight, TW: QuantizedWeight>(
-        element_type: ElementType, count: usize
+        element_type: ElementType,
+        count: usize,
     ) -> (CompressedPostingList<TW>, Vec<(u32, f32)>) {
         #[rustfmt::skip]
         let mut elements: Vec<(u32, f32)> = Vec::new();

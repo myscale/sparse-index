@@ -369,9 +369,9 @@ fn convert_weights_type_for_block<OW: QuantizedWeight, TW: QuantizedWeight, F: F
 
 #[cfg(test)]
 mod test {
-    use itertools::Itertools;
-    use super::super::test::{uncompress_row_ids_from_compressed_posting, mock_build_compressed_posting, generate_elements};
+    use super::super::test::{generate_elements, mock_build_compressed_posting, uncompress_row_ids_from_compressed_posting};
     use crate::core::{CompressedBlockType, ElementType, QuantizedParam, QuantizedWeight, WeightType, DEFAULT_MAX_NEXT_WEIGHT};
+    use itertools::Itertools;
 
     use super::CompressedPostingBuilder;
 

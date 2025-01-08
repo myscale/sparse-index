@@ -194,7 +194,7 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
                     itertools::MinMaxResult::OneElement(e) => (e, e),
                     itertools::MinMaxResult::MinMax(min, max) => (min, max),
                 };
-                if min==OW::MINIMUM() && max==OW::MINIMUM() {
+                if min == OW::MINIMUM() && max == OW::MINIMUM() {
                     quantized_param = Some(QuantizedParam::default());
                 } else {
                     quantized_param = Some(OW::gen_quantized_param(min, max));
@@ -210,8 +210,8 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test::{build_simple_posting_from_elements, expect_posting_with_extended_elements, expect_posting_with_simple_elements};
     use super::*;
-    use super::super::test::{build_simple_posting_from_elements, expect_posting_with_simple_elements, expect_posting_with_extended_elements};
     use crate::core::QuantizedWeight;
 
     // TODO 检查 quantized 之后的参数是否和预期一致
@@ -238,11 +238,10 @@ mod tests {
     //     PostingList { elements, element_type: ElementType::SIMPLE }
     // }
 
-
     fn inner_test_new_posting_builder<OW: QuantizedWeight, TW: QuantizedWeight>(element_type: ElementType, propagate_while_upserting: bool) {
         let builder: PostingListBuilder<OW, TW> = PostingListBuilder::<OW, TW>::new(element_type, propagate_while_upserting).unwrap();
         assert_eq!(builder.element_type, element_type);
-        assert_eq!(builder.need_quantized, OW::weight_type()!=TW::weight_type() && TW::weight_type() == WeightType::WeightU8);
+        assert_eq!(builder.need_quantized, OW::weight_type() != TW::weight_type() && TW::weight_type() == WeightType::WeightU8);
         assert_eq!(builder.propagate_while_upserting, propagate_while_upserting && element_type == ElementType::EXTENDED);
         assert_eq!(builder.finally_propagate, !propagate_while_upserting && element_type == ElementType::EXTENDED);
     }
@@ -264,8 +263,7 @@ mod tests {
         assert!(PostingListBuilder::<half::f16, u8>::new(ElementType::EXTENDED, false).is_err());
     }
 
-
-    fn inner_test_build_from_simple_elements<OW: QuantizedWeight, TW: QuantizedWeight>(elements: Vec<(u32, f32)>){
+    fn inner_test_build_from_simple_elements<OW: QuantizedWeight, TW: QuantizedWeight>(elements: Vec<(u32, f32)>) {
         let (output_posting, output_param) = build_simple_posting_from_elements::<OW, TW>(ElementType::SIMPLE, elements.clone());
         let (expected_posting, expected_param) = expect_posting_with_simple_elements::<OW, TW>(elements.clone());
 
@@ -273,7 +271,7 @@ mod tests {
         assert_eq!(output_param, expected_param);
     }
 
-    fn inner_test_build_from_extended_elements<OW: QuantizedWeight, TW: QuantizedWeight>(elements: Vec<(u32, f32, f32)>){
+    fn inner_test_build_from_extended_elements<OW: QuantizedWeight, TW: QuantizedWeight>(elements: Vec<(u32, f32, f32)>) {
         let simple_elements = elements.iter().map(|(row_id, weight, _)| (*row_id, *weight)).collect::<Vec<_>>();
 
         let (output_posting, output_param) = build_simple_posting_from_elements::<OW, TW>(ElementType::EXTENDED, simple_elements.clone());
