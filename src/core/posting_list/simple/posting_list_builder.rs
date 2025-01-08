@@ -12,7 +12,7 @@ use crate::{
     RowId,
 };
 
-#[derive(TypedBuilder)]
+#[derive(TypedBuilder, Clone)]
 pub struct PostingListBuilder<OW: QuantizedWeight, TW: QuantizedWeight> {
     /// [`PostingListBuilder`] will operate inner [`PostingList`]
     #[builder(default=PostingList::<OW>::new(ElementType::SIMPLE))]
@@ -72,15 +72,15 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
             .build())
     }
 
-    #[cfg(test)]
-    pub fn build_from(records: Vec<(RowId, DimWeight)>, element_type: ElementType) -> Result<PostingList<OW>, PostingListError> {
-        let mut posting_list_builder: PostingListBuilder<OW, OW> = PostingListBuilder::<OW, OW>::new(element_type, false)?;
-        for (row_id, weight) in records {
-            posting_list_builder.add(row_id, weight);
-        }
+    // #[cfg(test)]
+    // pub fn build_from(records: Vec<(RowId, DimWeight)>, element_type: ElementType) -> Result<PostingList<OW>, PostingListError> {
+    //     let mut posting_list_builder: PostingListBuilder<OW, OW> = PostingListBuilder::<OW, OW>::new(element_type, false)?;
+    //     for (row_id, weight) in records {
+    //         posting_list_builder.add(row_id, weight);
+    //     }
 
-        Ok(posting_list_builder.build()?.0)
-    }
+    //     Ok(posting_list_builder.build()?.0)
+    // }
     #[cfg(test)]
     pub fn update_inner_posting(&mut self, posting: PostingList<OW>) {
         self.posting = posting
@@ -172,10 +172,6 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
     }
 
     pub fn build(mut self) -> Result<(PostingList<TW>, Option<QuantizedParam>), PostingListError> {
-        // if self.finally_sort {
-        //     self.posting.elements.sort_unstable_by_key(|e| e.row_id());
-        // }
-
         #[cfg(debug_assertions)]
         {
             if let Some(res) = self.posting.elements.windows(2).find(|e| e[0].row_id() >= e[1].row_id()) {
@@ -198,7 +194,11 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
                     itertools::MinMaxResult::OneElement(e) => (e, e),
                     itertools::MinMaxResult::MinMax(min, max) => (min, max),
                 };
-                quantized_param = Some(OW::gen_quantized_param(min, max));
+                if min==OW::MINIMUM() && max==OW::MINIMUM() {
+                    quantized_param = Some(QuantizedParam::default());
+                } else {
+                    quantized_param = Some(OW::gen_quantized_param(min, max));
+                }
             }
         }
 
@@ -211,19 +211,19 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> PostingListBuilder<OW, TW> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::test::{build_simple_posting_from_elements, expect_posting_with_simple_elements, expect_posting_with_extended_elements};
     use crate::core::QuantizedWeight;
 
+    // TODO 检查 quantized 之后的参数是否和预期一致
     fn mock_build_elements<OW: QuantizedWeight, TW: QuantizedWeight>(
         element_type: ElementType,
+        elements: Vec<(RowId, f32)>,
         propagate_while_upserting: bool,
     ) -> Result<(PostingList<TW>, Option<QuantizedParam>), PostingListError> {
         let mut builder = PostingListBuilder::<OW, TW>::new(element_type, propagate_while_upserting)?;
-        assert_eq!(builder.add(6, 70.0), true);
-        assert_eq!(builder.add(14, 50.0), true);
-        assert_eq!(builder.add(18, 30.0), true);
-        assert_eq!(builder.add(21, 20.0), true);
-        assert_eq!(builder.add(17, 10.0), true);
-        assert_eq!(builder.add(14, 45.0), false);
+        for el in elements {
+            builder.add(el.0, el.1);
+        }
         builder.build()
     }
 
@@ -233,111 +233,107 @@ mod tests {
         PostingList { elements, element_type: ElementType::EXTENDED }
     }
 
-    fn create_simple_posting<W: QuantizedWeight>(elements: Vec<(RowId, W)>) -> PostingList<W> {
-        let elements: Vec<GenericElement<W>> = elements.into_iter().map(|(row_id, weight)| SimpleElement { row_id, weight }.into()).collect::<Vec<_>>();
-        PostingList { elements, element_type: ElementType::SIMPLE }
-    }
+    // fn create_simple_posting<W: QuantizedWeight>(elements: Vec<(RowId, W)>) -> PostingList<W> {
+    //     let elements: Vec<GenericElement<W>> = elements.into_iter().map(|(row_id, weight)| SimpleElement { row_id, weight }.into()).collect::<Vec<_>>();
+    //     PostingList { elements, element_type: ElementType::SIMPLE }
+    // }
 
+
+    fn inner_test_new_posting_builder<OW: QuantizedWeight, TW: QuantizedWeight>(element_type: ElementType, propagate_while_upserting: bool) {
+        let builder: PostingListBuilder<OW, TW> = PostingListBuilder::<OW, TW>::new(element_type, propagate_while_upserting).unwrap();
+        assert_eq!(builder.element_type, element_type);
+        assert_eq!(builder.need_quantized, OW::weight_type()!=TW::weight_type() && TW::weight_type() == WeightType::WeightU8);
+        assert_eq!(builder.propagate_while_upserting, propagate_while_upserting && element_type == ElementType::EXTENDED);
+        assert_eq!(builder.finally_propagate, !propagate_while_upserting && element_type == ElementType::EXTENDED);
+    }
     #[test]
     fn test_new_posting_builder() {
-        let builder_f32_f32: PostingListBuilder<f32, f32> = PostingListBuilder::<f32, f32>::new(ElementType::SIMPLE, true).unwrap();
-        assert_eq!(builder_f32_f32.element_type, ElementType::SIMPLE);
-        assert_eq!(builder_f32_f32.need_quantized, false);
-        assert_eq!(builder_f32_f32.propagate_while_upserting, false);
-        assert_eq!(builder_f32_f32.finally_propagate, false);
+        // Not quantized.
+        inner_test_new_posting_builder::<f32, f32>(ElementType::SIMPLE, true);
+        inner_test_new_posting_builder::<f32, f32>(ElementType::SIMPLE, false);
+        inner_test_new_posting_builder::<half::f16, half::f16>(ElementType::EXTENDED, true);
+        inner_test_new_posting_builder::<half::f16, half::f16>(ElementType::EXTENDED, false);
+        inner_test_new_posting_builder::<u8, u8>(ElementType::EXTENDED, false);
 
-        let builder_f16_f16: PostingListBuilder<half::f16, half::f16> = PostingListBuilder::<half::f16, half::f16>::new(ElementType::EXTENDED, true).unwrap();
-        assert_eq!(builder_f16_f16.element_type, ElementType::EXTENDED);
-        assert_eq!(builder_f16_f16.need_quantized, false);
-        assert_eq!(builder_f16_f16.propagate_while_upserting, true);
-        assert_eq!(builder_f16_f16.finally_propagate, false);
+        // Quantized.
+        inner_test_new_posting_builder::<f32, u8>(ElementType::SIMPLE, true);
+        inner_test_new_posting_builder::<half::f16, u8>(ElementType::SIMPLE, false);
 
-        let builder_u8_u8: PostingListBuilder<u8, u8> = PostingListBuilder::<u8, u8>::new(ElementType::EXTENDED, false).unwrap();
-        assert_eq!(builder_u8_u8.element_type, ElementType::EXTENDED);
-        assert_eq!(builder_u8_u8.need_quantized, false);
-        assert_eq!(builder_u8_u8.propagate_while_upserting, false);
-        assert_eq!(builder_u8_u8.finally_propagate, true);
-
+        // Invalid.
         assert!(PostingListBuilder::<f32, u8>::new(ElementType::EXTENDED, false).is_err());
         assert!(PostingListBuilder::<half::f16, u8>::new(ElementType::EXTENDED, false).is_err());
-
-        let builder_f32_u8: PostingListBuilder<f32, u8> = PostingListBuilder::<f32, u8>::new(ElementType::SIMPLE, false).unwrap();
-        assert_eq!(builder_f32_u8.element_type, ElementType::SIMPLE);
-        assert_eq!(builder_f32_u8.need_quantized, true);
-        assert_eq!(builder_f32_u8.propagate_while_upserting, false);
-        assert_eq!(builder_f32_u8.finally_propagate, false);
     }
 
-    // 测试 PostingListBuilder::add 函数
+
+    fn inner_test_build_from_simple_elements<OW: QuantizedWeight, TW: QuantizedWeight>(elements: Vec<(u32, f32)>){
+        let (output_posting, output_param) = build_simple_posting_from_elements::<OW, TW>(ElementType::SIMPLE, elements.clone());
+        let (expected_posting, expected_param) = expect_posting_with_simple_elements::<OW, TW>(elements.clone());
+
+        assert_eq!(output_posting, expected_posting);
+        assert_eq!(output_param, expected_param);
+    }
+
+    fn inner_test_build_from_extended_elements<OW: QuantizedWeight, TW: QuantizedWeight>(elements: Vec<(u32, f32, f32)>){
+        let simple_elements = elements.iter().map(|(row_id, weight, _)| (*row_id, *weight)).collect::<Vec<_>>();
+
+        let (output_posting, output_param) = build_simple_posting_from_elements::<OW, TW>(ElementType::EXTENDED, simple_elements.clone());
+        let (expected_posting, expected_param) = expect_posting_with_extended_elements::<OW, TW>(elements.clone());
+
+        assert_eq!(output_posting, expected_posting);
+        assert_eq!(output_param, expected_param);
+    }
+
     #[test]
     fn test_build_elements() {
         let m = DEFAULT_MAX_NEXT_WEIGHT;
 
-        // Weight type is f32, stored without quantized, `ExtendedType`
-        {
-            let (posting, param) = mock_build_elements::<f32, f32>(ElementType::EXTENDED, false).expect("");
-            let expected = create_extended_posting::<f32>(vec![(6, 70.0, 45.0), (14, 45.0, 30.0), (17, 10.0, 30.0), (18, 30.0, 20.0), (21, 20.0, m)]);
-            assert_eq!(posting, expected);
-            assert!(param.is_none())
-        }
-        // Weight type is f32, stored without quantized, `SimpleType`
-        {
-            let (posting, param) = mock_build_elements::<f32, f32>(ElementType::SIMPLE, false).expect("");
-            let expected = create_simple_posting::<f32>(vec![(6, 70.0), (14, 45.0), (17, 10.0), (18, 30.0), (21, 20.0)]);
-            assert_eq!(posting, expected);
-            assert!(param.is_none())
-        }
-        // Weight type is f32, stored with quantized-u8, `SimpleType`
-        {
-            let (posting, param) = mock_build_elements::<f32, u8>(ElementType::SIMPLE, false).expect("");
-            let expected_param = QuantizedParam::from_minmax(10.0, 70.0);
-            let expected = create_simple_posting::<u8>(vec![
-                (6, f32::quantize_with_param(70.0, expected_param)),
-                (14, f32::quantize_with_param(45.0, expected_param)),
-                (17, f32::quantize_with_param(10.0, expected_param)),
-                (18, f32::quantize_with_param(30.0, expected_param)),
-                (21, f32::quantize_with_param(20.0, expected_param)),
-            ]);
-            assert_eq!(posting, expected);
-            assert!(param.is_some());
-            assert_eq!(param.unwrap(), expected_param);
-            assert_eq!(format!("{:.2}", 70.0), format!("{:.2}", f32::unquantize_with_param(expected.get_ref(0).unwrap().weight(), param.unwrap())));
-        }
-        // Invalid parameter.
-        {
-            assert!(mock_build_elements::<f32, u8>(ElementType::EXTENDED, false).is_err());
-            assert!(mock_build_elements::<half::f16, u8>(ElementType::EXTENDED, false).is_err());
-            assert!(mock_build_elements::<u8, u8>(ElementType::EXTENDED, false).is_ok());
-        }
+        // For simple element.
+        let simple_elements = vec![(6, 70.0), (18, 30.0), (21, 20.0), (17, 10.0), (14, 45.0)];
+        // not quantized
+        inner_test_build_from_simple_elements::<f32, f32>(simple_elements.clone());
+        inner_test_build_from_simple_elements::<half::f16, half::f16>(simple_elements.clone());
+        inner_test_build_from_simple_elements::<u8, u8>(simple_elements.clone());
+        // quantized
+        inner_test_build_from_simple_elements::<f32, u8>(simple_elements.clone());
+        inner_test_build_from_simple_elements::<half::f16, u8>(simple_elements.clone());
+
+        // For extended element.
+        let extended_elements = vec![(6, 70.0, 45.0), (14, 45.0, 30.0), (17, 10.0, 30.0), (18, 30.0, 20.0), (21, 20.0, m)];
+        inner_test_build_from_extended_elements::<f32, f32>(extended_elements.clone());
+        inner_test_build_from_extended_elements::<half::f16, half::f16>(extended_elements.clone());
+        inner_test_build_from_extended_elements::<u8, u8>(extended_elements.clone());
     }
 
     #[test]
-    fn test_propagate_while_build() {
+    fn test_propagate_while_building() {
         let m = DEFAULT_MAX_NEXT_WEIGHT;
-        // propagate while upserting.
+        let simple_elements = vec![(6, 70.0), (18, 30.0), (21, 20.0), (17, 10.0), (14, 45.0)];
+        let propagated_elements = vec![(6, 70.0, 45.0), (14, 45.0, 30.0), (17, 10.0, 30.0), (18, 30.0, 20.0), (21, 20.0, m)];
+        let not_propagated_elements = vec![(6, 70.0, m), (14, 45.0, m), (17, 10.0, m), (18, 30.0, m), (21, 20.0, m)];
+
+        // When upserting, we execute propagating.
         {
             let mut builder = PostingListBuilder::<f32, f32>::new(ElementType::EXTENDED, true).expect("");
-            assert_eq!(builder.add(6, 70.0), true);
-            assert_eq!(builder.add(14, 50.0), true);
-            assert_eq!(builder.add(18, 30.0), true);
-            assert_eq!(builder.add(21, 20.0), true);
-            assert_eq!(builder.add(17, 10.0), true);
-            assert_eq!(builder.add(14, 45.0), false);
-            assert_eq!(builder.posting, create_extended_posting::<f32>(vec![(6, 70.0, 45.0), (14, 45.0, 30.0), (17, 10.0, 30.0), (18, 30.0, 20.0), (21, 20.0, m)]));
+            for (row_id, weight) in simple_elements.iter() {
+                assert!(builder.add(*row_id, *weight));
+            }
+            // verify before building.
+            assert_eq!(builder.posting, create_extended_posting::<f32>(propagated_elements.clone()));
+            // verify after building.
+            let posting = builder.build().unwrap().0;
+            assert_eq!(posting, create_extended_posting::<f32>(propagated_elements.clone()));
         }
-        // propagate will be trigger while build.
+        // When upserting, we not execute propagating.
         {
             let mut builder = PostingListBuilder::<f32, f32>::new(ElementType::EXTENDED, false).expect("");
-            assert_eq!(builder.add(6, 70.0), true);
-            assert_eq!(builder.add(14, 50.0), true);
-            assert_eq!(builder.add(18, 30.0), true);
-            assert_eq!(builder.add(21, 20.0), true);
-            assert_eq!(builder.add(17, 10.0), true);
-            assert_eq!(builder.add(14, 45.0), false);
-            assert_eq!(builder.posting, create_extended_posting::<f32>(vec![(6, 70.0, m), (14, 45.0, m), (17, 10.0, m), (18, 30.0, m), (21, 20.0, m)]));
-
+            for (row_id, weight) in simple_elements.iter() {
+                assert!(builder.add(*row_id, *weight));
+            }
+            // verify before building.
+            assert_eq!(builder.posting, create_extended_posting::<f32>(not_propagated_elements.clone()));
+            // verify after building.
             let posting = builder.build().unwrap().0;
-            assert_eq!(posting, create_extended_posting::<f32>(vec![(6, 70.0, 45.0), (14, 45.0, 30.0), (17, 10.0, 30.0), (18, 30.0, 20.0), (21, 20.0, m)]));
+            assert_eq!(posting, create_extended_posting::<f32>(propagated_elements.clone()));
         }
     }
 }

@@ -103,7 +103,7 @@ fn index_documents(
             );
             segment_writer.index_row_content(sv)?;
         }
-        let mem_usage = segment_writer.mem_usage();
+        let mem_usage = segment_writer.mem_usage()?;
         trace!("{} [index_documents] mem_usage {}, true budget {}", thread::current().name().unwrap_or_default(), mem_usage, memory_budget - MARGIN_IN_BYTES);
         // If reach memory limit, we should serialize this segment.
         if mem_usage >= memory_budget - MARGIN_IN_BYTES {

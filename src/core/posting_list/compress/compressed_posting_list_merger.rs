@@ -31,7 +31,7 @@ impl CompressedPostingListMerger {
                 let mut builder: CompressedPostingBuilder<OW, TW> = CompressedPostingBuilder::<OW, TW>::new(element_type, false, false)?;
                 let (merged, _, _) = PostingListMerger::merge_simple_postings(&postings)?;
                 builder.posting = merged;
-                let compressed_merged = builder.build();
+                let compressed_merged = builder.build()?;
                 let param = compressed_merged.quantization_params.clone();
                 return Ok((compressed_merged, param));
             }
@@ -40,7 +40,7 @@ impl CompressedPostingListMerger {
                 let mut builder: CompressedPostingBuilder<OW, TW> = CompressedPostingBuilder::<OW, TW>::new(element_type, false, false)?;
                 let merged = PostingListMerger::merge_extended_postings(&postings)?;
                 builder.posting = merged;
-                let compressed_merged = builder.build();
+                let compressed_merged = builder.build()?;
                 return Ok((compressed_merged, None));
             }
         }
@@ -50,7 +50,7 @@ impl CompressedPostingListMerger {
 #[cfg(test)]
 mod tests {
     use super::super::test::{enlarge_elements, get_compressed_posting_iterators, mock_build_compressed_posting};
-    use crate::core::{CompressedPostingList, CompressedPostingListMerger, ElementType, QuantizedParam, QuantizedWeight};
+    use crate::core::{CompressedPostingList, CompressedPostingListMerger, ElementType, QuantizedParam, QuantizedWeight, WeightType};
     use core::f32;
 
     fn mock_compressed_posting_candidates<OW: QuantizedWeight, TW: QuantizedWeight>(
@@ -105,85 +105,42 @@ mod tests {
         return (postings, merged);
     }
 
-    #[test]
-    fn test_merge_simple_compressed_posting_lists() {
-        // merge for f32-f32 postings. (not-quantized)
-        {
-            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<f32, f32>(ElementType::SIMPLE, 12);
-            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
-            let (result_cmp_posting, result_quantized_param) = CompressedPostingListMerger::merge_posting_lists::<f32, f32>(&mut candidate_iterators, ElementType::SIMPLE).unwrap();
-            assert!(result_quantized_param.is_none());
-            assert_eq!(expected_cmp_posting, result_cmp_posting);
-        }
-        // merge for f16-f16 postings. (not-quantized)
-        {
-            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<half::f16, half::f16>(ElementType::SIMPLE, 12);
-            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
-            let (result_cmp_posting, result_quantized_param) =
-                CompressedPostingListMerger::merge_posting_lists::<half::f16, half::f16>(&mut candidate_iterators, ElementType::SIMPLE).unwrap();
-            assert!(result_quantized_param.is_none());
-            assert_eq!(expected_cmp_posting, result_cmp_posting);
-        }
-        // merge for u8-u8 postings. (not-quantized)
-        {
-            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<u8, u8>(ElementType::SIMPLE, 12);
-            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
-            let (result_cmp_posting, result_quantized_param) = CompressedPostingListMerger::merge_posting_lists::<u8, u8>(&mut candidate_iterators, ElementType::SIMPLE).unwrap();
-            assert!(result_quantized_param.is_none());
-            assert_eq!(expected_cmp_posting, result_cmp_posting);
-        }
-        // merge for f32-u8 postings (quantized).
-        {
-            let (candidates, (expected_cmp_posting, expected_quantized_param)) = mock_compressed_posting_candidates::<f32, u8>(ElementType::SIMPLE, 12);
-            let mut candidate_iterators = get_compressed_posting_iterators::<f32, u8>(&candidates);
-            let (result_cmp_posting, result_quantized_param) = CompressedPostingListMerger::merge_posting_lists::<f32, u8>(&mut candidate_iterators, ElementType::SIMPLE).unwrap();
+    fn inner_test_merge_compressed_posting_lists<OW: QuantizedWeight, TW: QuantizedWeight>(element_type: ElementType, enlarge: i32) {
+        let use_quantized = OW::weight_type() != TW::weight_type() && TW::weight_type() == WeightType::WeightU8;
+        let (candidates, (expected_cmp_posting, expected_quantized_param)) = mock_compressed_posting_candidates::<OW, TW>(element_type, enlarge);
+        let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
+        let (result_cmp_posting, result_quantized_param) = CompressedPostingListMerger::merge_posting_lists::<OW, TW>(&mut candidate_iterators, element_type).unwrap();
 
-            assert!(expected_quantized_param.is_some());
+        if use_quantized {
             assert!(result_quantized_param.is_some());
             assert_eq!(expected_quantized_param, result_quantized_param);
             assert!(result_cmp_posting.approximately_eq(&expected_cmp_posting));
-        }
-        // merge for f16-u8 postings (quantized).
-        {
-            let (candidates, (expected_cmp_posting, expected_quantized_param)) = mock_compressed_posting_candidates::<half::f16, u8>(ElementType::SIMPLE, 12);
-            let mut candidate_iterators = get_compressed_posting_iterators::<half::f16, u8>(&candidates);
-            let (result_cmp_posting, result_quantized_param) =
-                CompressedPostingListMerger::merge_posting_lists::<half::f16, u8>(&mut candidate_iterators, ElementType::SIMPLE).unwrap();
-
-            assert!(expected_quantized_param.is_some());
-            assert!(result_quantized_param.is_some());
-            assert_eq!(expected_quantized_param, result_quantized_param);
-            assert!(result_cmp_posting.approximately_eq(&expected_cmp_posting));
+        } else {
+            assert!(result_quantized_param.is_none());
+            assert_eq!(expected_cmp_posting, result_cmp_posting);
         }
     }
 
     #[test]
-    fn test_merge_extended_compressed_posting_lists() {
-        // merge for f32-f32 postings. (not-quantized)
-        {
-            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<f32, f32>(ElementType::EXTENDED, 12);
-            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
-            let (result_cmp_posting, result_quantized_param) =
-                CompressedPostingListMerger::merge_posting_lists::<f32, f32>(&mut candidate_iterators, ElementType::EXTENDED).unwrap();
-            assert!(result_quantized_param.is_none());
-            assert_eq!(expected_cmp_posting, result_cmp_posting);
-        }
-        // merge for f16-f16 postings. (not-quantized)
-        {
-            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<half::f16, half::f16>(ElementType::EXTENDED, 12);
-            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
-            let (result_cmp_posting, result_quantized_param) =
-                CompressedPostingListMerger::merge_posting_lists::<half::f16, half::f16>(&mut candidate_iterators, ElementType::EXTENDED).unwrap();
-            assert!(result_quantized_param.is_none());
-            assert_eq!(expected_cmp_posting, result_cmp_posting);
-        }
-        // merge for u8-u8 postings. (not-quantized)
-        {
-            let (candidates, (expected_cmp_posting, _)) = mock_compressed_posting_candidates::<u8, u8>(ElementType::EXTENDED, 12);
-            let mut candidate_iterators = get_compressed_posting_iterators(&candidates);
-            let (result_cmp_posting, result_quantized_param) = CompressedPostingListMerger::merge_posting_lists::<u8, u8>(&mut candidate_iterators, ElementType::EXTENDED).unwrap();
-            assert!(result_quantized_param.is_none());
-            assert_eq!(expected_cmp_posting, result_cmp_posting);
-        }
+    fn test_merge_compressed_posting_lists() {
+        // TODO 缺乏边界测试，需要补充
+
+        // Simple: merge for f32-f32 postings. (not-quantized)
+        inner_test_merge_compressed_posting_lists::<f32, f32>(ElementType::SIMPLE, 12);
+        // Simple: merge for f16-f16 postings. (not-quantized)
+        inner_test_merge_compressed_posting_lists::<half::f16, half::f16>(ElementType::SIMPLE, 12);
+        // Simple: merge for u8-u8 postings. (not-quantized)
+        inner_test_merge_compressed_posting_lists::<u8, u8>(ElementType::SIMPLE, 12);
+        // Simple: merge for f32-u8 postings (quantized).
+        inner_test_merge_compressed_posting_lists::<f32, u8>(ElementType::SIMPLE, 12);
+        // Simple: merge for f16-u8 postings (quantized).
+        inner_test_merge_compressed_posting_lists::<half::f16, u8>(ElementType::SIMPLE, 12);
+
+        // Extended: merge for f32-f32 postings. (not-quantized)
+        inner_test_merge_compressed_posting_lists::<f32, f32>(ElementType::EXTENDED, 12);
+        // Extended: merge for f16-f16 postings. (not-quantized)
+        inner_test_merge_compressed_posting_lists::<half::f16, half::f16>(ElementType::EXTENDED, 12);
+        // Extended: merge for u8-u8 postings. (not-quantized)
+        inner_test_merge_compressed_posting_lists::<u8, u8>(ElementType::EXTENDED, 12);
     }
 }

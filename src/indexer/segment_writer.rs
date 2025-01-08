@@ -32,14 +32,14 @@ impl SegmentWriter {
         self.index_ram_builder.build_and_flush(self.index_config.storage_type, self.index_config.weight_type, self.index_config.quantized, &directory, Some(&segment_id))
     }
 
-    pub fn mem_usage(&self) -> usize {
+    pub fn mem_usage(&self) -> crate::Result<usize> {
         self.index_ram_builder.memory_usage()
     }
 
     /// TODO: Refine the way we compute num_rows_count.
     pub fn index_row_content(&mut self, add_operation: AddOperation) -> crate::Result<bool> {
         let AddOperation { opstamp: _, row_content } = add_operation;
-        let is_insert_operation = self.index_ram_builder.add(row_content.row_id, row_content.sparse_vector);
+        let is_insert_operation = self.index_ram_builder.add(row_content.row_id, row_content.sparse_vector)?;
         if is_insert_operation {
             self.num_rows_count += 1;
         }

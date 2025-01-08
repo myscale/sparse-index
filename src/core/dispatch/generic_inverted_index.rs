@@ -142,7 +142,7 @@ impl GenericInvertedIndex {
                     index_settings.inverted_index_config.storage_type, index_settings.inverted_index_config.weight_type, index_settings.inverted_index_config.quantized
                 );
                 error!("{}", error_msg);
-                panic!("{}", error_msg);
+                Err(SparseError::UnExpectedError(error_msg))
             }
         }
     }
@@ -195,7 +195,7 @@ impl GenericInvertedIndex {
         if !types.iter().all(|&t|t==types[0]) {
             let error_msg = "Error happended when merging a group of GenericInvertedIndexes, they types should keep same.";
             error!("{}", error_msg);
-            panic!("{}", error_msg);
+            return Err(SparseError::UnExpectedError(error_msg.to_string()));
         }
 
         // get first index type

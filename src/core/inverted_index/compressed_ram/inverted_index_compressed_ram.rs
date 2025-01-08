@@ -1,10 +1,10 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, path::PathBuf};
 
 use log::error;
 
 use crate::core::{
     inverted_index::common::InvertedIndexMetrics, CompressedBlockType, CompressedPostingBuilder, CompressedPostingList, DimId, ElementRead, ElementType, InvertedIndexRam,
-    InvertedIndexRamAccess, QuantizedParam, QuantizedWeight,
+    InvertedIndexRamAccess, PostingList, QuantizedParam, QuantizedWeight,
 };
 
 #[derive(Debug, Clone)]
@@ -24,48 +24,35 @@ impl<TW: QuantizedWeight> CompressedInvertedIndexRam<TW> {
     }
 
     // TODO: Refine ram trait.
-    pub fn from_ram_index<P: AsRef<std::path::Path>>(ram_index: Cow<InvertedIndexRam<TW>>, _path: P, _segment_id: Option<&str>) -> std::io::Result<Self> {
+    pub fn from_ram_index(ram_index: Cow<InvertedIndexRam<TW>>, _path: PathBuf, _segment_id: Option<&str>) -> crate::Result<Self> {
         let mut postings = Vec::with_capacity(ram_index.size());
         let element_type = ram_index.element_type();
 
+        let empty_posting_list = PostingList::<TW>::new(ram_index.element_type());
+
         for dim_id in 0..ram_index.size() {
-            let compressed_posting_list = ram_index
-                .get(&(dim_id as DimId))
-                .map_or(
-                    CompressedPostingList::<TW> {
-                        row_ids_compressed: vec![],
-                        simple_blocks: vec![],
-                        extended_blocks: vec![],
-                        compressed_block_type: CompressedBlockType::from(ram_index.element_type()),
-                        quantization_params: match ram_index.need_quantized {
-                            true => Some(QuantizedParam::default()),
-                            false => None,
-                        },
-                        row_ids_count: 0,
-                        max_row_id: None,
+            // Get the posting list from the ram index.
+            let posting_list_in_ram: &PostingList<TW> = ram_index.get(&(dim_id as DimId)).unwrap_or(&empty_posting_list);
 
-                    },
-                    |posting| {
-                        let mut compressed_posting_builder: CompressedPostingBuilder<TW, TW> = CompressedPostingBuilder::<TW, TW>::new(element_type, true, false).expect("msg");
+            // Compress the posting list.
+            let mut compressed_posting_builder: CompressedPostingBuilder<TW, TW> = CompressedPostingBuilder::<TW, TW>::new(element_type, true, false)?;
 
-                        for element in &posting.elements {
-                            compressed_posting_builder.add(element.row_id(), TW::to_f32(element.weight()));
-                        }
+            // TODO 这个流程可以优化，并不需要逐个的添加到 builder 里面
+            for element in &posting_list_in_ram.elements {
+                compressed_posting_builder.add(element.row_id(), TW::to_f32(element.weight()));
+            }
 
-                        let mut compressed_posting_list = compressed_posting_builder.build();
+            let compressed_posting_list = compressed_posting_builder.build()?;
 
-                        compressed_posting_list.quantization_params = match ram_index.quantized_params().get(dim_id) {
-                            Some(param) => param.clone(),
-                            None => {
-                                let error_msg = "This error should not occur because the posting must exist in `ram_index`. Its occurrence suggests potential bugs during the construction of `ram_index`.";
-                                error!("{}", error_msg);
-                                panic!("{}", error_msg);
-                            },
-                        };
-
-                        compressed_posting_list
-                    }
-                );
+            // TODO 这里的 quantized param 是重新生成了，估计也没有必要从 ram index 中获取
+            // compressed_posting_list.quantization_params = match ram_index.quantized_params().get(dim_id) {
+            //     Some(param) => param.clone(),
+            //     None => {
+            //         let error_msg = "This error should not occur because the posting must exist in `ram_index`. Its occurrence suggests potential bugs during the construction of `ram_index`.";
+            //         error!("{}", error_msg);
+            //         panic!("{}", error_msg);
+            //     },
+            // };
             postings.push(compressed_posting_list);
         }
 

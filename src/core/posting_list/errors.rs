@@ -18,4 +18,7 @@ pub enum PostingListError {
 
     #[error("UncompressError: '{0}")]
     UncompressError(String),
+
+    #[error("LogicError: '{0}")]
+    LogicError(String),
 }

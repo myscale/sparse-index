@@ -36,36 +36,36 @@ impl GenericInvertedIndexRamBuilder {
     }
 
     #[rustfmt::skip]
-    pub fn add(&mut self, row_id: RowId, vector: SparseVector) -> bool {
+    pub fn add(&mut self, row_id: RowId, vector: SparseVector) -> crate::Result<bool> {
         match self {
-            GenericInvertedIndexRamBuilder::F32NoQuantized(e) => e.add(row_id, vector),
-            GenericInvertedIndexRamBuilder::F32Quantized(e) => e.add(row_id, vector),
-            GenericInvertedIndexRamBuilder::F16NoQuantized(e) => e.add(row_id, vector),
-            GenericInvertedIndexRamBuilder::F16Quantized(e) => e.add(row_id, vector),
-            GenericInvertedIndexRamBuilder::U8NoQuantized(e) => e.add(row_id, vector),
+            GenericInvertedIndexRamBuilder::F32NoQuantized(e) => Ok(e.add(row_id, vector)?),
+            GenericInvertedIndexRamBuilder::F32Quantized(e) => Ok(e.add(row_id, vector)?),
+            GenericInvertedIndexRamBuilder::F16NoQuantized(e) => Ok(e.add(row_id, vector)?),
+            GenericInvertedIndexRamBuilder::F16Quantized(e) => Ok(e.add(row_id, vector)?),
+            GenericInvertedIndexRamBuilder::U8NoQuantized(e) => Ok(e.add(row_id, vector)?),
         }
     }
 
 
     #[rustfmt::skip]
-    fn build_ram_index(self) -> GenericInvertedIndexRam {
+    fn build_ram_index(self) -> crate::Result<GenericInvertedIndexRam> {
         match self {
-            GenericInvertedIndexRamBuilder::F32NoQuantized(e) => GenericInvertedIndexRam::F32RamIndex(e.build()),
-            GenericInvertedIndexRamBuilder::F32Quantized(e) => GenericInvertedIndexRam::U8RamIndex(e.build()),
-            GenericInvertedIndexRamBuilder::F16NoQuantized(e) => GenericInvertedIndexRam::F16RamIndex(e.build()),
-            GenericInvertedIndexRamBuilder::F16Quantized(e) => GenericInvertedIndexRam::U8RamIndex(e.build()),
-            GenericInvertedIndexRamBuilder::U8NoQuantized(e) => GenericInvertedIndexRam::U8RamIndex(e.build()),
+            GenericInvertedIndexRamBuilder::F32NoQuantized(e) => Ok(GenericInvertedIndexRam::F32RamIndex(e.build()?)),
+            GenericInvertedIndexRamBuilder::F32Quantized(e) => Ok(GenericInvertedIndexRam::U8RamIndex(e.build()?)),
+            GenericInvertedIndexRamBuilder::F16NoQuantized(e) => Ok(GenericInvertedIndexRam::F16RamIndex(e.build()?)),
+            GenericInvertedIndexRamBuilder::F16Quantized(e) => Ok(GenericInvertedIndexRam::U8RamIndex(e.build()?)),
+            GenericInvertedIndexRamBuilder::U8NoQuantized(e) => Ok(GenericInvertedIndexRam::U8RamIndex(e.build()?)),
         }
     }
 
     #[rustfmt::skip]
-    pub fn memory_usage(&self) -> usize {
+    pub fn memory_usage(&self) -> crate::Result<usize> {
         match self {
-            GenericInvertedIndexRamBuilder::F32NoQuantized(e) => e.memory_usage(),
-            GenericInvertedIndexRamBuilder::F32Quantized(e) => e.memory_usage(),
-            GenericInvertedIndexRamBuilder::F16NoQuantized(e) => e.memory_usage(),
-            GenericInvertedIndexRamBuilder::F16Quantized(e) => e.memory_usage(),
-            GenericInvertedIndexRamBuilder::U8NoQuantized(e) => e.memory_usage(),
+            GenericInvertedIndexRamBuilder::F32NoQuantized(e) => Ok(e.memory_usage()?),
+            GenericInvertedIndexRamBuilder::F32Quantized(e) => Ok(e.memory_usage()?),
+            GenericInvertedIndexRamBuilder::F16NoQuantized(e) => Ok(e.memory_usage()?),
+            GenericInvertedIndexRamBuilder::F16Quantized(e) => Ok(e.memory_usage()?),
+            GenericInvertedIndexRamBuilder::U8NoQuantized(e) => Ok(e.memory_usage()?),
         }
     }
 
@@ -79,17 +79,17 @@ impl GenericInvertedIndexRamBuilder {
         segment_id: Option<&str>
     ) -> crate::Result<Vec<PathBuf>> {
         match (storage_type, weight_type, need_quantized) {
-            (StorageType::Mmap, IndexWeightType::Float32, true) => self.build_ram_index().save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
-            (StorageType::Mmap, IndexWeightType::Float32, false) => self.build_ram_index().save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
-            (StorageType::Mmap, IndexWeightType::Float16, true) => self.build_ram_index().save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
-            (StorageType::Mmap, IndexWeightType::Float16, false) => self.build_ram_index().save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
-            (StorageType::Mmap, IndexWeightType::UInt8, false) => self.build_ram_index().save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
-            (StorageType::CompressedMmap, IndexWeightType::Float32, true) => self.build_ram_index().save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
-            (StorageType::CompressedMmap, IndexWeightType::Float32, false) => self.build_ram_index().save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
-            (StorageType::CompressedMmap, IndexWeightType::Float16, true) => self.build_ram_index().save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
-            (StorageType::CompressedMmap, IndexWeightType::Float16, false) => self.build_ram_index().save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
-            (StorageType::CompressedMmap, IndexWeightType::UInt8, true) => self.build_ram_index().save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
-            (StorageType::CompressedMmap, IndexWeightType::UInt8, false) => self.build_ram_index().save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
+            (StorageType::Mmap, IndexWeightType::Float32, true) => self.build_ram_index()?.save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
+            (StorageType::Mmap, IndexWeightType::Float32, false) => self.build_ram_index()?.save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
+            (StorageType::Mmap, IndexWeightType::Float16, true) => self.build_ram_index()?.save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
+            (StorageType::Mmap, IndexWeightType::Float16, false) => self.build_ram_index()?.save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
+            (StorageType::Mmap, IndexWeightType::UInt8, false) => self.build_ram_index()?.save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
+            (StorageType::CompressedMmap, IndexWeightType::Float32, true) => self.build_ram_index()?.save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
+            (StorageType::CompressedMmap, IndexWeightType::Float32, false) => self.build_ram_index()?.save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
+            (StorageType::CompressedMmap, IndexWeightType::Float16, true) => self.build_ram_index()?.save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
+            (StorageType::CompressedMmap, IndexWeightType::Float16, false) => self.build_ram_index()?.save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
+            (StorageType::CompressedMmap, IndexWeightType::UInt8, true) => self.build_ram_index()?.save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
+            (StorageType::CompressedMmap, IndexWeightType::UInt8, false) => self.build_ram_index()?.save_to_mmap(storage_type, weight_type, need_quantized, directory, segment_id),
             (_, _, _) => {
                 let error_msg = format!("Invalid parameter when flush index to disk. storage_type:{:?}, weight_type:{:?}, need_quantized:{}", storage_type, weight_type, need_quantized);
                 error!("{}", error_msg);

@@ -3,6 +3,7 @@ use std::{path::PathBuf, str::Utf8Error, sync::Arc};
 use thiserror::Error;
 
 use crate::core::{InvertedIndexError, PostingListError};
+use crate::directory::error;
 use crate::{
     core::FileOperationError,
     directory::error::{Incompatibility, LockError, OpenDirectoryError, OpenReadError, OpenWriteError},
@@ -202,6 +203,9 @@ pub enum SparseError {
 
     #[error("'{0:?}'")]
     InvertedIndexError(#[from] InvertedIndexError),
+
+    #[error("'{0:?}'")]
+    UnExpectedError(String),
 }
 
 impl From<io::Error> for SparseError {

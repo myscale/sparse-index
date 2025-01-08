@@ -1,10 +1,11 @@
+use log::error;
 use typed_builder::TypedBuilder;
 
 use super::InvertedIndexRam;
 use crate::core::inverted_index::common::InvertedIndexMetrics;
 use crate::core::sparse_vector::SparseVector;
 use crate::core::{posting_list::PostingListBuilder, QuantizedWeight};
-use crate::core::{DimId, ElementType, InvertedIndexRamBuilderTrait, PostingList, QuantizedParam, WeightType};
+use crate::core::{DimId, ElementType, InvertedIndexError, InvertedIndexRamBuilderTrait, WeightType};
 use crate::RowId;
 
 #[derive(TypedBuilder)]
@@ -23,12 +24,6 @@ pub struct InvertedIndexRamBuilder<OW: QuantizedWeight, TW: QuantizedWeight> {
 
     #[builder(default = false)]
     propagate_while_upserting: bool,
-
-    #[builder(default = false)]
-    finally_sort: bool,
-
-    #[builder(default = false)]
-    finally_propagate: bool,
 }
 
 /// Operation
@@ -40,35 +35,33 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexRamBuilderTrait<TW> 
             .memory_consumed(0)
             .metrics(InvertedIndexMetrics::default())
             .propagate_while_upserting(false)
-            .finally_sort(false)
-            .finally_propagate(element_type == ElementType::EXTENDED)
             .build()
     }
 
-    fn memory_usage(&self) -> usize {
-        self.memory_consumed
+    fn memory_usage(&self) -> Result<usize, InvertedIndexError> {
+        Ok(self.memory_consumed)
     }
 
     /// ## brief
     /// add one row into inverted_index_ram
     /// ## return
     /// bool: `true` if operation is `insert`, otherwise is `update`
-    fn add(&mut self, row_id: RowId, vector: SparseVector) -> bool {
+    fn add(&mut self, row_id: RowId, vector: SparseVector) -> Result<bool, InvertedIndexError> {
         let mut is_insert_operation = true;
         for (dim_id, weight) in vector.indices.into_iter().zip(vector.values.into_iter()) {
             let dim_id = dim_id as usize;
             // resize postings.
             if dim_id >= self.posting_builders.len() {
-                // TODO: 优化错误传递， finally sort 也可以忽略掉
-                self.posting_builders.resize_with(dim_id + 1, || PostingListBuilder::<OW, TW>::new(self.element_type, self.propagate_while_upserting).expect(""));
+                let empty_builder = PostingListBuilder::<OW, TW>::new(self.element_type, self.propagate_while_upserting).map_err(|e| InvertedIndexError::from(e))?;
+                self.posting_builders.resize_with(dim_id + 1, || empty_builder.clone());
             }
             // insert new sparse_vector into postings.
-            let memory_before = self.posting_builders[dim_id].memory_usage().0;
+            let actual_memory_before = self.posting_builders[dim_id].memory_usage().0;
             let operation = self.posting_builders[dim_id].add(row_id, weight);
             is_insert_operation &= operation;
-            let memory_after = self.posting_builders[dim_id].memory_usage().0;
+            let actual_memory_after = self.posting_builders[dim_id].memory_usage().0;
 
-            self.memory_consumed = self.memory_consumed.saturating_add(memory_after - memory_before);
+            self.memory_consumed = self.memory_consumed.saturating_add(actual_memory_after - actual_memory_before);
             self.metrics.compare_and_update_dim_id(dim_id as DimId);
         }
         // update metrics
@@ -78,18 +71,27 @@ impl<OW: QuantizedWeight, TW: QuantizedWeight> InvertedIndexRamBuilderTrait<TW> 
 
         self.metrics.compare_and_update_row_id(row_id);
 
-        is_insert_operation
+        Ok(is_insert_operation)
     }
 
     /// Consumes the builder and returns an InvertedIndexRam
-    fn build(self) -> InvertedIndexRam<TW> {
-        // TODO: 优化错误传递
-        let (postings, quantized_params): (Vec<PostingList<TW>>, Vec<Option<QuantizedParam>>) = self.posting_builders.into_iter().map(|builder| builder.build().expect("")).unzip();
-
+    fn build(self) -> Result<InvertedIndexRam<TW>, InvertedIndexError> {
         let need_quantized = TW::weight_type() != OW::weight_type() && TW::weight_type() == WeightType::WeightU8;
-        if !need_quantized {
-            assert_eq!(TW::weight_type(), OW::weight_type());
+        if !need_quantized && TW::weight_type() != OW::weight_type() {
+            let error_msg = "[InvertedIndexRam] WeightType should keep same, while quantized is disabled.";
+            error!("{}", error_msg);
+            return Err(InvertedIndexError::InvalidParameter(error_msg.to_string()));
         }
-        InvertedIndexRam::<TW> { postings, quantized_params, metrics: self.metrics, element_type: self.element_type, need_quantized }
+
+        let mut postings = Vec::with_capacity(self.posting_builders.len());
+        let mut quantized_params = Vec::with_capacity(self.posting_builders.len());
+
+        for builder in self.posting_builders.into_iter() {
+            let (posting, quantized_param) = builder.build().map_err(|e| InvertedIndexError::from(e))?;
+            postings.push(posting);
+            quantized_params.push(quantized_param);
+        }
+
+        Ok(InvertedIndexRam::<TW> { postings, quantized_params, metrics: self.metrics, element_type: self.element_type, need_quantized })
     }
 }

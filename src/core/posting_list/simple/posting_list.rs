@@ -179,130 +179,175 @@ impl<OW: QuantizedWeight> PostingList<OW> {
 #[cfg(test)]
 mod tests {
     use core::f32;
+    use std::collections::HashSet;
 
     use crate::{
-        core::{ElementType, ExtendedElement, GenericElement, PostingListBuilder, QuantizedWeight, DEFAULT_MAX_NEXT_WEIGHT},
+        core::{ElementType, ExtendedElement, GenericElement, PostingListBuilder, QuantizedWeight, SimpleElement, WeightType, DEFAULT_MAX_NEXT_WEIGHT},
         RowId,
     };
+    use super::super::test::{build_simple_posting, expect_posting_with_simple_elements, generate_random_int, expect_posting_with_extended_elements};
 
     use super::PostingList;
 
-    fn create_extended_posting<W: QuantizedWeight>(elements: Vec<(RowId, W, W)>) -> PostingList<W> {
-        let elements: Vec<GenericElement<W>> =
+    fn scrape_posting_from_simple<TW: QuantizedWeight>(elements: Vec<(RowId, TW)>) -> PostingList<TW> {
+        let elements: Vec<GenericElement<TW>> =
+            elements.into_iter().map(|(row_id, weight)| SimpleElement { row_id, weight }.into()).collect::<Vec<_>>();
+        PostingList { elements, element_type: ElementType::SIMPLE }
+    }
+
+    fn scrape_posting_from_extended<TW: QuantizedWeight>(elements: Vec<(RowId, TW, TW)>) -> PostingList<TW> {
+        let elements: Vec<GenericElement<TW>> =
             elements.into_iter().map(|(row_id, weight, max_next_weight)| ExtendedElement { row_id, weight, max_next_weight }.into()).collect::<Vec<_>>();
         PostingList { elements, element_type: ElementType::EXTENDED }
     }
 
+    // TODO Should be unit test, not integration test.
+    fn inner_test_posting_delete<OW: QuantizedWeight, TW: QuantizedWeight>(element_type: ElementType, elements_count: usize, delete_with_propagate: bool) {
+        let use_quantized = OW::weight_type()!=TW::weight_type() && TW::weight_type()==WeightType::WeightU8;
+
+        // Use [`PostingBuilder`] to build a random Posting.
+        let (mut output_posting, output_param, mut raw_elements, _) = build_simple_posting::<OW, TW>(element_type, elements_count, 1, true);
+
+        // Check the posting is expected.
+        let (expected_posting, expected_param) = match element_type {
+            ElementType::SIMPLE => expect_posting_with_simple_elements::<OW, TW>(raw_elements.clone()),
+            ElementType::EXTENDED => {
+                // We need propagate `max_next_weight`, so we have to use PostingListBuilder.
+                let mut builder = PostingListBuilder::<OW, TW>::new(element_type, false).expect("msg");
+                for (row_id, weight) in raw_elements.iter() {
+                    builder.add(*row_id, *weight);
+                }
+                builder.build().expect("msg")
+            },
+        };
+        assert_eq!(expected_posting, output_posting);
+        assert_eq!(expected_param, output_param);
+        assert_eq!(output_posting.len(), elements_count);
+
+        // Generate a group of row_ids which need to be deleted.
+        let row_ids_del_set = (0..elements_count/2).into_iter().map(|_| generate_random_int(1, elements_count as u32)).collect::<HashSet<u32>>();
+        let row_ids_del = row_ids_del_set.clone().into_iter().collect::<Vec<u32>>();
+
+        // Remove these row_ids from posting.
+        for row_id_del in row_ids_del {
+            match delete_with_propagate {
+                true => {
+                    let del_status = output_posting.delete_with_propagate(row_id_del);
+                    assert!(del_status);
+                },
+                false => {
+                    let (_, del_status) = output_posting.delete(row_id_del);
+                    assert!(del_status);
+                },
+            }
+        }
+        assert_eq!(output_posting.len(), elements_count - row_ids_del_set.len());
+        // Remove elements in `raw_elements`.
+        raw_elements.retain(|(row_id, _)| !row_ids_del_set.contains(row_id));
+
+        // Remove these row_ids from elements.
+        match element_type {
+            ElementType::SIMPLE => {
+                let (expected_posting_del, expected_param_del) = expect_posting_with_simple_elements::<OW, TW>(raw_elements.clone());
+                match use_quantized {
+                    true => {
+                        if output_param == expected_param_del {
+                            assert_eq!(output_posting, expected_posting_del);
+                        } else {
+                            assert_ne!(output_posting, expected_posting_del);
+                        }
+                    },
+                    false => {
+                        assert_eq!(output_posting, expected_posting_del);
+                    },
+                }
+            },
+            ElementType::EXTENDED => {
+                // We need propagate `max_next_weight`, so we have to use PostingListBuilder.
+                let mut builder = PostingListBuilder::<OW, TW>::new(element_type, false).expect("msg");
+                for (row_id, weight) in raw_elements {
+                    builder.add(row_id, weight);
+                }
+                let (expected_posting_del, expected_param_del) = builder.build().expect("msg");
+                match use_quantized {
+                    true => {
+                        if output_param == expected_param_del {
+                            assert_eq!(output_posting, expected_posting_del);
+                        } else {
+                            assert_ne!(output_posting, expected_posting_del);
+                        }
+                    },
+                    false => {
+                        assert_eq!(output_posting, expected_posting_del);
+                    },
+                }    
+            },
+        }
+    }
+
+
     #[test]
     fn test_posting_delete() {
-        let mut posting = PostingListBuilder::<f32, f32>::build_from(
-            vec![(1, 100.0), (2, 90.0), (3, 80.0), (4, 70.0), (5, 60.0), (6, 50.0), (7, 40.0), (8, 30.0), (9, 20.0), (10, 10.0)],
-            ElementType::EXTENDED,
-        )
-        .expect("");
-        let m = DEFAULT_MAX_NEXT_WEIGHT;
+        // Boundary Test.
+        inner_test_posting_delete::<f32, f32>(ElementType::SIMPLE, 0, false);
+        inner_test_posting_delete::<f32, u8>(ElementType::SIMPLE, 0, false);
+        inner_test_posting_delete::<f32, f32>(ElementType::SIMPLE, 1, false);
+        inner_test_posting_delete::<f32, u8>(ElementType::SIMPLE, 1, false);
+        inner_test_posting_delete::<f32, f32>(ElementType::EXTENDED, 0, false);
+        inner_test_posting_delete::<f32, f32>(ElementType::EXTENDED, 0, true);
+        inner_test_posting_delete::<f32, f32>(ElementType::EXTENDED, 1, false);
+        inner_test_posting_delete::<f32, f32>(ElementType::EXTENDED, 1, true);
 
-        assert_eq!(
-            posting,
-            create_extended_posting::<f32>(vec![
-                (1, 100.0, 90.0),
-                (2, 90.0, 80.0),
-                (3, 80.0, 70.0),
-                (4, 70.0, 60.0),
-                (5, 60.0, 50.0),
-                (6, 50.0, 40.0),
-                (7, 40.0, 30.0),
-                (8, 30.0, 20.0),
-                (9, 20.0, 10.0),
-                (10, 10.0, m),
-            ])
-        );
+        // Normal Test.
+        inner_test_posting_delete::<f32, f32>(ElementType::SIMPLE, 20096, false);
+        inner_test_posting_delete::<f32, u8>(ElementType::SIMPLE, 20096, false);
+        inner_test_posting_delete::<half::f16, half::f16>(ElementType::SIMPLE, 20096, false);
+        inner_test_posting_delete::<half::f16, u8>(ElementType::SIMPLE, 20096, false);
+        inner_test_posting_delete::<u8, u8>(ElementType::SIMPLE, 20096, false);
 
-        // Delete middle element in posting.
-        assert_eq!(posting.delete(4), (3, true));
-        assert_eq!(posting.delete(4), (0, false));
-
-        // Delete first and last element in posting.
-        assert_eq!(posting.delete(10), (8, true));
-        assert_eq!(posting.delete(1), (0, true));
-        assert!(posting.get_ref(8).is_none());
-
-        assert_eq!(
-            posting,
-            create_extended_posting::<f32>(vec![(2, 90.0, 80.0), (3, 80.0, 70.0), (5, 60.0, 50.0), (6, 50.0, 40.0), (7, 40.0, 30.0), (8, 30.0, 20.0), (9, 20.0, m),])
-        );
+        inner_test_posting_delete::<f32, f32>(ElementType::EXTENDED, 10, true);
+        inner_test_posting_delete::<half::f16, half::f16>(ElementType::EXTENDED, 20096, true);
+        inner_test_posting_delete::<u8, u8>(ElementType::EXTENDED, 20096, true);
     }
 
-    #[test]
-    fn test_posting_delete_with_propagate() {
-        let mut posting = PostingListBuilder::<f32, f32>::build_from(
-            vec![(1, 100.0), (2, 90.0), (3, 80.0), (4, 70.0), (5, 60.0), (6, 50.0), (7, 40.0), (8, 30.0), (9, 20.0), (10, 10.0)],
-            ElementType::EXTENDED,
-        )
-        .expect("");
-        let m = DEFAULT_MAX_NEXT_WEIGHT;
 
-        assert_eq!(
-            posting,
-            create_extended_posting::<f32>(vec![
-                (1, 100.0, 90.0),
-                (2, 90.0, 80.0),
-                (3, 80.0, 70.0),
-                (4, 70.0, 60.0),
-                (5, 60.0, 50.0),
-                (6, 50.0, 40.0),
-                (7, 40.0, 30.0),
-                (8, 30.0, 20.0),
-                (9, 20.0, 10.0),
-                (10, 10.0, m),
-            ])
-        );
-
-        // Delete middle element in posting.
-        assert_eq!(posting.delete_with_propagate(4), true);
-        assert_eq!(posting.delete_with_propagate(4), false);
-
-        // Delete last and first element in posting.
-        assert_eq!(posting.delete_with_propagate(10), true);
-        assert_eq!(posting.delete_with_propagate(1), true);
-        assert!(posting.get_ref(8).is_none());
-
-        assert_eq!(
-            posting,
-            create_extended_posting::<f32>(vec![(2, 90.0, 80.0), (3, 80.0, 60.0), (5, 60.0, 50.0), (6, 50.0, 40.0), (7, 40.0, 30.0), (8, 30.0, 20.0), (9, 20.0, m),])
-        );
-    }
-
-    #[test]
-    fn test_posting_upsert() {
-        let mut posting = PostingListBuilder::<f32, f32>::build_from(vec![], ElementType::EXTENDED).expect("");
+    fn inner_test_posting_upsert<OW: QuantizedWeight>() {
+        let mut posting = PostingList::<OW>::new(ElementType::EXTENDED);
         let m = DEFAULT_MAX_NEXT_WEIGHT;
 
         // Sequence insert
         assert_eq!(posting.upsert(ExtendedElement::new(2, 40.0).into()), (0, true));
-        assert_eq!(posting.upsert(ExtendedElement::new(3, 30.0).into()), (1, true));
+        assert_eq!(posting.upsert(ExtendedElement::new(3, 30.0123456).into()), (1, true));
         assert_eq!(posting.upsert(ExtendedElement::new(4, 50.0).into()), (2, true));
         assert_eq!(posting.upsert(ExtendedElement::new(5, 20.0).into()), (3, true));
         assert_eq!(posting.upsert(ExtendedElement::new(7, 50.0).into()), (4, true));
         assert_eq!(posting.upsert(ExtendedElement::new(9, 10.0).into()), (5, true));
-        assert_eq!(posting, create_extended_posting::<f32>(vec![(2, 40.0, m), (3, 30.0, m), (4, 50.0, m), (5, 20.0, m), (7, 50.0, m), (9, 10.0, m)]));
+        assert_eq!(posting, expect_posting_with_extended_elements::<OW, OW>(vec![(2, 40.0, m), (3, 30.0123456, m), (4, 50.0, m), (5, 20.0, m), (7, 50.0, m), (9, 10.0, m)]).0);
 
         // Update existing element
         assert_eq!(posting.upsert(ExtendedElement::new(2, 45.0).into()), (0, false));
         assert_eq!(posting.upsert(ExtendedElement::new(5, 25.0).into()), (3, false));
         assert_eq!(posting.upsert(ExtendedElement::new(7, 55.0).into()), (4, false));
         assert_eq!(posting.upsert(ExtendedElement::new(9, 15.0).into()), (5, false));
-        assert_eq!(posting, create_extended_posting::<f32>(vec![(2, 45.0, m), (3, 30.0, m), (4, 50.0, m), (5, 25.0, m), (7, 55.0, m), (9, 15.0, m)]));
+        assert_eq!(posting, expect_posting_with_extended_elements::<OW,OW>(vec![(2, 45.0, m), (3, 30.0123456, m), (4, 50.0, m), (5, 25.0, m), (7, 55.0, m), (9, 15.0, m)]).0);
 
         // Unordered insert
         assert_eq!(posting.upsert(ExtendedElement::new(1, 20.0).into()), (0, true));
         assert_eq!(posting.upsert(ExtendedElement::new(6, 35.0).into()), (5, true));
-        assert_eq!(posting, create_extended_posting::<f32>(vec![(1, 20.0, m), (2, 45.0, m), (3, 30.0, m), (4, 50.0, m), (5, 25.0, m), (6, 35.0, m), (7, 55.0, m), (9, 15.0, m)]));
+        assert_eq!(posting, expect_posting_with_extended_elements::<OW,OW>(vec![(1, 20.0, m), (2, 45.0, m), (3, 30.0123456, m), (4, 50.0, m), (5, 25.0, m), (6, 35.0, m), (7, 55.0, m), (9, 15.0, m)]).0);
     }
 
+
     #[test]
-    fn test_posting_upsert_with_propagate() {
-        let mut posting = PostingListBuilder::<f32, f32>::build_from(vec![], ElementType::EXTENDED).expect("");
+    fn test_posting_upsert() {
+        inner_test_posting_upsert::<f32>();
+        inner_test_posting_upsert::<half::f16>();
+        inner_test_posting_upsert::<u8>();
+
+    }
+
+    fn inner_test_posting_upsert_with_propagate<OW: QuantizedWeight>() {
+        let mut posting = PostingList::<OW>::new(ElementType::EXTENDED);
         let m = DEFAULT_MAX_NEXT_WEIGHT;
 
         // Sequence insert
@@ -312,21 +357,21 @@ mod tests {
         assert_eq!(posting.upsert_with_propagate(ExtendedElement::new(5, 20.0).into()), true);
         assert_eq!(posting.upsert_with_propagate(ExtendedElement::new(7, 50.0).into()), true);
         assert_eq!(posting.upsert_with_propagate(ExtendedElement::new(9, 10.0).into()), true);
-        assert_eq!(posting, create_extended_posting::<f32>(vec![(2, 40.0, 50.0), (3, 30.0, 50.0), (4, 50.0, 50.0), (5, 20.0, 50.0), (7, 50.0, 10.0), (9, 10.0, m)]));
+        assert_eq!(posting, expect_posting_with_extended_elements::<OW,OW>(vec![(2, 40.0, 50.0), (3, 30.0, 50.0), (4, 50.0, 50.0), (5, 20.0, 50.0), (7, 50.0, 10.0), (9, 10.0, m)]).0);
 
         // Update existing element
         assert_eq!(posting.upsert_with_propagate(ExtendedElement::new(2, 45.0).into()), false);
         assert_eq!(posting.upsert_with_propagate(ExtendedElement::new(5, 25.0).into()), false);
         assert_eq!(posting.upsert_with_propagate(ExtendedElement::new(7, 55.0).into()), false);
         assert_eq!(posting.upsert_with_propagate(ExtendedElement::new(9, 15.0).into()), false);
-        assert_eq!(posting, create_extended_posting::<f32>(vec![(2, 45.0, 55.0), (3, 30.0, 55.0), (4, 50.0, 55.0), (5, 25.0, 55.0), (7, 55.0, 15.0), (9, 15.0, m)]));
+        assert_eq!(posting, expect_posting_with_extended_elements::<OW,OW>(vec![(2, 45.0, 55.0), (3, 30.0, 55.0), (4, 50.0, 55.0), (5, 25.0, 55.0), (7, 55.0, 15.0), (9, 15.0, m)]).0);
 
         // Unordered insert
         assert_eq!(posting.upsert_with_propagate(ExtendedElement::new(1, 20.0).into()), true);
         assert_eq!(posting.upsert_with_propagate(ExtendedElement::new(6, 80.0).into()), true);
         assert_eq!(
             posting,
-            create_extended_posting::<f32>(vec![
+            expect_posting_with_extended_elements::<OW, OW>(vec![
                 (1, 20.0, 80.0),
                 (2, 45.0, 80.0),
                 (3, 30.0, 80.0),
@@ -335,7 +380,15 @@ mod tests {
                 (6, 80.0, 55.0),
                 (7, 55.0, 15.0),
                 (9, 15.0, m)
-            ])
+            ]).0
         );
     }
+
+    #[test]
+    fn test_posting_upsert_with_propagate() {
+        inner_test_posting_upsert_with_propagate::<f32>();
+        inner_test_posting_upsert_with_propagate::<half::f16>();
+        inner_test_posting_upsert_with_propagate::<u8>();
+    }
+
 }

@@ -29,8 +29,10 @@ impl Into<ElementType> for CompressedBlockType {
 }
 
 pub trait CompressedPostingBlock<W: QuantizedWeight> {
+    #[allow(unused)]
     fn compressed_block_type(&self) -> CompressedBlockType;
 
+    #[allow(unused)]
     fn approximately_eq(&self, other: &Self, quantized_param: Option<QuantizedParam>) -> bool;
 }
 

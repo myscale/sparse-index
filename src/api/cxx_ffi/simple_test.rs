@@ -18,30 +18,30 @@ mod test {
         })
     }
 
-    #[test]
-    pub fn test_index_rows() {
-        let mut builder = env_logger::Builder::from_default_env();
-        builder.filter(None, log::LevelFilter::Info).init();
+    // #[test]
+    // pub fn test_index_rows() {
+    //     let mut builder = env_logger::Builder::from_default_env();
+    //     builder.filter(None, log::LevelFilter::Info).init();
 
-        let temp_dir = TempDir::new().unwrap().path().to_str().unwrap().to_string();
+    //     let temp_dir = TempDir::new().unwrap().path().to_str().unwrap().to_string();
 
-        // let_cxx_string!(index_path = temp_dir);
-        let_cxx_string!(index_path = "/home/mochix/test/sparse_index_files/temp2");
-        let res = ffi_create_index(&index_path);
-        println!("create - {:?}", res);
+    //     // let_cxx_string!(index_path = temp_dir);
+    //     let_cxx_string!(index_path = "/home/mochix/test/sparse_index_files/temp2");
+    //     let res = ffi_create_index(&index_path);
+    //     println!("create - {:?}", res);
 
-        for (row_id, sv) in mock_row_content(0, 5000000).enumerate() {
-            ffi_insert_sparse_vector(&index_path, row_id as u32, &sv);
-        }
-        let res = ffi_commit_index(&index_path);
-        println!("commit - {:?}", res);
+    //     for (row_id, sv) in mock_row_content(0, 5000000).enumerate() {
+    //         ffi_insert_sparse_vector(&index_path, row_id as u32, &sv);
+    //     }
+    //     let res = ffi_commit_index(&index_path);
+    //     println!("commit - {:?}", res);
 
-        let res = ffi_load_index_reader(&index_path);
-        println!("load - {:?}", res);
+    //     let res = ffi_load_index_reader(&index_path);
+    //     println!("load - {:?}", res);
 
-        // for sv in mock_row_content(10, 100) {
-        //     let res = ffi_sparse_search(&index_path, &sv, &vec![], 10);
-        //     println!("{:?}", res);
-        // }
-    }
+    //     // for sv in mock_row_content(10, 100) {
+    //     //     let res = ffi_sparse_search(&index_path, &sv, &vec![], 10);
+    //     //     println!("{:?}", res);
+    //     // }
+    // }
 }

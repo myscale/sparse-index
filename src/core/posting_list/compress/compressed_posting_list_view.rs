@@ -220,4 +220,6 @@ mod tests {
         assert!(std::ptr::addr_eq(original.simple_blocks as *const _, cloned.simple_blocks as *const _));
         assert!(std::ptr::addr_eq(original.extended_blocks as *const _, cloned.extended_blocks as *const _));
     }
+
+    // TODO 测试 uncompress 逻辑是否正确
 }

@@ -311,44 +311,44 @@ mod tests {
         return builder;
     }
 
-    #[test]
-    pub fn test_create_index() {
-        get_logger().init();
-        // let dir = TempDir::new().expect("error create temp dir");
-        let index_directory = Path::new("/home/mochix/test/sparse_index_files/temp");
-        let index_settings = IndexSettings {
-            inverted_index_config: InvertedIndexConfig {
-                storage_type: StorageType::CompressedMmap,
-                weight_type: IndexWeightType::Float16,
-                quantized: false,
-                element_type: ElementType::SIMPLE,
-            },
-        };
-        let index = Index::create_in_dir(index_directory, index_settings).expect("error create index in dir");
-        let mut index_writer = index.writer(1024 * 1024 * 128).expect("error create index writer");
+    // #[test]
+    // pub fn test_create_index() {
+    //     get_logger().init();
+    //     // let dir = TempDir::new().expect("error create temp dir");
+    //     let index_directory = Path::new("/home/mochix/test/sparse_index_files/temp");
+    //     let index_settings = IndexSettings {
+    //         inverted_index_config: InvertedIndexConfig {
+    //             storage_type: StorageType::CompressedMmap,
+    //             weight_type: IndexWeightType::Float16,
+    //             quantized: false,
+    //             element_type: ElementType::SIMPLE,
+    //         },
+    //     };
+    //     let index = Index::create_in_dir(index_directory, index_settings).expect("error create index in dir");
+    //     let mut index_writer = index.writer(1024 * 1024 * 128).expect("error create index writer");
 
-        let log_merge_policy = LogMergePolicy::default();
-        // log_merge_policy.set_max_docs_before_merge(5);
-        index_writer.set_merge_policy(Box::new(log_merge_policy));
-        // index_writer.set_merge_policy(Box::new(NoMergePolicy::default()));
+    //     let log_merge_policy = LogMergePolicy::default();
+    //     // log_merge_policy.set_max_docs_before_merge(5);
+    //     index_writer.set_merge_policy(Box::new(log_merge_policy));
+    //     // index_writer.set_merge_policy(Box::new(NoMergePolicy::default()));
 
-        let time_begin = Instant::now();
-        for base in 0..1 {
-            for row in mock_row_content(base, 500000) {
-                let res = index_writer.add_document(row);
-            }
-            let commit_res = index_writer.commit();
-            info!("[BASE-{}] commit res opstamp is: {:?}", base, commit_res.unwrap());
-        }
+    //     let time_begin = Instant::now();
+    //     for base in 0..1 {
+    //         for row in mock_row_content(base, 500000) {
+    //             let res = index_writer.add_document(row);
+    //         }
+    //         let commit_res = index_writer.commit();
+    //         info!("[BASE-{}] commit res opstamp is: {:?}", base, commit_res.unwrap());
+    //     }
 
-        let res = index_writer.wait_merging_threads();
-        let time_end = Instant::now();
-        info!("release merging threads is {}, duration is {}s", res.is_ok(), time_end.duration_since(time_begin).as_secs());
+    //     let res = index_writer.wait_merging_threads();
+    //     let time_end = Instant::now();
+    //     info!("release merging threads is {}, duration is {}s", res.is_ok(), time_end.duration_since(time_begin).as_secs());
 
-        let searcher = index.reader().expect("error index reader").searcher();
-        for row in mock_row_content(5, 100) {
-            let res = searcher.search(&row.sparse_vector, &None, 4).expect("error search");
-            info!("RES: {:?}", res);
-        }
-    }
+    //     let searcher = index.reader().expect("error index reader").searcher();
+    //     for row in mock_row_content(5, 100) {
+    //         let res = searcher.search(&row.sparse_vector, &None, 4).expect("error search");
+    //         info!("RES: {:?}", res);
+    //     }
+    // }
 }
