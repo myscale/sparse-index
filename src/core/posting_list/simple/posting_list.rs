@@ -181,24 +181,15 @@ mod tests {
     use core::f32;
     use std::collections::HashSet;
 
-    use super::super::test::{build_simple_posting, expect_posting_with_extended_elements, expect_posting_with_simple_elements, generate_random_int};
+    use rand::{seq::SliceRandom, thread_rng};
+
+    use super::super::test::{build_simple_posting, expect_posting_with_extended_elements, expect_posting_with_simple_elements, generate_random_int, generate_raw_elements};
     use crate::{
         core::{ElementType, ExtendedElement, GenericElement, PostingListBuilder, QuantizedWeight, SimpleElement, WeightType, DEFAULT_MAX_NEXT_WEIGHT},
         RowId,
     };
 
     use super::PostingList;
-
-    fn scrape_posting_from_simple<TW: QuantizedWeight>(elements: Vec<(RowId, TW)>) -> PostingList<TW> {
-        let elements: Vec<GenericElement<TW>> = elements.into_iter().map(|(row_id, weight)| SimpleElement { row_id, weight }.into()).collect::<Vec<_>>();
-        PostingList { elements, element_type: ElementType::SIMPLE }
-    }
-
-    fn scrape_posting_from_extended<TW: QuantizedWeight>(elements: Vec<(RowId, TW, TW)>) -> PostingList<TW> {
-        let elements: Vec<GenericElement<TW>> =
-            elements.into_iter().map(|(row_id, weight, max_next_weight)| ExtendedElement { row_id, weight, max_next_weight }.into()).collect::<Vec<_>>();
-        PostingList { elements, element_type: ElementType::EXTENDED }
-    }
 
     // TODO Should be unit test, not integration test.
     fn inner_test_posting_delete<OW: QuantizedWeight, TW: QuantizedWeight>(element_type: ElementType, elements_count: usize, delete_with_propagate: bool) {
@@ -280,6 +271,117 @@ mod tests {
                         assert_eq!(output_posting, expected_posting_del);
                     }
                 }
+            }
+        }
+    }
+
+    // 单元测试思路：
+    // 随机生成一组新的 elements，保证这组 elements 的 max_next_weight 也是正确排序
+    // 实际上就是生成一个 PostingList，但是这个逻辑不应该被 PostingListBuilder 完成，不应该接入别的组件逻辑
+    fn mock_generic_elements<W: QuantizedWeight>(
+        element_type: ElementType,
+        count: usize,
+        sequential: bool,
+        row_id_start: RowId,
+        propagate: bool,
+    ) -> (PostingList<W>, Option<Vec<(u32, f32)>>, Option<Vec<(u32, f32, f32)>>) {
+        let elements = generate_raw_elements(count, row_id_start, sequential);
+        match element_type {
+            ElementType::SIMPLE => {
+                let generic_elements = elements
+                    .clone()
+                    .into_iter()
+                    .map(|(row_id, weight)| {
+                        let simple_element = SimpleElement::<W> { row_id, weight: W::from_f32(weight) };
+                        simple_element.into()
+                    })
+                    .collect::<Vec<GenericElement<W>>>();
+                let posting = PostingList { elements: generic_elements, element_type };
+                (posting, Some(elements), None)
+            }
+            ElementType::EXTENDED => {
+                let mut elements_extend: Vec<(u32, f32, f32)> = Vec::new();
+                let mut max_next_weight = DEFAULT_MAX_NEXT_WEIGHT;
+                for (row_id, weight) in elements.clone().into_iter().rev() {
+                    match propagate {
+                        true => {
+                            elements_extend.push((row_id, weight, max_next_weight));
+                            max_next_weight = max_next_weight.max(weight);
+                        }
+                        false => {
+                            elements_extend.push((row_id, weight, max_next_weight));
+                        }
+                    }
+                }
+                elements_extend.reverse();
+                let generic_elements = elements_extend
+                    .clone()
+                    .into_iter()
+                    .map(|(row_id, weight, max_next_weight)| {
+                        let extended_element = ExtendedElement::<W> { row_id, weight: W::from_f32(weight), max_next_weight: W::from_f32(max_next_weight) };
+                        extended_element.into()
+                    })
+                    .collect::<Vec<GenericElement<W>>>();
+
+                let posting = PostingList { elements: generic_elements, element_type };
+                (posting, None, Some(elements_extend))
+            }
+        }
+    }
+
+    fn inner_test_posting_delete2<W: QuantizedWeight>(element_type: ElementType, count: usize, sequential: bool, delete_with_propagate: bool) {
+        let row_id_start = generate_random_int(0, 10000);
+
+        let (mut posting, mut simple_elements, mut extended_elements) = mock_generic_elements::<W>(element_type, count, sequential, row_id_start, true);
+        match element_type {
+            ElementType::SIMPLE => {
+                assert!(simple_elements.is_some());
+                let simple_elements = simple_elements.unwrap();
+                let need_deletes = simple_elements.choose_multiple(&mut thread_rng(), generate_random_int(0, count as u32) as usize).cloned().collect::<Vec<_>>();
+                for (row_id, _) in need_deletes.clone().into_iter() {
+                    let del_status = match delete_with_propagate {
+                        true => posting.delete_with_propagate(row_id),
+                        false => posting.delete(row_id).1,
+                    };
+                    assert!(del_status);
+                }
+
+                let mut remains = simple_elements.clone();
+                remains.retain(|e| need_deletes.contains(e));
+
+                let remains_generic = remains
+                    .into_iter()
+                    .map(|(row_id, weight)| {
+                        let simple_element = SimpleElement::<W> { row_id, weight: W::from_f32(weight) };
+                        simple_element.into()
+                    })
+                    .collect::<Vec<GenericElement<W>>>();
+
+                assert_eq!(posting.elements, remains_generic);
+            }
+            ElementType::EXTENDED => {
+                assert!(extended_elements.is_some());
+                let mut extended_elements = extended_elements.unwrap();
+                let need_deletes = extended_elements.choose_multiple(&mut thread_rng(), generate_random_int(0, count as u32) as usize).cloned().collect::<Vec<_>>();
+                for (row_id, _, _) in need_deletes.clone().into_iter() {
+                    let del_status = match delete_with_propagate {
+                        true => posting.delete_with_propagate(row_id),
+                        false => posting.delete(row_id).1,
+                    };
+                    assert!(del_status);
+                }
+                let mut remains = extended_elements.clone();
+                remains.retain(|e| need_deletes.contains(e));
+
+                let remains_generic = remains
+                    .into_iter()
+                    .map(|(row_id, weight, max_next_weight)| {
+                        let extended_element = ExtendedElement::<W> { row_id, weight: W::from_f32(weight), max_next_weight: W::from_f32(max_next_weight) };
+                        extended_element.into()
+                    })
+                    .collect::<Vec<GenericElement<W>>>();
+
+                assert_eq!(posting.elements, remains_generic);
             }
         }
     }

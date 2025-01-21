@@ -31,11 +31,13 @@ mod test {
         builder.build().expect("msg")
     }
 
+    // generate random f32
     pub(super) fn generate_random_float() -> f32 {
         let mut rng = rand::thread_rng();
         rng.gen_range(0.010101..10.1111)
     }
 
+    // generate random int value from `min` to `max`
     pub(super) fn generate_random_int(min: u32, max: u32) -> u32 {
         if min >= max {
             return min;
@@ -56,7 +58,7 @@ mod test {
         row_id_start: RowId,
         enable_elements_sequential: bool,
     ) -> (PostingList<TW>, Option<QuantizedParam>, Vec<(u32, f32)>, (Vec<(u32, TW)>, Vec<(u32, TW, TW)>)) {
-        let elements: Vec<(u32, f32)> = generate_elements(count, row_id_start, enable_elements_sequential);
+        let elements: Vec<(u32, f32)> = generate_raw_elements(count, row_id_start, enable_elements_sequential);
         let mut builder = PostingListBuilder::<OW, TW>::new(element_type, false).expect("");
 
         for (row_id, weight) in elements.clone() {
@@ -146,8 +148,8 @@ mod test {
         (posting, None)
     }
 
-    /// When `enable_elements_sequential` is true, the row_id will be generated sortly but not sequence.
-    pub(super) fn generate_elements(count: usize, row_id_start: RowId, enable_elements_sequential: bool) -> Vec<(u32, f32)> {
+    /// When `sequential` is true, the row_id will be generated sortly but not sequence.
+    pub(super) fn generate_raw_elements(count: usize, row_id_start: RowId, sequential: bool) -> Vec<(u32, f32)> {
         let mut elements: Vec<(u32, f32)> = Vec::new();
         // Boundary
         if count == 0 {
@@ -158,7 +160,7 @@ mod test {
 
         for _ in (row_id_start + 1)..(row_id_start + count as RowId) {
             let row_id = elements.last().unwrap().0
-                + match enable_elements_sequential {
+                + match sequential {
                     true => 1,
                     false => generate_random_int(1, 128),
                 };
