@@ -56,6 +56,12 @@ Segment 是最小的索引文件单元，它使用了倒排索引 Inverted Index
 ### 1. Lib 库编译与测试
 
 #### a. lib 库编译
+使用到的 rust 工具链版本:
+
+```bash
+❯ cargo version                          
+cargo 1.79.0 (ffa9cf99a 2024-06-03)
+```
 
 执行下属命令以 release 模式编译 SparseIndex lib 库。
 
